@@ -22,7 +22,16 @@ except ImportError:
     raise SystemExit("Run: pip install yfinance pandas flask flask-cors")
 
 app = Flask(__name__)
-CORS(app)  # Allow cross-origin from the HTML file
+# Allow requests from local file:// (origin = 'null') and any web origin
+CORS(app, origins="*", supports_credentials=False)
+
+# Extra: handle preflight and null origin explicitly
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin']  = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    return response
 
 # ── Ticker map ─────────────────────────────────────────────────────────────────
 YAHOO_TICKER_MAP = {
