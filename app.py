@@ -1,12 +1,11 @@
 """
-TradeEdge Cloud API
-Fetches NSE F&O OHLC data via Yahoo Finance.
-Supports batched fetching to stay within Render free tier's 30s response timeout.
+TradeEdge Cloud API — batched fetching (40 symbols per call, ~10s each)
+Stays within Render free tier 30s response limit.
 """
 from __future__ import annotations
-import os, time, json
+import os, time
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 
 try:
@@ -16,14 +15,29 @@ except ImportError:
     raise SystemExit("Run: pip install yfinance pandas flask flask-cors")
 
 app = Flask(__name__)
-CORS(app, origins="*", supports_credentials=False)
+# Most permissive CORS config — allows file:// (null origin) and everything else
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
+def cors_response(data, status=200):
+    """Wrap jsonify with explicit CORS headers to handle null origin from file://"""
+    resp = make_response(jsonify(data), status)
+    resp.headers['Access-Control-Allow-Origin']  = '*'
+    resp.headers['Access-Control-Allow-Headers'] = '*'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    return resp
 
 @app.after_request
-def add_cors_headers(response):
+def add_cors(response):
     response.headers['Access-Control-Allow-Origin']  = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Allow-Headers'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
     return response
+
+# Handle preflight OPTIONS for all routes
+@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def options_handler(path=''):
+    return cors_response({'ok': True})
 
 YAHOO_TICKER_MAP = {
     "NIFTY50":"^NSEI","BANKNIFTY":"^NSEBANK","FINNIFTY":"NIFTY_FIN_SERVICE.NS",
@@ -31,11 +45,10 @@ YAHOO_TICKER_MAP = {
     "CNXPHARMA":"^CNXPHARMA","CNXENERGY":"^CNXENERGY","CNXMETAL":"^CNXMETAL",
     "CNXFMCG":"^CNXFMCG","CNXINFRA":"^CNXINFRA","CNXCONSUM":"^CNXCONSUM",
     "M&M":"M&M.NS","BAJAJ-AUTO":"BAJAJ-AUTO.NS",
-    "AMARAJABAT":"AMARARAJA.NS",   # Amara Raja Energy & Mobility (renamed)
-    "BIRLASOFT":"BSOFT.NS","DEEPAKNITR":"DEEPAKNTR.NS","ICICIPRULIFE":"ICICIPRULI.NS",
-    "MCDOWELL-N":"UNITDSPR.NS",
-    "NAVINFLOUR":"NAVNFLUOR.NS",   # Navin Fluorine correct Yahoo ticker
-    "TATAMOTORS":"TMPV.NS",        # Tata Motors demerged Oct 2025: TMPV=passenger, TMCV=commercial
+    "AMARAJABAT":"AMARARAJA.NS","BIRLASOFT":"BSOFT.NS","DEEPAKNITR":"DEEPAKNTR.NS",
+    "ICICIPRULIFE":"ICICIPRULI.NS","MCDOWELL-N":"UNITDSPR.NS",
+    "NAVINFLOUR":"NAVNFLUOR.NS",
+    "TATAMOTORS":"TMPV.NS",
     "ZOMATO":"ETERNAL.NS",
 }
 
@@ -94,7 +107,6 @@ def parse_df(df):
             for i, r in df.iterrows()]
 
 def fetch_batch(symbols, start, end):
-    """Fetch a batch of symbols. Returns (result_dict, failed_list)."""
     tickers = [get_yf_ticker(s) for s in symbols]
     t2s = {get_yf_ticker(s): s for s in symbols}
     result, failed = {}, []
@@ -117,40 +129,30 @@ def fetch_batch(symbols, start, end):
 
 @app.route("/")
 def health():
-    return jsonify({"status":"ok","service":"TradeEdge API",
+    return cors_response({"status":"ok","service":"TradeEdge API",
                     "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "symbols":len(ALL_SYMBOLS)})
 
 
 @app.route("/sync-today")
 def sync_today():
-    """Fetch all symbols — client calls this multiple times with offset for batching."""
-    p       = request.args.get("symbols","")
-    offset  = int(request.args.get("offset", 0))
-    limit   = int(request.args.get("limit", 40))   # 40 symbols per call ≈ 10s
-
-    # Build symbol list
-    if p:
-        syms = [s.strip().upper() for s in p.split(",") if s.strip()]
-        syms = [s for s in syms if s in set(ALL_SYMBOLS)]
-    else:
-        syms = ALL_SYMBOLS[offset:offset + limit]
-
-    total_symbols = len(ALL_SYMBOLS)
+    offset = int(request.args.get("offset", 0))
+    limit  = int(request.args.get("limit",  40))
+    syms   = ALL_SYMBOLS[offset:offset + limit]
 
     if not syms:
-        return jsonify({"status":"ok","fetched":0,"failed":0,
-                        "failedSymbols":[],"elapsed":0,
+        return cors_response({"status":"ok","fetched":0,"failed":0,
+                        "failedSymbols":[],"elapsed":0,"data":{},
                         "asOf":datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "data":{},"done":True})
+                        "done":True})
 
     end   = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
     start = (datetime.today() - timedelta(days=7)).strftime("%Y-%m-%d")
-    t0 = time.time()
+    t0    = time.time()
 
     result, failed = fetch_batch(syms, start, end)
 
-    return jsonify({
+    return cors_response({
         "status":       "ok",
         "fetched":      len(result),
         "failed":       len(failed),
@@ -160,9 +162,8 @@ def sync_today():
         "data":         result,
         "offset":       offset,
         "limit":        limit,
-        "batchTotal":   len(syms),
-        "grandTotal":   total_symbols,
-        "done":         (offset + limit) >= total_symbols,
+        "grandTotal":   len(ALL_SYMBOLS),
+        "done":         (offset + limit) >= len(ALL_SYMBOLS),
     })
 
 
