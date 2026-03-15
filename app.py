@@ -6,34 +6,35 @@ import os, time, json
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
-
+ 
 try:
     import yfinance as yf
     import pandas as pd
 except ImportError:
     raise SystemExit("Run: pip install yfinance pandas flask flask-cors")
-
+ 
 app = Flask(__name__)
 CORS(app, origins="*", supports_credentials=False)
-
+ 
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin']  = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
     return response
-
+ 
 YAHOO_TICKER_MAP = {
     "NIFTY50":"^NSEI","BANKNIFTY":"^NSEBANK","FINNIFTY":"NIFTY_FIN_SERVICE.NS",
     "MIDCPNIFTY":"^NSEMDCP50","CNXIT":"^CNXIT","CNXAUTO":"^CNXAUTO",
     "CNXPHARMA":"^CNXPHARMA","CNXENERGY":"^CNXENERGY","CNXMETAL":"^CNXMETAL",
     "CNXFMCG":"^CNXFMCG","CNXINFRA":"^CNXINFRA","CNXCONSUM":"^CNXCONSUM",
-    "M&M":"M&M.NS","BAJAJ-AUTO":"BAJAJ-AUTO.NS","AMARAJABAT":"AMARARAJA.NS",
+    "M&M":"M&M.NS","BAJAJ-AUTO":"BAJAJ-AUTO.NS","AMARAJABAT":"AMARARAJA.NS",   # Amara Raja Energy & Mobility (renamed)
     "BIRLASOFT":"BSOFT.NS","DEEPAKNITR":"DEEPAKNTR.NS","ICICIPRULIFE":"ICICIPRULI.NS",
-    "MCDOWELL-N":"UNITDSPR.NS","NAVINFLOUR":"NAVNFLUOR.NS",
-    "TATAMOTORS":"TATAMOTORS.NS","ZOMATO":"ETERNAL.NS",
+    "MCDOWELL-N":"UNITDSPR.NS","NAVINFLOUR":"NAVNFLUOR.NS",   # Navin Fluorine correct Yahoo ticker
+    "TATAMOTORS":"TMPV.NS",        # Tata Motors demerged Oct 2025: TMPV=passenger, TMCV=commercial
+    "ZOMATO":"ETERNAL.NS",
 }
-
+ 
 ALL_SYMBOLS = [
     "NIFTY50","BANKNIFTY","FINNIFTY","MIDCPNIFTY",
     "CNXIT","CNXAUTO","CNXPHARMA","CNXENERGY","CNXMETAL","CNXFMCG","CNXINFRA","CNXCONSUM",
@@ -71,10 +72,10 @@ ALL_SYMBOLS = [
     "UBL","ULTRACEMCO","UNIONBANK","UPL",
     "VBL","VEDL","VOLTAS","WHIRLPOOL","WIPRO","ZOMATO",
 ]
-
+ 
 def get_yf_ticker(s):
     return YAHOO_TICKER_MAP.get(s, s + ".NS")
-
+ 
 def parse_df(df):
     if df is None or df.empty: return None
     df = df.copy()
@@ -87,16 +88,16 @@ def parse_df(df):
              "open": round(float(r["open"]),2), "high": round(float(r["high"]),2),
              "low":  round(float(r["low"]),2),  "close": round(float(r["close"]),2)}
             for i, r in df.iterrows()]
-
+ 
 def sse(data):
     return f"data: {json.dumps(data)}\n\n"
-
+ 
 @app.route("/")
 def health():
     return jsonify({"status":"ok","service":"TradeEdge API",
                     "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "symbols":len(ALL_SYMBOLS)})
-
+ 
 @app.route("/sync-today")
 def sync_today():
     p = request.args.get("symbols","")
@@ -124,14 +125,14 @@ def sync_today():
     return jsonify({"status":"ok","fetched":len(result),"failed":len(failed),
                     "failedSymbols":failed[:20],"elapsed":round(time.time()-t0,1),
                     "asOf":datetime.now().strftime("%Y-%m-%d %H:%M"),"data":result})
-
+ 
 @app.route("/sync-today-stream")
 def sync_today_stream():
     """SSE: streams progress per batch, sends final JSON at end."""
     p = request.args.get("symbols","")
     syms = [s.strip().upper() for s in p.split(",") if s.strip()] if p else ALL_SYMBOLS
     syms = [s for s in syms if s in set(ALL_SYMBOLS)]
-
+ 
     def generate():
         total   = len(syms)
         result  = {}
@@ -141,7 +142,7 @@ def sync_today_stream():
         start   = (datetime.today()-timedelta(days=7)).strftime("%Y-%m-%d")
         done    = 0
         BATCH   = 20
-
+ 
         for bi in range(0, total, BATCH):
             batch = syms[bi:bi+BATCH]
             tickers = [get_yf_ticker(s) for s in batch]
@@ -170,15 +171,15 @@ def sync_today_stream():
                     failed.append(sym)
                     yield sse({"type":"progress","done":done,"total":total,
                                "sym":sym,"ok":False,"pct":round(done/total*100)})
-
+ 
         yield sse({"type":"done","fetched":len(result),"failed":len(failed),
                    "failedSymbols":failed[:20],"elapsed":round(time.time()-t0,1),
                    "asOf":datetime.now().strftime("%Y-%m-%d %H:%M"),"data":result})
-
+ 
     return Response(stream_with_context(generate()),
                     mimetype="text/event-stream",
                     headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
-
+ 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, threaded=True)
