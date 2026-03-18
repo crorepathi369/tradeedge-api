@@ -46,8 +46,9 @@ YAHOO_TICKER_MAP = {
     "CNXFMCG":"^CNXFMCG","CNXINFRA":"^CNXINFRA","CNXCONSUM":"^CNXCONSUM",
     "M&M":"M&M.NS","BAJAJ-AUTO":"BAJAJ-AUTO.NS",
     "BIRLASOFT":"BSOFT.NS","DEEPAKNITR":"DEEPAKNTR.NS",
-    "ICICIPRULIFE":"ICICIPRULI.NS","MCDOWELL-N":"UNITDSPR.NS",
-    "TATAMOTORS":"TMPV.NS",
+    "ICICIPRULIFE":"ICICIPRULI.NS",# MCDOWELL-N removed — UNITDSPR not F&O
+    # TATAMOTORS removed — demerged Oct 2025
+    "NAVINFLOUR":"NAVNFLUOR.NS",
     "ZOMATO":"ETERNAL.NS",
 }
 
@@ -56,7 +57,7 @@ ALL_SYMBOLS = [
     "CNXIT","CNXAUTO","CNXPHARMA","CNXENERGY","CNXMETAL","CNXFMCG","CNXINFRA","CNXCONSUM",
     "AARTIIND","ABB","ABCAPITAL","ABFRL","ACC","ADANIENT","ADANIGREEN",
     "ADANIPORTS","ALKEM","AMBUJACEM","AMBER","APOLLOHOSP",
-    "APOLLOTYRE","ASHOKLEY","ASIANPAINT","AUBANK","AUROPHARMA",
+    "APOLLOTYRE","ASHOKLEY","ASIANPAINT","AUBANK","AUROPHARMA","AXISBANK",
     "BAJAJ-AUTO","BAJAJFINSV","BAJFINANCE","BALKRISIND","BANDHANBNK",
     "BANKBARODA","BEL","BERGEPAINT","BHARTIARTL","BHEL","BIOCON",
     "BIRLASOFT","BOSCHLTD","BPCL","BRITANNIA","BSE",
@@ -67,26 +68,23 @@ ALL_SYMBOLS = [
     "GAIL","GLAND","GODREJCP","GODREJPROP","GRASIM",
     "HAL","HAVELLS","HCLTECH","HDFCBANK","HDFCLIFE","HEROMOTOCO",
     "HINDALCO","HINDUNILVR","HUDCO",
-    "ICICIBANK","ICICIGI","ICICIPRULIFE","IDEA","IDFCFIRSTB","IGL",
-    "IIFL","INDHOTEL","INDIAMART","INDIGO","INDUSINDBK","IOC",
+    "ICICIBANK","ICICIGI","ICICIPRULIFE","IDFCFIRSTB","IGL",
+    "INDHOTEL","INDIAMART","INDIGO","INDUSINDBK","IOC",
     "IPCALAB","IRB","IRFC","ITC",
     "JINDALSTEL","JUBLFOOD","JSWSTEEL",
     "KALYANKJIL","KOTAKBANK","KPITTECH",
     "LALPATHLAB","LAURUSLABS","LICHSGFIN","LT","LTIM","LTTS","LUPIN",
-    "M&M","M&MFIN","MANAPPURAM","MARICO","MARUTI","MCX","MCDOWELL-N",
-    "MGL","MOTHERSON","MPHASIS","MRF","MUTHOOTFIN",
-    "NATIONALUM","NAUKRI","NBCC","NESTLEIND","NHPC",
+    "M&M","M&MFIN","MANAPPURAM","MARICO","MARUTI","MCX","MGL","MOTHERSON","MPHASIS","MRF","MUTHOOTFIN",
+    "NATIONALUM","NAUKRI","NAVINFLOUR","NBCC","NESTLEIND","NHPC",
     "NMDC","NTPC","NYKAA","OBEROIRLTY","OFSS","ONGC",
-    "PAYTM","PFC","PIDILITIND","PIIND","PNBHOUSING","POLICYBZR",
+    "PFC","PIDILITIND","PIIND","PNBHOUSING","POLICYBZR",
     "POWERGRID","PRESTIGE","PERSISTENT","PNB","PVRINOX",
-    "RADICO","RBLBANK","RECLTD","RELIANCE","RPOWER",
-    "SAIL","SBICARD","SBILIFE","SBIN","SHREECEM","SIEMENS","SJVN",
+    "RADICO","RBLBANK","RECLTD","RELIANCE","SAIL","SBICARD","SBILIFE","SBIN","SHREECEM","SIEMENS","SJVN",
     "SRF","STAR","SUNPHARMA","SUZLON",
-    "TATACHEM","TATACOMM","TATACONSUM","TATAELXSI","TATAMOTORS",
-    "TATAPOWER","TATASTEEL","TCS","TECHM","TIINDIA","TITAN",
+    "TATACHEM","TATACOMM","TATACONSUM","TATAELXSI","TATAPOWER","TATASTEEL","TCS","TECHM","TIINDIA","TITAN",
     "TORNTPHARM","TORNTPOWER","TRENT",
     "UBL","ULTRACEMCO","UNIONBANK","UPL",
-    "VBL","VEDL","VOLTAS","WHIRLPOOL","WIPRO","ZOMATO",
+    "VBL","VEDL","VOLTAS","WIPRO","ZOMATO",
 ]
 
 def get_yf_ticker(s):
@@ -97,12 +95,13 @@ def parse_df(df):
     df = df.copy()
     df.columns = [c.lower() for c in df.columns]
     if not all(c in df.columns for c in ["open","high","low","close"]): return None
-    df = df[["open","high","low","close"]].dropna()
+    df = df[["open","high","low","close","volume"] if "volume" in df.columns else ["open","high","low","close"]].dropna(subset=["open","high","low","close"])
     df = df[df["open"] > 0].round(2)
     if df.empty: return None
     return [{"date": pd.Timestamp(i).strftime("%Y-%m-%d"),
              "open": round(float(r["open"]),2), "high": round(float(r["high"]),2),
-             "low":  round(float(r["low"]),2),  "close": round(float(r["close"]),2)}
+             "low":  round(float(r["low"]),2),  "close": round(float(r["close"]),2),
+             "volume": int(r["volume"]) if "volume" in r.index and pd.notna(r["volume"]) else 0}
             for i, r in df.iterrows()]
 
 def fetch_batch(symbols, start, end):
@@ -164,8 +163,3 @@ def sync_today():
         "grandTotal":   len(ALL_SYMBOLS),
         "done":         (offset + limit) >= len(ALL_SYMBOLS),
     })
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
