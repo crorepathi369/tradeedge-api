@@ -40,50 +40,102 @@ def options_handler(path=''):
     return cors_response({'ok': True})
 
 YAHOO_TICKER_MAP = {
-    "NIFTY50":"^NSEI","BANKNIFTY":"^NSEBANK","FINNIFTY":"NIFTY_FIN_SERVICE.NS",
-    "MIDCPNIFTY":"^NSEMDCP50","CNXIT":"^CNXIT","CNXAUTO":"^CNXAUTO",
-    "CNXPHARMA":"^CNXPHARMA","CNXENERGY":"^CNXENERGY","CNXMETAL":"^CNXMETAL",
-    "CNXFMCG":"^CNXFMCG","CNXINFRA":"^CNXINFRA","CNXCONSUM":"^CNXCONSUM",
-    "M&M":"M&M.NS","BAJAJ-AUTO":"BAJAJ-AUTO.NS",
-    "BIRLASOFT":"BSOFT.NS","DEEPAKNITR":"DEEPAKNTR.NS",
-    "ICICIPRULIFE":"ICICIPRULI.NS",# MCDOWELL-N removed — UNITDSPR not F&O
-    # TATAMOTORS removed — demerged Oct 2025
-    "ZOMATO":"ETERNAL.NS",
+    # Indices
+    "NIFTY50":     "^NSEI",
+    "BANKNIFTY":   "^NSEBANK",
+    "FINNIFTY":    "NIFTY_FIN_SERVICE.NS",
+    "MIDCPNIFTY":  "^NSEMDCP50",
+    # Stocks with non-standard Yahoo tickers
+    "M&M":         "M&M.NS",
+    "BAJAJ-AUTO":  "BAJAJ-AUTO.NS",
+    "ETERNAL":     "ETERNAL.NS",      # Formerly Zomato
+    "ICICIPRULI":  "ICICIPRULI.NS",
+    "JIOFIN":      "JIOFIN.NS",
+    "LODHA":       "LODHA.NS",
+    "INDUSTOWER":  "INDUSTOWER.NS",
+    "SAMMAANCAP":  "SAMMAANCAP.NS",
+    "RVNL":        "RVNL.NS",
+    "PGEL":        "PGEL.NS",
+    "WAAREEENER":  "WAAREEENER.NS",
+    "INOXWIND":    "INOXWIND.NS",
+    "IREDA":       "IREDA.NS",
+    "SWIGGY":      "SWIGGY.NS",
+    "SYNGENE":     "SYNGENE.NS",
+    "NUVAMA":      "NUVAMA.NS",
+    "KFINTECH":    "KFINTECH.NS",
+    "KAYNES":      "KAYNES.NS",
+    "TATATECH":    "TATATECH.NS",
+    "PREMIERENE":  "PREMIERENE.NS",
 }
 
 ALL_SYMBOLS = [
-    "NIFTY50","BANKNIFTY","FINNIFTY","MIDCPNIFTY",
-    "CNXIT","CNXAUTO","CNXPHARMA","CNXENERGY","CNXMETAL","CNXFMCG","CNXINFRA","CNXCONSUM",
-    "AARTIIND","ABB","ABCAPITAL","ABFRL","ACC","ADANIENT","ADANIGREEN",
-    "ADANIPORTS","ALKEM","AMBUJACEM","AMBER","APOLLOHOSP",
-    "APOLLOTYRE","ASHOKLEY","ASIANPAINT","AUBANK","AUROPHARMA","AXISBANK",
-    "BAJAJ-AUTO","BAJAJFINSV","BAJFINANCE","BALKRISIND","BANDHANBNK",
-    "BANKBARODA","BEL","BERGEPAINT","BHARTIARTL","BHEL","BIOCON",
-    "BIRLASOFT","BOSCHLTD","BPCL","BRITANNIA","BSE",
-    "CAMS","CANBK","CESC","CHAMBLFERT","CHOLAFIN","CIPLA","COALINDIA",
-    "COFORGE","COLPAL","CONCOR","COROMANDEL","CUMMINSIND",
-    "DABUR","DEEPAKNITR","DELHIVERY","DMART","DIVISLAB","DIXON","DLF","DRREDDY",
-    "EICHERMOT","EMAMILTD","EXIDEIND","FEDERALBNK",
-    "GAIL","GLAND","GODREJCP","GODREJPROP","GRASIM",
-    "HAL","HAVELLS","HCLTECH","HDFCBANK","HDFCLIFE","HEROMOTOCO",
-    "HINDALCO","HINDUNILVR","HUDCO",
-    "ICICIBANK","ICICIGI","ICICIPRULIFE","IDFCFIRSTB","IGL",
-    "INDHOTEL","INDIAMART","INDIGO","INDUSINDBK","IOC",
-    "IPCALAB","IRB","IRFC","ITC",
-    "JINDALSTEL","JUBLFOOD","JSWSTEEL",
-    "KALYANKJIL","KOTAKBANK","KPITTECH",
-    "LALPATHLAB","LAURUSLABS","LICHSGFIN","LT","LTIM","LTTS","LUPIN",
-    "M&M","M&MFIN","MANAPPURAM","MARICO","MARUTI","MCX","MGL","MOTHERSON","MPHASIS","MRF","MUTHOOTFIN",
-    "NATIONALUM","NAUKRI","NBCC","NESTLEIND","NHPC",
-    "NMDC","NTPC","NYKAA","OBEROIRLTY","OFSS","ONGC",
-    "PFC","PIDILITIND","PIIND","PNBHOUSING","POLICYBZR",
-    "POWERGRID","PRESTIGE","PERSISTENT","PNB","PVRINOX",
-    "RADICO","RBLBANK","RECLTD","RELIANCE","SAIL","SBICARD","SBILIFE","SBIN","SHREECEM","SIEMENS","SJVN",
-    "SRF","STAR","SUNPHARMA","SUZLON",
-    "TATACHEM","TATACOMM","TATACONSUM","TATAELXSI","TATAPOWER","TATASTEEL","TCS","TECHM","TIINDIA","TITAN",
-    "TORNTPHARM","TORNTPOWER","TRENT",
-    "UBL","ULTRACEMCO","UNIONBANK","UPL",
-    "VBL","VEDL","VOLTAS","WIPRO","ZOMATO",
+    # ── Indices ───────────────────────────────────────────────────────────────
+    "NIFTY50", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY",
+    # ── A ─────────────────────────────────────────────────────────────────────
+    "360ONE", "ABB", "ABCAPITAL", "ADANIENSOL", "ADANIENT", "ADANIGREEN",
+    "ADANIPORTS", "ALKEM", "AMBER", "AMBUJACEM", "ANGELONE", "APLAPOLLO",
+    "APOLLOHOSP", "ASHOKLEY", "ASIANPAINT", "ASTRAL", "AUBANK", "AUROPHARMA",
+    "AXISBANK",
+    # ── B ─────────────────────────────────────────────────────────────────────
+    "BAJAJ-AUTO", "BAJAJFINSV", "BAJAJHLDNG", "BAJFINANCE", "BANDHANBNK",
+    "BANKBARODA", "BANKINDIA", "BDL", "BEL", "BHARATFORG", "BHARTIARTL",
+    "BHEL", "BIOCON", "BLUESTARCO", "BOSCHLTD", "BPCL", "BRITANNIA", "BSE",
+    # ── C ─────────────────────────────────────────────────────────────────────
+    "CAMS", "CANBK", "CDSL", "CGPOWER", "CHOLAFIN", "CIPLA", "COALINDIA",
+    "COFORGE", "COLPAL", "CONCOR", "CROMPTON", "CUMMINSIND",
+    # ── D ─────────────────────────────────────────────────────────────────────
+    "DABUR", "DALBHARAT", "DELHIVERY", "DIVISLAB", "DIXON", "DLF", "DMART",
+    "DRREDDY",
+    # ── E ─────────────────────────────────────────────────────────────────────
+    "EICHERMOT", "ETERNAL", "EXIDEIND",
+    # ── F ─────────────────────────────────────────────────────────────────────
+    "FEDERALBNK", "FORTIS",
+    # ── G ─────────────────────────────────────────────────────────────────────
+    "GAIL", "GLENMARK", "GODREJCP", "GODREJPROP", "GRASIM",
+    # ── H ─────────────────────────────────────────────────────────────────────
+    "HAL", "HAVELLS", "HCLTECH", "HDFCAMC", "HDFCBANK", "HDFCLIFE",
+    "HEROMOTOCO", "HINDALCO", "HINDPETRO", "HINDUNILVR", "HINDZINC", "HUDCO",
+    # ── I ─────────────────────────────────────────────────────────────────────
+    "ICICIBANK", "ICICIGI", "ICICIPRULI", "IDEA", "IDFCFIRSTB", "IEX",
+    "INDHOTEL", "INDIANB", "INDIGO", "INDUSINDBK", "INDUSTOWER", "INFY",
+    "INOXWIND", "IOC", "IREDA", "IRFC", "ITC",
+    # ── J ─────────────────────────────────────────────────────────────────────
+    "JINDALSTEL", "JIOFIN", "JSWENERGY", "JSWSTEEL", "JUBLFOOD",
+    # ── K ─────────────────────────────────────────────────────────────────────
+    "KALYANKJIL", "KAYNES", "KEI", "KFINTECH", "KOTAKBANK", "KPITTECH",
+    # ── L ─────────────────────────────────────────────────────────────────────
+    "LAURUSLABS", "LICHSGFIN", "LICI", "LODHA", "LT", "LTF", "LTIM", "LUPIN",
+    # ── M ─────────────────────────────────────────────────────────────────────
+    "M&M", "MANAPPURAM", "MANKIND", "MARICO", "MARUTI", "MAXHEALTH", "MAZDOCK",
+    "MCX", "MFSL", "MOTHERSON", "MPHASIS", "MUTHOOTFIN",
+    # ── N ─────────────────────────────────────────────────────────────────────
+    "NATIONALUM", "NAUKRI", "NBCC", "NESTLEIND", "NHPC", "NMDC", "NTPC",
+    "NUVAMA", "NYKAA",
+    # ── O ─────────────────────────────────────────────────────────────────────
+    "OBEROIRLTY", "OFSS", "OIL", "ONGC",
+    # ── P ─────────────────────────────────────────────────────────────────────
+    "PAGEIND", "PATANJALI", "PAYTM", "PERSISTENT", "PETRONET", "PFC", "PGEL",
+    "PHOENIXLTD", "PIDILITIND", "PIIND", "PNB", "PNBHOUSING", "POLICYBZR",
+    "POLYCAB", "POWERGRID", "PREMIERENE", "PRESTIGE",
+    # ── R ─────────────────────────────────────────────────────────────────────
+    "RBLBANK", "RECLTD", "RELIANCE", "RVNL",
+    # ── S ─────────────────────────────────────────────────────────────────────
+    "SAIL", "SAMMAANCAP", "SBICARD", "SBILIFE", "SBIN", "SHREECEM",
+    "SHRIRAMFIN", "SIEMENS", "SOLARINDS", "SONACOMS", "SRF", "SUNPHARMA",
+    "SUPREMEIND", "SUZLON", "SWIGGY", "SYNGENE",
+    # ── T ─────────────────────────────────────────────────────────────────────
+    "TATACONSUM", "TATAELXSI", "TATAPOWER", "TATASTEEL", "TATATECH", "TCS",
+    "TECHM", "TIINDIA", "TITAN", "TORNTPHARM", "TORNTPOWER", "TRENT", "TVSMOTOR",
+    # ── U ─────────────────────────────────────────────────────────────────────
+    "ULTRACEMCO", "UNIONBANK", "UNITDSPR", "UNOMINDA", "UPL",
+    # ── V ─────────────────────────────────────────────────────────────────────
+    "VBL", "VEDL", "VOLTAS",
+    # ── W ─────────────────────────────────────────────────────────────────────
+    "WAAREEENER", "WIPRO",
+    # ── Y ─────────────────────────────────────────────────────────────────────
+    "YESBANK",
+    # ── Z ─────────────────────────────────────────────────────────────────────
+    "ZYDUSLIFE",
 ]
 
 def get_yf_ticker(s):
