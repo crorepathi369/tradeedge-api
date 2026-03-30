@@ -3,7 +3,7 @@ TradeEdge Cloud API — batched fetching (40 symbols per call, ~10s each)
 Stays within Render free tier 30s response limit.
 """
 from __future__ import annotations
-import os, time
+import os, time, requests
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
@@ -13,6 +13,19 @@ try:
     import pandas as pd
 except ImportError:
     raise SystemExit("Run: pip install yfinance pandas flask flask-cors")
+
+# ── Yahoo Finance auth fix ────────────────────────────────────────────────────
+# Yahoo changed their crumb/cookie system in 2024. This session with proper
+# headers prevents silent auth failures that return empty DataFrames in <1s.
+_yf_session = requests.Session()
+_yf_session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+})
 
 app = Flask(__name__)
 # Most permissive CORS config — allows file:// (null origin) and everything else
@@ -92,6 +105,21 @@ ALL_SYMBOLS = [
 def get_yf_ticker(s):
     return YAHOO_TICKER_MAP.get(s, s + ".NS")
 
+def fetch_single(ticker, start, end):
+    """Fetch one symbol individually — used as fallback when batch fails."""
+    try:
+        df = yf.download(ticker, start=start, end=end, interval="1d",
+                         auto_adjust=False, progress=False,
+                         session=_yf_session, timeout=20)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [str(c[0]).lower().replace(" ", "_") for c in df.columns]
+        else:
+            df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
+        return parse_df(df)
+    except Exception as e:
+        print(f"  Single fetch failed for {ticker}: {e}")
+        return None
+
 def parse_df(df):
     """
     Parse a yfinance DataFrame (auto_adjust=False) into row dicts.
@@ -126,23 +154,42 @@ def fetch_batch(symbols, start, end):
     try:
         raw = yf.download(tickers, start=start, end=end, interval="1d",
                           auto_adjust=False, progress=False,
-                          group_by="ticker", timeout=25)
+                          group_by="ticker", session=_yf_session, timeout=25)
         for tk, sym in t2s.items():
             try:
                 if isinstance(raw.columns, pd.MultiIndex):
                     df = raw[tk].copy()
-                    # Flatten MultiIndex: ("Adj Close", "RELIANCE.NS") -> "adj_close"
                     df.columns = [str(c[0]).lower().replace(" ", "_") for c in df.columns]
                 else:
                     df = raw.copy()
                     df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
                 rows = parse_df(df)
-                if rows: result[sym] = rows
-                else: failed.append(sym)
-            except: failed.append(sym)
+                if rows:
+                    result[sym] = rows
+                else:
+                    failed.append(sym)
+            except:
+                failed.append(sym)
     except Exception as e:
         print(f"Batch error: {e}")
         failed.extend(symbols)
+
+    # ── Fallback: retry each failed symbol individually ───────────────────────
+    # Batch downloads sometimes fail for index tickers (^NSEI etc.) or when
+    # only 1 symbol is in the batch. Individual fetch is slower but reliable.
+    if failed:
+        print(f"  Retrying {len(failed)} failed symbols individually…")
+        still_failed = []
+        for sym in failed:
+            tk   = get_yf_ticker(sym)
+            rows = fetch_single(tk, start, end)
+            if rows:
+                result[sym] = rows
+                print(f"  ✓ {sym} recovered individually ({len(rows)} rows)")
+            else:
+                still_failed.append(sym)
+        failed = still_failed
+
     return result, failed
 
 
