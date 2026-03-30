@@ -1,6 +1,7 @@
 flask
 flask-cors
-yfinance
+yfinance==0.2.54
 pandas
+requests
 gunicorn
 gevent
