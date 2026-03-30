@@ -157,6 +157,7 @@ def health():
 def sync_today():
     offset = int(request.args.get("offset", 0))
     limit  = int(request.args.get("limit",  40))
+    days   = int(request.args.get("days",   7))   # default 7 = existing behaviour
     syms   = ALL_SYMBOLS[offset:offset + limit]
 
     if not syms:
@@ -166,7 +167,7 @@ def sync_today():
                         "done":True})
 
     end   = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
-    start = (datetime.today() - timedelta(days=7)).strftime("%Y-%m-%d")
+    start = (datetime.today() - timedelta(days=days)).strftime("%Y-%m-%d")
     t0    = time.time()
 
     result, failed = fetch_batch(syms, start, end)
