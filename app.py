@@ -3,7 +3,7 @@ TradeEdge Cloud API — batched fetching (40 symbols per call, ~10s each)
 Stays within Render free tier 30s response limit.
 """
 from __future__ import annotations
-import os, time
+import os, time, threading
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
@@ -17,6 +17,9 @@ except ImportError:
 app = Flask(__name__)
 # Most permissive CORS config — allows file:// (null origin) and everything else
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
+# Semaphore — only one Yahoo fetch at a time to avoid rate limiting
+_fetch_lock = threading.Semaphore(1)
 
 def cors_response(data, status=200):
     """Wrap jsonify with explicit CORS headers to handle null origin from file://"""
@@ -200,7 +203,15 @@ def sync_today():
     if offset > 0:
         time.sleep(2)
 
-    result, failed = fetch_batch(syms, start, end)
+    # Acquire lock — only one Yahoo fetch runs at a time across all clients
+    acquired = _fetch_lock.acquire(timeout=25)
+    if not acquired:
+        return cors_response({"status":"error","error":"Server busy, retry shortly"}, 503)
+
+    try:
+        result, failed = fetch_batch(syms, start, end)
+    finally:
+        _fetch_lock.release()
 
     return cors_response({
         "status":       "ok",
