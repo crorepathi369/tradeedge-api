@@ -138,25 +138,6 @@ def fetch_batch(symbols, start, end):
     except Exception as e:
         print(f"Batch error: {e}")
         failed.extend(symbols)
-
-    # Individual fallback for any that failed in the batch download
-    if failed:
-        retry = list(failed); failed = []
-        for sym in retry:
-            try:
-                tk = get_yf_ticker(sym)
-                df = yf.download(tk, start=start, end=end, interval="1d",
-                                 auto_adjust=False, progress=False, timeout=15)
-                if df is not None and not df.empty:
-                    df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
-                    rows = parse_df(df)
-                    if rows:
-                        result[sym] = rows
-                        continue
-            except Exception as e:
-                print(f"Individual fetch failed {sym}: {e}")
-            failed.append(sym)
-
     return result, failed
 
 
@@ -183,6 +164,11 @@ def sync_today():
     end   = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
     start = (datetime.today() - timedelta(days=days)).strftime("%Y-%m-%d")
     t0    = time.time()
+
+    # Small pause between batches — reduces Yahoo Finance rate limit risk
+    # First batch (offset=0) gets no delay; subsequent batches get 2s
+    if offset > 0:
+        time.sleep(2)
 
     result, failed = fetch_batch(syms, start, end)
 
