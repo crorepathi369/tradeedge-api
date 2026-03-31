@@ -123,21 +123,51 @@ def fetch_batch(symbols, start, end):
         raw = yf.download(tickers, start=start, end=end, interval="1d",
                           auto_adjust=False, progress=False,
                           group_by="ticker", timeout=25)
+
+        if raw is None or raw.empty:
+            print(f"Batch returned empty DataFrame for {len(symbols)} symbols")
+            failed.extend(symbols)
+            return result, failed
+
+        print(f"Batch raw shape: {raw.shape}, cols type: {type(raw.columns)}")
+
         for tk, sym in t2s.items():
             try:
                 if isinstance(raw.columns, pd.MultiIndex):
-                    df = raw[tk].copy()
-                    df.columns = [str(c[0]).lower().replace(" ", "_") for c in df.columns]
+                    # New yfinance: MultiIndex is (field, ticker) or (ticker, field)
+                    # Detect orientation by checking level values
+                    lvl0 = [str(v) for v in raw.columns.get_level_values(0)]
+                    lvl1 = [str(v) for v in raw.columns.get_level_values(1)]
+                    if tk in lvl1:
+                        # Format: (field, ticker) — standard group_by='ticker' output
+                        df = raw.xs(tk, axis=1, level=1).copy()
+                    elif tk in lvl0:
+                        # Format: (ticker, field)
+                        df = raw.xs(tk, axis=1, level=0).copy()
+                    else:
+                        print(f"Ticker {tk} not found in MultiIndex")
+                        failed.append(sym)
+                        continue
+                    df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
                 else:
                     df = raw.copy()
                     df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
+
                 rows = parse_df(df)
-                if rows: result[sym] = rows
-                else: failed.append(sym)
-            except: failed.append(sym)
+                if rows:
+                    result[sym] = rows
+                else:
+                    print(f"parse_df returned None for {sym} ({tk})")
+                    failed.append(sym)
+            except Exception as e:
+                print(f"Error parsing {sym} ({tk}): {e}")
+                failed.append(sym)
+
     except Exception as e:
-        print(f"Batch error: {e}")
+        print(f"Batch download error: {e}")
         failed.extend(symbols)
+
+    print(f"Batch done: {len(result)} ok, {len(failed)} failed")
     return result, failed
 
 
