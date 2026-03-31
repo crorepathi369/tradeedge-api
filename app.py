@@ -40,16 +40,21 @@ def options_handler(path=''):
     return cors_response({'ok': True})
 
 YAHOO_TICKER_MAP = {
-    "NIFTY50":"^NSEI","BANKNIFTY":"^NSEBANK","FINNIFTY":"NIFTY_FIN_SERVICE.NS",
-    "MIDCPNIFTY":"^NSEMDCP50","CNXIT":"^CNXIT","CNXAUTO":"^CNXAUTO",
-    "CNXPHARMA":"^CNXPHARMA","CNXENERGY":"^CNXENERGY","CNXMETAL":"^CNXMETAL",
-    "CNXFMCG":"^CNXFMCG","CNXINFRA":"^CNXINFRA","CNXCONSUM":"^CNXCONSUM",
-    "M&M":"M&M.NS","BAJAJ-AUTO":"BAJAJ-AUTO.NS",
-    "BIRLASOFT":"BSOFT.NS","DEEPAKNITR":"DEEPAKNTR.NS",
-    "ICICIPRULIFE":"ICICIPRULI.NS","MCDOWELL-N":"UNITDSPR.NS",
-    "TATAMOTORS":"TMPV.NS",
-    "ZOMATO":"ETERNAL.NS",
+    # Indices
+    "NIFTY50":    "^NSEI",
+    "BANKNIFTY":  "^NSEBANK",
+    "FINNIFTY":   "NIFTY_FIN_SERVICE.NS",
+    "MIDCPNIFTY": "^NSEMDCP50",
+    # Stocks with non-standard Yahoo tickers
+    "M&M":        "M&M.NS",
+    "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
+    "ETERNAL":    "ETERNAL.NS",       # formerly ZOMATO
+    "UNITDSPR":   "UNITDSPR.NS",      # formerly MCDOWELL-N
+    "ICICIPRULI": "ICICIPRULI.NS",    # ICICI Prudential Life
+    "BLUESTARCO": "BLUESTAR.NS",      # Blue Star
+    "MAZDOCK":    "MAZDOCK.NS",       # Mazagon Dock
 }
+
 
 ALL_SYMBOLS = [
     "NIFTY50","BANKNIFTY","FINNIFTY","MIDCPNIFTY","360ONE","ABB","ABCAPITAL","ADANIENSOL",
@@ -122,7 +127,6 @@ def fetch_batch(symbols, start, end):
             try:
                 if isinstance(raw.columns, pd.MultiIndex):
                     df = raw[tk].copy()
-                    # Flatten MultiIndex: ("Adj Close", "RELIANCE.NS") -> "adj_close"
                     df.columns = [str(c[0]).lower().replace(" ", "_") for c in df.columns]
                 else:
                     df = raw.copy()
@@ -134,6 +138,25 @@ def fetch_batch(symbols, start, end):
     except Exception as e:
         print(f"Batch error: {e}")
         failed.extend(symbols)
+
+    # Individual fallback for any that failed in the batch download
+    if failed:
+        retry = list(failed); failed = []
+        for sym in retry:
+            try:
+                tk = get_yf_ticker(sym)
+                df = yf.download(tk, start=start, end=end, interval="1d",
+                                 auto_adjust=False, progress=False, timeout=15)
+                if df is not None and not df.empty:
+                    df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
+                    rows = parse_df(df)
+                    if rows:
+                        result[sym] = rows
+                        continue
+            except Exception as e:
+                print(f"Individual fetch failed {sym}: {e}")
+            failed.append(sym)
+
     return result, failed
 
 
@@ -148,7 +171,7 @@ def health():
 def sync_today():
     offset = int(request.args.get("offset", 0))
     limit  = int(request.args.get("limit",  40))
-    days   = int(request.args.get("days",   7))   # default 7 = existing behaviour
+    days   = int(request.args.get("days",   5))   # default 5; TradeEdge app passes &days=10 explicitly
     syms   = ALL_SYMBOLS[offset:offset + limit]
 
     if not syms:
