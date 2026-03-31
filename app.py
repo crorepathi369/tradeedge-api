@@ -51,7 +51,7 @@ YAHOO_TICKER_MAP = {
     "ETERNAL":    "ETERNAL.NS",       # formerly ZOMATO
     "UNITDSPR":   "UNITDSPR.NS",      # formerly MCDOWELL-N
     "ICICIPRULI": "ICICIPRULI.NS",    # ICICI Prudential Life
-    "BLUESTARCO": "BLUESTAR.NS",      # Blue Star
+    "BLUESTARCO": "BLUESTARCO.NS",  # Blue Star
     "MAZDOCK":    "MAZDOCK.NS",       # Mazagon Dock
 }
 
