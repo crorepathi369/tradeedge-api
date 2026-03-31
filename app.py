@@ -3,7 +3,7 @@ TradeEdge Cloud API — batched fetching (40 symbols per call, ~10s each)
 Stays within Render free tier 30s response limit.
 """
 from __future__ import annotations
-import os, time, requests
+import os, time
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
@@ -13,19 +13,6 @@ try:
     import pandas as pd
 except ImportError:
     raise SystemExit("Run: pip install yfinance pandas flask flask-cors")
-
-# ── Yahoo Finance auth fix ────────────────────────────────────────────────────
-# Yahoo changed their crumb/cookie system in 2024. This session with proper
-# headers prevents silent auth failures that return empty DataFrames in <1s.
-_yf_session = requests.Session()
-_yf_session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-})
 
 app = Flask(__name__)
 # Most permissive CORS config — allows file:// (null origin) and everything else
@@ -65,60 +52,36 @@ YAHOO_TICKER_MAP = {
 }
 
 ALL_SYMBOLS = [
-    "NIFTY50","BANKNIFTY","FINNIFTY","MIDCPNIFTY",
-    "CNXIT","CNXAUTO","CNXPHARMA","CNXENERGY","CNXMETAL","CNXFMCG","CNXINFRA","CNXCONSUM",
-    "AARTIIND","ABB","ABCAPITAL","ABFRL","ACC","ADANIENT","ADANIGREEN",
-    "ADANIPORTS","ALKEM","AMBUJACEM","AMBER","APOLLOHOSP",
-    "APOLLOTYRE","ASHOKLEY","ASIANPAINT","AUBANK","AUROPHARMA",
-    "BAJAJ-AUTO","BAJAJFINSV","BAJFINANCE","BALKRISIND","BANDHANBNK",
-    "BANKBARODA","BEL","BERGEPAINT","BHARTIARTL","BHEL","BIOCON",
-    "BIRLASOFT","BOSCHLTD","BPCL","BRITANNIA","BSE",
-    "CAMS","CANBK","CESC","CHAMBLFERT","CHOLAFIN","CIPLA","COALINDIA",
-    "COFORGE","COLPAL","CONCOR","COROMANDEL","CUMMINSIND",
-    "DABUR","DEEPAKNITR","DELHIVERY","DMART","DIVISLAB","DIXON","DLF","DRREDDY",
-    "EICHERMOT","EMAMILTD","EXIDEIND","FEDERALBNK",
-    "GAIL","GLAND","GODREJCP","GODREJPROP","GRASIM",
-    "HAL","HAVELLS","HCLTECH","HDFCBANK","HDFCLIFE","HEROMOTOCO",
-    "HINDALCO","HINDUNILVR","HUDCO",
-    "ICICIBANK","ICICIGI","ICICIPRULIFE","IDEA","IDFCFIRSTB","IGL",
-    "IIFL","INDHOTEL","INDIAMART","INDIGO","INDUSINDBK","IOC",
-    "IPCALAB","IRB","IRFC","ITC",
-    "JINDALSTEL","JUBLFOOD","JSWSTEEL",
-    "KALYANKJIL","KOTAKBANK","KPITTECH",
-    "LALPATHLAB","LAURUSLABS","LICHSGFIN","LT","LTIM","LTTS","LUPIN",
-    "M&M","M&MFIN","MANAPPURAM","MARICO","MARUTI","MCX","MCDOWELL-N",
-    "MGL","MOTHERSON","MPHASIS","MRF","MUTHOOTFIN",
-    "NATIONALUM","NAUKRI","NBCC","NESTLEIND","NHPC",
-    "NMDC","NTPC","NYKAA","OBEROIRLTY","OFSS","ONGC",
-    "PAYTM","PFC","PIDILITIND","PIIND","PNBHOUSING","POLICYBZR",
-    "POWERGRID","PRESTIGE","PERSISTENT","PNB","PVRINOX",
-    "RADICO","RBLBANK","RECLTD","RELIANCE","RPOWER",
-    "SAIL","SBICARD","SBILIFE","SBIN","SHREECEM","SIEMENS","SJVN",
-    "SRF","STAR","SUNPHARMA","SUZLON",
-    "TATACHEM","TATACOMM","TATACONSUM","TATAELXSI","TATAMOTORS",
-    "TATAPOWER","TATASTEEL","TCS","TECHM","TIINDIA","TITAN",
-    "TORNTPHARM","TORNTPOWER","TRENT",
-    "UBL","ULTRACEMCO","UNIONBANK","UPL",
-    "VBL","VEDL","VOLTAS","WHIRLPOOL","WIPRO","ZOMATO",
+    "NIFTY50","BANKNIFTY","FINNIFTY","MIDCPNIFTY","360ONE","ABB","ABCAPITAL","ADANIENSOL",
+    "ADANIENT","ADANIGREEN","ADANIPORTS","ALKEM","AMBER","AMBUJACEM","ANGELONE","APLAPOLLO",
+    "APOLLOHOSP","ASHOKLEY","ASIANPAINT","ASTRAL","AUBANK","AUROPHARMA","AXISBANK","BAJAJ-AUTO",
+    "BAJAJFINSV","BAJAJHLDNG","BAJFINANCE","BANDHANBNK","BANKBARODA","BANKINDIA","BDL","BEL",
+    "BHARATFORG","BHARTIARTL","BHEL","BIOCON","BLUESTARCO","BOSCHLTD","BPCL","BRITANNIA",
+    "BSE","CAMS","CANBK","CDSL","CGPOWER","CHOLAFIN","CIPLA","COALINDIA",
+    "COFORGE","COLPAL","CONCOR","CROMPTON","CUMMINSIND","DABUR","DALBHARAT","DELHIVERY",
+    "DIVISLAB","DIXON","DLF","DMART","DRREDDY","EICHERMOT","ETERNAL","EXIDEIND",
+    "FEDERALBNK","FORTIS","GAIL","GLENMARK","GODREJCP","GODREJPROP","GRASIM","HAL",
+    "HAVELLS","HCLTECH","HDFCAMC","HDFCBANK","HDFCLIFE","HEROMOTOCO","HINDALCO","HINDPETRO",
+    "HINDUNILVR","HINDZINC","HUDCO","ICICIBANK","ICICIGI","ICICIPRULI","IDEA","IDFCFIRSTB",
+    "IEX","INDHOTEL","INDIANB","INDIGO","INDUSINDBK","INDUSTOWER","INFY","INOXWIND",
+    "IOC","IREDA","IRFC","ITC","JINDALSTEL","JIOFIN","JSWENERGY","JSWSTEEL",
+    "JUBLFOOD","KALYANKJIL","KAYNES","KEI","KFINTECH","KOTAKBANK","KPITTECH","LAURUSLABS",
+    "LICHSGFIN","LICI","LODHA","LT","LTF","LTIM","LUPIN","M&M",
+    "MANAPPURAM","MANKIND","MARICO","MARUTI","MAXHEALTH","MAZDOCK","MCX","MFSL",
+    "MOTHERSON","MPHASIS","MUTHOOTFIN","NATIONALUM","NAUKRI","NBCC","NESTLEIND","NHPC",
+    "NMDC","NTPC","NUVAMA","NYKAA","OBEROIRLTY","OFSS","OIL","ONGC",
+    "PAGEIND","PATANJALI","PAYTM","PERSISTENT","PETRONET","PFC","PGEL","PHOENIXLTD",
+    "PIDILITIND","PIIND","PNB","PNBHOUSING","POLICYBZR","POLYCAB","POWERGRID","PREMIERENE",
+    "PRESTIGE","RBLBANK","RECLTD","RELIANCE","RVNL","SAIL","SAMMAANCAP","SBICARD",
+    "SBILIFE","SBIN","SHREECEM","SHRIRAMFIN","SIEMENS","SOLARINDS","SONACOMS","SRF",
+    "SUNPHARMA","SUPREMEIND","SUZLON","SWIGGY","SYNGENE","TATACONSUM","TATAELXSI","TATAPOWER",
+    "TATASTEEL","TATATECH","TCS","TECHM","TIINDIA","TITAN","TORNTPHARM","TORNTPOWER",
+    "TRENT","TVSMOTOR","ULTRACEMCO","UNIONBANK","UNITDSPR","UNOMINDA","UPL","VBL",
+    "VEDL","VOLTAS","WAAREEENER","WIPRO","YESBANK","ZYDUSLIFE",
 ]
 
 def get_yf_ticker(s):
     return YAHOO_TICKER_MAP.get(s, s + ".NS")
-
-def fetch_single(ticker, start, end):
-    """Fetch one symbol individually — used as fallback when batch fails."""
-    try:
-        df = yf.download(ticker, start=start, end=end, interval="1d",
-                         auto_adjust=False, progress=False,
-                         session=_yf_session, timeout=20)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [str(c[0]).lower().replace(" ", "_") for c in df.columns]
-        else:
-            df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
-        return parse_df(df)
-    except Exception as e:
-        print(f"  Single fetch failed for {ticker}: {e}")
-        return None
 
 def parse_df(df):
     """
@@ -154,42 +117,23 @@ def fetch_batch(symbols, start, end):
     try:
         raw = yf.download(tickers, start=start, end=end, interval="1d",
                           auto_adjust=False, progress=False,
-                          group_by="ticker", session=_yf_session, timeout=25)
+                          group_by="ticker", timeout=25)
         for tk, sym in t2s.items():
             try:
                 if isinstance(raw.columns, pd.MultiIndex):
                     df = raw[tk].copy()
+                    # Flatten MultiIndex: ("Adj Close", "RELIANCE.NS") -> "adj_close"
                     df.columns = [str(c[0]).lower().replace(" ", "_") for c in df.columns]
                 else:
                     df = raw.copy()
                     df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
                 rows = parse_df(df)
-                if rows:
-                    result[sym] = rows
-                else:
-                    failed.append(sym)
-            except:
-                failed.append(sym)
+                if rows: result[sym] = rows
+                else: failed.append(sym)
+            except: failed.append(sym)
     except Exception as e:
         print(f"Batch error: {e}")
         failed.extend(symbols)
-
-    # ── Fallback: retry each failed symbol individually ───────────────────────
-    # Batch downloads sometimes fail for index tickers (^NSEI etc.) or when
-    # only 1 symbol is in the batch. Individual fetch is slower but reliable.
-    if failed:
-        print(f"  Retrying {len(failed)} failed symbols individually…")
-        still_failed = []
-        for sym in failed:
-            tk   = get_yf_ticker(sym)
-            rows = fetch_single(tk, start, end)
-            if rows:
-                result[sym] = rows
-                print(f"  ✓ {sym} recovered individually ({len(rows)} rows)")
-            else:
-                still_failed.append(sym)
-        failed = still_failed
-
     return result, failed
 
 
