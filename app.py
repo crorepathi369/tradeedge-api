@@ -122,53 +122,66 @@ def fetch_batch(symbols, start, end):
     tickers = [get_yf_ticker(s) for s in symbols]
     t2s = {get_yf_ticker(s): s for s in symbols}
     result, failed = {}, []
-    try:
-        raw = yf.download(tickers, start=start, end=end, interval="1d",
-                          auto_adjust=False, progress=False,
-                          group_by="ticker", timeout=25)
 
-        if raw is None or raw.empty:
-            print(f"Batch returned empty DataFrame for {len(symbols)} symbols")
-            failed.extend(symbols)
-            return result, failed
+    for attempt in range(3):
+        if attempt > 0:
+            sleep_s = attempt * 5  # 5s, then 10s
+            print(f"Rate limit backoff: sleeping {sleep_s}s before retry {attempt}")
+            time.sleep(sleep_s)
+        try:
+            raw = yf.download(tickers, start=start, end=end, interval="1d",
+                              auto_adjust=False, progress=False,
+                              group_by="ticker", timeout=25)
 
-        print(f"Batch raw shape: {raw.shape}, cols type: {type(raw.columns)}")
+            if raw is None or raw.empty:
+                print(f"Batch returned empty DataFrame for {len(symbols)} symbols (attempt {attempt+1})")
+                continue  # retry
 
-        for tk, sym in t2s.items():
-            try:
-                if isinstance(raw.columns, pd.MultiIndex):
-                    # New yfinance: MultiIndex is (field, ticker) or (ticker, field)
-                    # Detect orientation by checking level values
-                    lvl0 = [str(v) for v in raw.columns.get_level_values(0)]
-                    lvl1 = [str(v) for v in raw.columns.get_level_values(1)]
-                    if tk in lvl1:
-                        # Format: (field, ticker) — standard group_by='ticker' output
-                        df = raw.xs(tk, axis=1, level=1).copy()
-                    elif tk in lvl0:
-                        # Format: (ticker, field)
-                        df = raw.xs(tk, axis=1, level=0).copy()
+            print(f"Batch raw shape: {raw.shape}, cols type: {type(raw.columns)}")
+
+            batch_result, batch_failed = {}, []
+            for tk, sym in t2s.items():
+                try:
+                    if isinstance(raw.columns, pd.MultiIndex):
+                        lvl0 = [str(v) for v in raw.columns.get_level_values(0)]
+                        lvl1 = [str(v) for v in raw.columns.get_level_values(1)]
+                        if tk in lvl1:
+                            df = raw.xs(tk, axis=1, level=1).copy()
+                        elif tk in lvl0:
+                            df = raw.xs(tk, axis=1, level=0).copy()
+                        else:
+                            print(f"Ticker {tk} not found in MultiIndex")
+                            batch_failed.append(sym)
+                            continue
+                        df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
                     else:
-                        print(f"Ticker {tk} not found in MultiIndex")
-                        failed.append(sym)
-                        continue
-                    df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
-                else:
-                    df = raw.copy()
-                    df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
+                        df = raw.copy()
+                        df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
 
-                rows = parse_df(df)
-                if rows:
-                    result[sym] = rows
-                else:
-                    print(f"parse_df returned None for {sym} ({tk})")
-                    failed.append(sym)
-            except Exception as e:
-                print(f"Error parsing {sym} ({tk}): {e}")
-                failed.append(sym)
+                    rows = parse_df(df)
+                    if rows:
+                        batch_result[sym] = rows
+                    else:
+                        batch_failed.append(sym)
+                except Exception as e:
+                    print(f"Error parsing {sym} ({tk}): {e}")
+                    batch_failed.append(sym)
 
-    except Exception as e:
-        print(f"Batch download error: {e}")
-        failed.extend(symbols)
+            # If we got meaningful data, accept this attempt
+            if len(batch_result) > len(symbols) // 2:
+                result = batch_result
+                failed = batch_failed
+                break
+            else:
+                print(f"Only {len(batch_result)}/{len(symbols)} parsed — retrying")
+                continue
+
+        except Exception as e:
+            print(f"Batch download error (attempt {attempt+1}): {e}")
+            continue
+
+    if not result:
+        failed = symbols  # all failed after retries
 
     print(f"Batch done: {len(result)} ok, {len(failed)} failed")
     return result, failed
@@ -184,7 +197,7 @@ def health():
 @app.route("/sync-today")
 def sync_today():
     offset = int(request.args.get("offset", 0))
-    limit  = int(request.args.get("limit",  40))
+    limit  = int(request.args.get("limit",  20))
     days   = int(request.args.get("days",   5))   # default 5; TradeEdge app passes &days=10 explicitly
     syms   = ALL_SYMBOLS[offset:offset + limit]
 
