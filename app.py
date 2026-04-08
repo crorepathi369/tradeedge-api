@@ -159,8 +159,8 @@ def is_rate_limit(e):
 
 # ── Fetch constants ───────────────────────────────────────────────────────────
 
-INTER_SYMBOL    = 1.5   # seconds between every symbol fetch — steady pace
-RATE_LIMIT_WAIT = 30.0  # seconds to pause when rate limit hit
+INTER_SYMBOL    = 0.8   # seconds between every symbol fetch — steady pace
+RATE_LIMIT_WAIT = 45.0  # seconds to pause when rate limit hit
 MAX_RETRIES     = 3     # retries per symbol after rate limit
 
 def fetch_single(sym, start, end):
