@@ -1,11 +1,12 @@
 """
-TradeEdge Cloud API — Yahoo Finance with sequential fetching + exponential backoff
-Fixes rate-limiting inconsistency by:
-  1. Sequential per-symbol fetch (no concurrent threads → no rate limit pile-up)
-  2. Exponential backoff on 429 / RateLimitError (2s → 4s → 8s → 16s, up to 4 retries)
-  3. Small inter-symbol delay (0.35s) to stay under Yahoo's per-IP rate limit
-  4. Batch yf.download() attempted first for speed; falls back to per-symbol on failure
-  5. Indices always fetched individually (^ symbols hit rate limits faster)
+TradeEdge Cloud API — Yahoo Finance with robust rate limit handling
+Key fixes vs previous version:
+  1. Catch YFRateLimitError by class name (not just string) — works across yfinance versions
+  2. Much longer inter-symbol delay (1.5s) — Yahoo's current rate limit is strict
+  3. On rate limit: wait 30s before retrying entire batch (not per-symbol backoff)
+  4. Global rate-limit state: if one symbol hits limit, pause ALL fetching for 30s
+  5. Skip bulk download entirely — it's the main trigger for rate limits
+  6. Sequential only, one symbol at a time with steady pacing
 """
 from __future__ import annotations
 import os, time, random
@@ -18,6 +19,12 @@ try:
     import pandas as pd
 except ImportError:
     raise SystemExit("Run: pip install yfinance pandas flask flask-cors")
+
+# Grab YFRateLimitError if available (yfinance >= 0.2.38), else fall back to Exception
+try:
+    from yfinance.exceptions import YFRateLimitError
+except ImportError:
+    YFRateLimitError = None
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
@@ -66,13 +73,6 @@ YAHOO_TICKER_MAP = {
     "ZOMATO":       "ETERNAL.NS",
 }
 
-# Indices — always fetched individually (^ symbols rate-limited more aggressively)
-INDEX_SYMBOLS = {
-    "NIFTY50", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY",
-    "CNXIT", "CNXAUTO", "CNXPHARMA", "CNXENERGY",
-    "CNXMETAL", "CNXFMCG", "CNXINFRA", "CNXCONSUM",
-}
-
 ALL_SYMBOLS = [
     "NIFTY50","BANKNIFTY","FINNIFTY","MIDCPNIFTY",
     "CNXIT","CNXAUTO","CNXPHARMA","CNXENERGY","CNXMETAL","CNXFMCG","CNXINFRA","CNXCONSUM",
@@ -114,7 +114,7 @@ ALL_SYMBOLS = [
 def get_yf_ticker(s):
     return YAHOO_TICKER_MAP.get(s, s + ".NS")
 
-# ── Data parsing ──────────────────────────────────────────────────────────────
+# ── Parsing ───────────────────────────────────────────────────────────────────
 
 def parse_df(df):
     if df is None or df.empty:
@@ -124,8 +124,7 @@ def parse_df(df):
         df.columns = [str(c[0]).lower().replace(" ", "_") for c in df.columns]
     else:
         df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
-    required = ["open", "high", "low", "close"]
-    if not all(c in df.columns for c in required):
+    if not all(c in df.columns for c in ["open","high","low","close"]):
         return None
     df = df[df["open"] > 0].round(2)
     has_adj = "adj_close" in df.columns
@@ -146,108 +145,65 @@ def parse_df(df):
             continue
     return rows if rows else None
 
-# ── Fetch logic ───────────────────────────────────────────────────────────────
+# ── Rate limit detection ──────────────────────────────────────────────────────
 
-MAX_RETRIES  = 4      # attempts per symbol
-BASE_DELAY   = 2.0    # seconds, doubles each retry
-INTER_SYMBOL = 0.35   # seconds between sequential fetches
-BATCH_DELAY  = 1.5    # seconds before switching to individual fallback
-
-def _is_rate_limit(e):
+def is_rate_limit(e):
+    """Detect rate limit errors by class name AND message — covers all yfinance versions."""
+    cls_name = type(e).__name__
+    if "RateLimit" in cls_name or "ratelimit" in cls_name.lower():
+        return True
+    if YFRateLimitError and isinstance(e, YFRateLimitError):
+        return True
     msg = str(e).lower()
-    return any(k in msg for k in ["rate", "429", "too many", "limit", "yfratelimit"])
+    return any(k in msg for k in ["rate limit", "too many requests", "429", "try after"])
+
+# ── Fetch constants ───────────────────────────────────────────────────────────
+
+INTER_SYMBOL    = 1.5   # seconds between every symbol fetch — steady pace
+RATE_LIMIT_WAIT = 30.0  # seconds to pause when rate limit hit
+MAX_RETRIES     = 3     # retries per symbol after rate limit
 
 def fetch_single(sym, start, end):
-    """Fetch one symbol with exponential backoff. Returns rows or None."""
+    """
+    Fetch one symbol sequentially.
+    On rate limit: wait RATE_LIMIT_WAIT seconds and retry up to MAX_RETRIES times.
+    On other errors: skip immediately.
+    """
     tk = get_yf_ticker(sym)
-    delay = BASE_DELAY
     for attempt in range(MAX_RETRIES):
         try:
             df = yf.download(tk, start=start, end=end, interval="1d",
-                             auto_adjust=False, progress=False, timeout=20)
+                             auto_adjust=False, progress=False, timeout=25)
             rows = parse_df(df)
-            if rows:
-                return rows
-            return None  # empty = wrong ticker, don't retry
+            return rows  # None if empty, that's fine
         except Exception as e:
-            if _is_rate_limit(e):
-                jitter = random.uniform(0, delay * 0.3)
-                wait   = delay + jitter
-                print(f"[{sym}] Rate limit attempt {attempt+1}, wait {wait:.1f}s")
+            if is_rate_limit(e):
+                wait = RATE_LIMIT_WAIT + random.uniform(0, 5)
+                print(f"[{sym}] Rate limit (attempt {attempt+1}/{MAX_RETRIES}), "
+                      f"pausing {wait:.0f}s …")
                 time.sleep(wait)
-                delay *= 2
             else:
-                print(f"[{sym}] Error: {e}")
+                print(f"[{sym}] Error: {type(e).__name__}: {e}")
                 return None
-    print(f"[{sym}] All {MAX_RETRIES} retries exhausted")
+    print(f"[{sym}] Giving up after {MAX_RETRIES} attempts")
     return None
-
-def fetch_bulk(symbols, start, end):
-    """One-shot bulk fetch. Returns (result, failed)."""
-    if not symbols:
-        return {}, []
-    tickers = [get_yf_ticker(s) for s in symbols]
-    t2s     = {get_yf_ticker(s): s for s in symbols}
-    result, failed = {}, []
-    try:
-        raw = yf.download(tickers, start=start, end=end, interval="1d",
-                          auto_adjust=False, progress=False,
-                          group_by="ticker", timeout=30)
-        if raw.empty:
-            return {}, symbols[:]
-        for tk, sym in t2s.items():
-            try:
-                if isinstance(raw.columns, pd.MultiIndex):
-                    if tk not in raw.columns.get_level_values(0):
-                        failed.append(sym); continue
-                    df = raw[tk].copy()
-                    df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
-                else:
-                    df = raw.copy()
-                    df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
-                rows = parse_df(df)
-                if rows: result[sym] = rows
-                else:    failed.append(sym)
-            except Exception:
-                failed.append(sym)
-    except Exception as e:
-        print(f"Bulk error: {e}")
-        failed = symbols[:]
-    return result, failed
 
 def fetch_symbols(symbols, start, end):
     """
-    Strategy:
-    - Equities → bulk attempt first, then individual retry for failures
-    - Indices  → always individual (^ symbols rate-limited faster)
+    Pure sequential fetch — one symbol at a time with INTER_SYMBOL gap.
+    No bulk download (bulk is what triggers mass rate limits on Render's shared IP).
     """
-    equities = [s for s in symbols if s not in INDEX_SYMBOLS]
-    indices  = [s for s in symbols if s in INDEX_SYMBOLS]
-    result, all_failed = {}, []
-
-    # Equities: bulk → individual fallback
-    if equities:
-        bulk_res, bulk_failed = fetch_bulk(equities, start, end)
-        result.update(bulk_res)
-        print(f"Bulk: {len(bulk_res)} ok / {len(bulk_failed)} failed")
-        if bulk_failed:
-            time.sleep(BATCH_DELAY)
-            for sym in bulk_failed:
-                rows = fetch_single(sym, start, end)
-                if rows: result[sym] = rows
-                else:    all_failed.append(sym)
-                time.sleep(INTER_SYMBOL)
-
-    # Indices: always individual
-    if indices:
-        time.sleep(BATCH_DELAY)
-        for sym in indices:
-            rows = fetch_single(sym, start, end)
-            if rows: result[sym] = rows
-            else:    all_failed.append(sym)
+    result, failed = {}, []
+    for i, sym in enumerate(symbols):
+        rows = fetch_single(sym, start, end)
+        if rows:
+            result[sym] = rows
+        else:
+            failed.append(sym)
+        # Always wait between symbols — even on success
+        if i < len(symbols) - 1:
             time.sleep(INTER_SYMBOL)
-
-    return result, all_failed
+    return result, failed
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
