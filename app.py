@@ -1,11 +1,14 @@
 """
 TradeEdge Cloud API — Yahoo Finance with robust rate limit handling
 Key design decisions:
-  1. Sequential fetch only — bulk download triggers mass rate limits on shared IPs
-  2. RATE_LIMIT_WAIT=18s (short) so a 10-symbol batch still completes inside the 150s client timeout
-  3. MAX_BATCH_SECS=130 safety cutoff — returns partial results before client timeout fires
-  4. YFRateLimitError, YFPricesMissingError, YFTzMissingError all handled explicitly
-  5. timeout= param removed from yf.download (unreliable across yfinance versions)
+  1. Use Ticker.history() NOT yf.download() — download() swallows rate limit errors
+     internally ("1 Failed download:"), returns empty DataFrame, so retry logic never runs.
+     Ticker.history() raises YFRateLimitError properly.
+  2. Sequential fetch only — bulk download triggers mass rate limits on shared IPs
+  3. MAX_BATCH_RL_HITS=3 abort — when Yahoo is clearly blocking the IP, stop early
+     rather than burning through retries for every remaining symbol in the batch
+  4. MAX_BATCH_SECS=130 safety cutoff — returns partial results before 150s client timeout
+  5. YFRateLimitError, YFPricesMissingError, YFTzMissingError all handled explicitly
   6. actions=False — skips dividend/split data, faster fetches
 """
 from __future__ import annotations
@@ -169,60 +172,78 @@ def is_rate_limit(e):
 
 # ── Fetch constants ───────────────────────────────────────────────────────────
 
-INTER_SYMBOL     = 1.0   # seconds between every symbol fetch — steady pace
-RATE_LIMIT_WAIT  = 18.0  # seconds to pause on rate limit (was 45 — kept short so 10-sym batch fits in 150s)
-MAX_RETRIES      = 2     # retries per symbol after rate limit (was 3)
-MAX_BATCH_SECS   = 130   # safety cutoff: return partial results rather than blow HTML timeout
+INTER_SYMBOL      = 1.5   # seconds between every symbol fetch — steady pace
+RATE_LIMIT_WAIT   = 25.0  # seconds to pause on rate limit per symbol
+MAX_RETRIES       = 2     # retries per symbol after rate limit
+MAX_BATCH_SECS    = 130   # safety cutoff: return partial results rather than blow HTML timeout
+MAX_BATCH_RL_HITS = 3     # abort batch early if this many symbols hit RL (Yahoo IP is blocked)
+
+# NOTE: Use Ticker.history() NOT yf.download().
+# yf.download() silently catches rate limit errors internally, prints them as
+# "1 Failed download:", and returns an empty DataFrame — so our except block
+# never runs and there is zero retry or backoff. Ticker.history() raises properly.
 
 def fetch_single(sym, start, end):
     """
-    Fetch one symbol sequentially.
+    Fetch one symbol using Ticker.history() which raises exceptions properly.
     On rate limit: wait RATE_LIMIT_WAIT seconds and retry up to MAX_RETRIES times.
-    On known no-data errors (delisted, tz missing, etc.): skip immediately.
-    On other errors: skip immediately.
+    On known no-data errors (delisted, tz missing): skip immediately, no retry.
+    Returns (rows_or_None, rate_limited: bool)
     """
     tk = get_yf_ticker(sym)
     for attempt in range(MAX_RETRIES):
         try:
-            df = yf.download(tk, start=start, end=end, interval="1d",
-                             auto_adjust=False, actions=False, progress=False)
+            ticker = yf.Ticker(tk)
+            df = ticker.history(start=start, end=end, interval="1d",
+                                auto_adjust=False, actions=False)
             rows = parse_df(df)
-            return rows  # None if empty, that's fine
+            return rows, False   # success (rows may be None if empty)
         except Exception as e:
-            # No-data errors — skip, no retry
+            # No-data errors — skip immediately, no retry
             if YFPricesMissingError and isinstance(e, YFPricesMissingError):
                 print(f"[{sym}] No price data (delisted or ticker change)")
-                return None
+                return None, False
             if YFTzMissingError and isinstance(e, YFTzMissingError):
                 print(f"[{sym}] Timezone data missing")
-                return None
+                return None, False
             if is_rate_limit(e):
-                wait = RATE_LIMIT_WAIT + random.uniform(0, 3)
+                wait = RATE_LIMIT_WAIT + random.uniform(0, 5)
                 print(f"[{sym}] Rate limit (attempt {attempt+1}/{MAX_RETRIES}), "
                       f"pausing {wait:.0f}s …")
                 time.sleep(wait)
             else:
                 print(f"[{sym}] Error: {type(e).__name__}: {e}")
-                return None
-    print(f"[{sym}] Giving up after {MAX_RETRIES} attempts")
-    return None
+                return None, False
+    print(f"[{sym}] Giving up after {MAX_RETRIES} rate-limit retries")
+    return None, True   # exhausted retries — signal RL to caller
 
 def fetch_symbols(symbols, start, end):
     """
     Pure sequential fetch — one symbol at a time with INTER_SYMBOL gap.
-    No bulk download (bulk is what triggers mass rate limits on Render's shared IP).
-    MAX_BATCH_SECS safety: returns partial results rather than exceed the HTML client timeout.
+    Ticker.history() is used so rate limits raise exceptions (yf.download swallows them).
+    Two safety valves:
+      - MAX_BATCH_RL_HITS: abort batch when Yahoo is clearly blocking this IP
+      - MAX_BATCH_SECS: return partial results before HTML client timeout fires
     """
     result, failed = {}, []
-    batch_t0 = time.time()
+    batch_t0  = time.time()
+    rl_hits   = 0
     for i, sym in enumerate(symbols):
         # Safety cutoff — return partial results before HTML client times out
         if time.time() - batch_t0 > MAX_BATCH_SECS:
             remaining = symbols[i:]
             failed.extend(remaining)
-            print(f"[batch] Safety cutoff after {MAX_BATCH_SECS}s — skipping {len(remaining)} remaining: {remaining}")
+            print(f"[batch] Safety cutoff after {MAX_BATCH_SECS}s — skipping {len(remaining)} remaining")
             break
-        rows = fetch_single(sym, start, end)
+        # Rate-limit abort — Yahoo is blocking this IP; remaining symbols will all fail
+        if rl_hits >= MAX_BATCH_RL_HITS:
+            remaining = symbols[i:]
+            failed.extend(remaining)
+            print(f"[batch] RL abort after {rl_hits} rate-limit hits — skipping {len(remaining)} remaining")
+            break
+        rows, was_rl = fetch_single(sym, start, end)
+        if was_rl:
+            rl_hits += 1
         if rows:
             result[sym] = rows
         else:
