@@ -1,12 +1,12 @@
 """
 TradeEdge Cloud API — Yahoo Finance with robust rate limit handling
-Key fixes vs previous version:
-  1. Catch YFRateLimitError by class name (not just string) — works across yfinance versions
-  2. Much longer inter-symbol delay (1.5s) — Yahoo's current rate limit is strict
-  3. On rate limit: wait 30s before retrying entire batch (not per-symbol backoff)
-  4. Global rate-limit state: if one symbol hits limit, pause ALL fetching for 30s
-  5. Skip bulk download entirely — it's the main trigger for rate limits
-  6. Sequential only, one symbol at a time with steady pacing
+Key design decisions:
+  1. Sequential fetch only — bulk download triggers mass rate limits on shared IPs
+  2. RATE_LIMIT_WAIT=18s (short) so a 10-symbol batch still completes inside the 150s client timeout
+  3. MAX_BATCH_SECS=130 safety cutoff — returns partial results before client timeout fires
+  4. YFRateLimitError, YFPricesMissingError, YFTzMissingError all handled explicitly
+  5. timeout= param removed from yf.download (unreliable across yfinance versions)
+  6. actions=False — skips dividend/split data, faster fetches
 """
 from __future__ import annotations
 import os, time, random
@@ -25,6 +25,16 @@ try:
     from yfinance.exceptions import YFRateLimitError
 except ImportError:
     YFRateLimitError = None
+
+try:
+    from yfinance.exceptions import YFPricesMissingError
+except ImportError:
+    YFPricesMissingError = None
+
+try:
+    from yfinance.exceptions import YFTzMissingError
+except ImportError:
+    YFTzMissingError = None
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
@@ -159,26 +169,35 @@ def is_rate_limit(e):
 
 # ── Fetch constants ───────────────────────────────────────────────────────────
 
-INTER_SYMBOL    = 0.8   # seconds between every symbol fetch — steady pace
-RATE_LIMIT_WAIT = 45.0  # seconds to pause when rate limit hit
-MAX_RETRIES     = 3     # retries per symbol after rate limit
+INTER_SYMBOL     = 1.0   # seconds between every symbol fetch — steady pace
+RATE_LIMIT_WAIT  = 18.0  # seconds to pause on rate limit (was 45 — kept short so 10-sym batch fits in 150s)
+MAX_RETRIES      = 2     # retries per symbol after rate limit (was 3)
+MAX_BATCH_SECS   = 130   # safety cutoff: return partial results rather than blow HTML timeout
 
 def fetch_single(sym, start, end):
     """
     Fetch one symbol sequentially.
     On rate limit: wait RATE_LIMIT_WAIT seconds and retry up to MAX_RETRIES times.
+    On known no-data errors (delisted, tz missing, etc.): skip immediately.
     On other errors: skip immediately.
     """
     tk = get_yf_ticker(sym)
     for attempt in range(MAX_RETRIES):
         try:
             df = yf.download(tk, start=start, end=end, interval="1d",
-                             auto_adjust=False, progress=False, timeout=25)
+                             auto_adjust=False, actions=False, progress=False)
             rows = parse_df(df)
             return rows  # None if empty, that's fine
         except Exception as e:
+            # No-data errors — skip, no retry
+            if YFPricesMissingError and isinstance(e, YFPricesMissingError):
+                print(f"[{sym}] No price data (delisted or ticker change)")
+                return None
+            if YFTzMissingError and isinstance(e, YFTzMissingError):
+                print(f"[{sym}] Timezone data missing")
+                return None
             if is_rate_limit(e):
-                wait = RATE_LIMIT_WAIT + random.uniform(0, 5)
+                wait = RATE_LIMIT_WAIT + random.uniform(0, 3)
                 print(f"[{sym}] Rate limit (attempt {attempt+1}/{MAX_RETRIES}), "
                       f"pausing {wait:.0f}s …")
                 time.sleep(wait)
@@ -192,9 +211,17 @@ def fetch_symbols(symbols, start, end):
     """
     Pure sequential fetch — one symbol at a time with INTER_SYMBOL gap.
     No bulk download (bulk is what triggers mass rate limits on Render's shared IP).
+    MAX_BATCH_SECS safety: returns partial results rather than exceed the HTML client timeout.
     """
     result, failed = {}, []
+    batch_t0 = time.time()
     for i, sym in enumerate(symbols):
+        # Safety cutoff — return partial results before HTML client times out
+        if time.time() - batch_t0 > MAX_BATCH_SECS:
+            remaining = symbols[i:]
+            failed.extend(remaining)
+            print(f"[batch] Safety cutoff after {MAX_BATCH_SECS}s — skipping {len(remaining)} remaining: {remaining}")
+            break
         rows = fetch_single(sym, start, end)
         if rows:
             result[sym] = rows
