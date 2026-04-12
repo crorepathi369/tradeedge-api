@@ -12,7 +12,11 @@ Key design decisions:
   6. actions=False — skips dividend/split data, faster fetches
 """
 from __future__ import annotations
-import os, time, random
+import os, time, random, warnings
+
+# yfinance uses pd.Timestamp.utcnow() which is deprecated in pandas 2.x — suppress the noise
+warnings.filterwarnings('ignore', message='.*utcnow.*', category=FutureWarning)
+warnings.filterwarnings('ignore', message='.*Timestamp.utcnow.*', category=FutureWarning)
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
