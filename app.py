@@ -251,104 +251,124 @@ def sync_today():
         "done":          (offset + limit) >= len(ALL_SYMBOLS),
     })
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+
+
 
 
 # ── Breeze API Proxy ──────────────────────────────────────────────────────────
-# Routes Breeze REST calls through the server so we can:
-# 1. Compute X-Checksum (SHA256) server-side — can't do crypto in plain browser JS
-# 2. Avoid CORS issues — Breeze API doesn't allow browser direct calls
-# 3. Keep secret_key off the client
+# Uses the official breeze-connect SDK which handles SHA256 checksum correctly.
+# Install: pip install breeze-connect
+# The SDK's generate_session() initialises auth; get_historical_data_v2() fetches OHLC.
 
-import hashlib, json as _json
-import urllib.request as _urllib
+import hashlib as _hashlib
+import json as _json
 
 BREEZE_API_BASE = 'https://api.icicidirect.com/breezeapi/api/v1'
 
-def _breeze_headers(api_key, secret_key, session_token, payload_str, timestamp):
-    """Compute Breeze auth headers including SHA256 checksum."""
-    checksum_input = timestamp + payload_str + secret_key
-    checksum = 'token ' + hashlib.sha256(checksum_input.encode('utf-8')).hexdigest()
-    return {
-        'Content-Type':   'application/json',
-        'X-AppKey':       api_key,
-        'X-SessionToken': session_token,
-        'X-Timestamp':    timestamp,
-        'X-Checksum':     checksum,
-    }
+def _breeze_checksum(timestamp, payload_str, secret_key):
+    raw = timestamp + payload_str + secret_key
+    return 'token ' + _hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+def _breeze_fetch_ohlc(api_key, secret_key, session_token, stock_code, exchange_code, from_date, to_date):
+    """
+    Fetch daily OHLC from Breeze using the official SDK.
+    Falls back to raw REST if SDK not installed.
+    """
+    try:
+        from breeze_connect import BreezeConnect
+        breeze = BreezeConnect(api_key=api_key)
+        breeze.generate_session(api_secret=secret_key, session_token=session_token)
+        resp = breeze.get_historical_data_v2(
+            interval='1day',
+            from_date=from_date,   # e.g. "2025-04-10T07:00:00.000Z"
+            to_date=to_date,
+            stock_code=stock_code,
+            exchange_code=exchange_code,
+            product_type='cash',
+        )
+        if resp.get('Status') != 200:
+            return None, resp.get('Error') or 'Breeze error'
+        candles = resp.get('Success') or []
+        return candles, None
+
+    except ImportError:
+        # SDK not available — use raw REST with manual checksum
+        import requests as _req
+        payload = _json.dumps({
+            'interval':      '1day',
+            'from_date':     from_date,
+            'to_date':       to_date,
+            'stock_code':    stock_code,
+            'exchange_code': exchange_code,
+            'product_type':  'cash',
+        }, separators=(',', ':'))
+        ts = datetime.now().__class__.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        headers = {
+            'Content-Type':   'application/json',
+            'X-AppKey':       api_key,
+            'X-SessionToken': session_token,
+            'X-Timestamp':    ts,
+            'X-Checksum':     _breeze_checksum(ts, payload, secret_key),
+        }
+        url = f'{BREEZE_API_BASE}/historicalcharts'
+        r = _req.get(url, headers=headers, data=payload, timeout=20)
+        data = r.json()
+        if data.get('Status') != 200:
+            return None, data.get('Error') or f'HTTP {r.status_code}'
+        return data.get('Success') or [], None
+
+def _parse_breeze_candles(candles):
+    rows = []
+    for c in candles:
+        d = (c.get('datetime') or c.get('date') or '')[:10]
+        try:
+            o  = float(c.get('open',  0))
+            h  = float(c.get('high',  0))
+            l  = float(c.get('low',   0))
+            cl = float(c.get('close', 0))
+            if d and o > 0:
+                rows.append({'date': d, 'open': round(o,2), 'high': round(h,2),
+                             'low': round(l,2), 'close': round(cl,2), 'adjClose': round(cl,2)})
+        except Exception:
+            continue
+    return rows
+
 
 @app.route('/breeze-historical')
 def breeze_historical():
     """
-    Proxy endpoint for Breeze historical data.
-    Params: api_key, session_token, secret_key, stock_code, exchange_code, from_date, to_date
+    Proxy: fetch one symbol's OHLC from Breeze and return clean rows.
+    Query params: api_key, secret_key, session_token, stock_code, exchange_code, from_date, to_date
     """
-    api_key       = request.args.get('api_key', '').strip()
-    secret_key    = request.args.get('secret_key', '').strip()
+    api_key       = request.args.get('api_key',       '').strip()
+    secret_key    = request.args.get('secret_key',    '').strip()
     session_token = request.args.get('session_token', '').strip()
-    stock_code    = request.args.get('stock_code', '').strip()
+    stock_code    = request.args.get('stock_code',    '').strip()
     exchange_code = request.args.get('exchange_code', 'NSE').strip()
-    from_date     = request.args.get('from_date', '').strip()
-    to_date       = request.args.get('to_date', '').strip()
+    from_date     = request.args.get('from_date',     '').strip()
+    to_date       = request.args.get('to_date',       '').strip()
 
     if not all([api_key, secret_key, session_token, stock_code, from_date, to_date]):
         return cors_response({'status': 'error', 'message': 'Missing required params'}, 400)
 
-    # Breeze expects dates as "YYYY-MM-DDTHH:MM:SS.000Z"
-    def fmt_date(d):
+    # Normalise dates to ISO format Breeze expects
+    def iso(d):
         return d if 'T' in d else d + 'T07:00:00.000Z'
 
-    payload = _json.dumps({
-        'stock_code':    stock_code,
-        'exchange_code': exchange_code,
-        'interval':      '1day',
-        'from_date':     fmt_date(from_date),
-        'to_date':       fmt_date(to_date),
-    }, separators=(',', ':'))
-
-    timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000Z')
-    headers   = _breeze_headers(api_key, secret_key, session_token, payload, timestamp)
-
     try:
-        url = f'{BREEZE_API_BASE}/historicalcharts'
-        req = _urllib.Request(url, data=payload.encode(), headers=headers, method='GET')
-        req.add_header('Content-Type', 'application/json')
-        # For GET with body — urllib needs special handling
-        req = _urllib.Request(url, headers=headers)
-        req.add_header('Content-Type', 'application/json')
-        # Use requests library if available, else urllib
-        try:
-            import requests as _req
-            resp = _req.get(url, headers=headers, params={
-                'stock_code': stock_code,
-                'exchange_code': exchange_code,
-                'interval': '1day',
-                'from_date': fmt_date(from_date),
-                'to_date':   fmt_date(to_date),
-            }, timeout=20)
-            data = resp.json()
-        except ImportError:
-            with _urllib.urlopen(req, timeout=20) as r:
-                data = _json.loads(r.read().decode())
-
-        if data.get('Status') != 200:
-            return cors_response({'status': 'error', 'message': data.get('Error', 'Breeze error'), 'raw': data}, 400)
-
-        # Parse OHLC rows
-        rows = []
-        for c in (data.get('Success') or []):
-            d = (c.get('datetime') or c.get('date') or '')[:10]
-            try:
-                o, h, l, cl = float(c['open']), float(c['high']), float(c['low']), float(c['close'])
-                if d and o > 0:
-                    rows.append({'date': d, 'open': round(o,2), 'high': round(h,2),
-                                 'low': round(l,2), 'close': round(cl,2), 'adjClose': round(cl,2)})
-            except Exception:
-                continue
-
+        candles, err = _breeze_fetch_ohlc(
+            api_key, secret_key, session_token,
+            stock_code, exchange_code, iso(from_date), iso(to_date)
+        )
+        if err:
+            return cors_response({'status': 'error', 'message': err}, 400)
+        rows = _parse_breeze_candles(candles or [])
         return cors_response({'status': 'ok', 'rows': rows, 'count': len(rows)})
-
     except Exception as e:
+        print(f'[Breeze] {stock_code} error: {e}')
         return cors_response({'status': 'error', 'message': str(e)}, 500)
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
