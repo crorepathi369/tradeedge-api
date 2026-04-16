@@ -5,3 +5,5 @@ pandas
 requests
 gunicorn
 gevent
+breeze-connect
+
