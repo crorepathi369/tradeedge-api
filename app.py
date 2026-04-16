@@ -270,7 +270,7 @@ def _breeze_checksum(timestamp, payload_str, secret_key):
     raw = timestamp + payload_str + secret_key
     return 'token ' + _hashlib.sha256(raw.encode('utf-8')).hexdigest()
 
-def _breeze_fetch_ohlc(api_key, secret_key, session_token, stock_code, exchange_code, from_date, to_date):
+def _breeze_fetch_ohlc(api_key, secret_key, session_token, stock_code, exchange_code, from_date, to_date, product_type='cash'):
     """
     Fetch daily OHLC from Breeze using the official SDK.
     Falls back to raw REST if SDK not installed.
@@ -346,6 +346,7 @@ def breeze_historical():
     session_token = request.args.get('session_token', '').strip()
     stock_code    = request.args.get('stock_code',    '').strip()
     exchange_code = request.args.get('exchange_code', 'NSE').strip()
+    product_type  = request.args.get('product_type',  'cash').strip()
     from_date     = request.args.get('from_date',     '').strip()
     to_date       = request.args.get('to_date',       '').strip()
 
@@ -359,7 +360,8 @@ def breeze_historical():
     try:
         candles, err = _breeze_fetch_ohlc(
             api_key, secret_key, session_token,
-            stock_code, exchange_code, iso(from_date), iso(to_date)
+            stock_code, exchange_code, iso(from_date), iso(to_date),
+            product_type=product_type
         )
         if err:
             return cors_response({'status': 'error', 'message': err}, 400)
