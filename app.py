@@ -369,6 +369,57 @@ def breeze_historical():
         return cors_response({'status': 'error', 'message': str(e)}, 500)
 
 
+@app.route('/breeze-test')
+def breeze_test():
+    """Quick diagnostic — tests one symbol and returns raw Breeze response for debugging."""
+    api_key       = request.args.get('api_key',       '').strip()
+    secret_key    = request.args.get('secret_key',    '').strip()
+    session_token = request.args.get('session_token', '').strip()
+
+    if not all([api_key, secret_key, session_token]):
+        return cors_response({'status': 'error', 'message': 'Need api_key, secret_key, session_token'}, 400)
+
+    from_date = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d') + 'T07:00:00.000Z'
+    to_date   = datetime.today().strftime('%Y-%m-%d') + 'T07:00:00.000Z'
+
+    try:
+        from breeze_connect import BreezeConnect
+        sdk_available = True
+        breeze = BreezeConnect(api_key=api_key)
+        breeze.generate_session(api_secret=secret_key, session_token=session_token)
+        resp = breeze.get_historical_data_v2(
+            interval='1day', from_date=from_date, to_date=to_date,
+            stock_code='ITC', exchange_code='NSE', product_type='cash',
+        )
+        return cors_response({
+            'status': 'ok', 'sdk': 'breeze-connect', 'sdk_available': True,
+            'breeze_status': resp.get('Status'), 'error': resp.get('Error'),
+            'rows': len(resp.get('Success') or []), 'raw_sample': (resp.get('Success') or [{}])[:2],
+        })
+    except ImportError:
+        sdk_available = False
+        # Fallback raw REST test
+        import requests as _req
+        payload = _json.dumps({
+            'interval': '1day', 'from_date': from_date, 'to_date': to_date,
+            'stock_code': 'ITC', 'exchange_code': 'NSE', 'product_type': 'cash',
+        }, separators=(',', ':'))
+        ts = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        headers = {
+            'Content-Type': 'application/json',
+            'X-AppKey': api_key, 'X-SessionToken': session_token,
+            'X-Timestamp': ts,
+            'X-Checksum': _breeze_checksum(ts, payload, secret_key),
+        }
+        r = _req.get(f'{BREEZE_API_BASE}/historicalcharts', headers=headers, data=payload, timeout=20)
+        return cors_response({
+            'status': 'ok', 'sdk': 'raw-rest', 'sdk_available': False,
+            'http_status': r.status_code, 'raw': r.json(),
+        })
+    except Exception as e:
+        return cors_response({'status': 'error', 'sdk_available': sdk_available, 'message': str(e)}, 500)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
