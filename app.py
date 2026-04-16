@@ -212,6 +212,7 @@ def health():
     return cors_response({
         "status":  "ok",
         "service": "TradeEdge API",
+        "version": "2.1-breeze",
         "time":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "symbols": len(ALL_SYMBOLS),
     })
