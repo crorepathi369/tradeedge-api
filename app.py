@@ -145,6 +145,7 @@ def parse_df(df):
         return None
     df = df[df["open"] > 0].round(2)
     has_adj = "adj_close" in df.columns
+    has_vol = "volume" in df.columns
     rows = []
     for i, r in df.iterrows():
         try:
@@ -157,6 +158,7 @@ def parse_df(df):
                 "adjClose": round(float(r["adj_close"]), 2)
                             if has_adj and pd.notna(r.get("adj_close"))
                             else round(float(r["close"]), 2),
+                "volume":   int(r["volume"]) if has_vol and pd.notna(r.get("volume")) else 0,
             })
         except Exception:
             continue
