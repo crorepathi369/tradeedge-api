@@ -1,15 +1,22 @@
 """
 TradeEdge Cloud API — Yahoo Finance with robust rate limit handling
-Key fixes vs previous version:
-  1. Catch YFRateLimitError by class name (not just string) — works across yfinance versions
-  2. Much longer inter-symbol delay (1.5s) — Yahoo's current rate limit is strict
-  3. On rate limit: wait 30s before retrying entire batch (not per-symbol backoff)
-  4. Global rate-limit state: if one symbol hits limit, pause ALL fetching for 30s
-  5. Skip bulk download entirely — it's the main trigger for rate limits
-  6. Sequential only, one symbol at a time with steady pacing
+Key design decisions:
+  1. Use Ticker.history() NOT yf.download() — download() swallows rate limit errors
+     internally ("1 Failed download:"), returns empty DataFrame, so retry logic never runs.
+     Ticker.history() raises YFRateLimitError properly.
+  2. Sequential fetch only — bulk download triggers mass rate limits on shared IPs
+  3. MAX_BATCH_RL_HITS=3 abort — when Yahoo is clearly blocking the IP, stop early
+     rather than burning through retries for every remaining symbol in the batch
+  4. MAX_BATCH_SECS=130 safety cutoff — returns partial results before 150s client timeout
+  5. YFRateLimitError, YFPricesMissingError, YFTzMissingError all handled explicitly
+  6. actions=False — skips dividend/split data, faster fetches
 """
 from __future__ import annotations
-import os, time, random
+import os, time, random, warnings
+
+# yfinance uses pd.Timestamp.utcnow() which is deprecated in pandas 2.x — suppress the noise
+warnings.filterwarnings('ignore', message='.*utcnow.*', category=FutureWarning)
+warnings.filterwarnings('ignore', message='.*Timestamp.utcnow.*', category=FutureWarning)
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
@@ -25,6 +32,16 @@ try:
     from yfinance.exceptions import YFRateLimitError
 except ImportError:
     YFRateLimitError = None
+
+try:
+    from yfinance.exceptions import YFPricesMissingError
+except ImportError:
+    YFPricesMissingError = None
+
+try:
+    from yfinance.exceptions import YFTzMissingError
+except ImportError:
+    YFTzMissingError = None
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
@@ -159,24 +176,40 @@ def is_rate_limit(e):
 
 # ── Fetch constants ───────────────────────────────────────────────────────────
 
-INTER_SYMBOL    = 0.8   # seconds between every symbol fetch — steady pace
-RATE_LIMIT_WAIT = 45.0  # seconds to pause when rate limit hit
-MAX_RETRIES     = 3     # retries per symbol after rate limit
+INTER_SYMBOL      = 1.5   # seconds between every symbol fetch — steady pace
+RATE_LIMIT_WAIT   = 25.0  # seconds to pause on rate limit per symbol
+MAX_RETRIES       = 2     # retries per symbol after rate limit
+MAX_BATCH_SECS    = 130   # safety cutoff: return partial results rather than blow HTML timeout
+MAX_BATCH_RL_HITS = 3     # abort batch early if this many symbols hit RL (Yahoo IP is blocked)
+
+# NOTE: Use Ticker.history() NOT yf.download().
+# yf.download() silently catches rate limit errors internally, prints them as
+# "1 Failed download:", and returns an empty DataFrame — so our except block
+# never runs and there is zero retry or backoff. Ticker.history() raises properly.
 
 def fetch_single(sym, start, end):
     """
-    Fetch one symbol sequentially.
+    Fetch one symbol using Ticker.history() which raises exceptions properly.
     On rate limit: wait RATE_LIMIT_WAIT seconds and retry up to MAX_RETRIES times.
-    On other errors: skip immediately.
+    On known no-data errors (delisted, tz missing): skip immediately, no retry.
+    Returns (rows_or_None, rate_limited: bool)
     """
     tk = get_yf_ticker(sym)
     for attempt in range(MAX_RETRIES):
         try:
-            df = yf.download(tk, start=start, end=end, interval="1d",
-                             auto_adjust=False, progress=False, timeout=25)
+            ticker = yf.Ticker(tk)
+            df = ticker.history(start=start, end=end, interval="1d",
+                                auto_adjust=False, actions=False)
             rows = parse_df(df)
-            return rows  # None if empty, that's fine
+            return rows, False   # success (rows may be None if empty)
         except Exception as e:
+            # No-data errors — skip immediately, no retry
+            if YFPricesMissingError and isinstance(e, YFPricesMissingError):
+                print(f"[{sym}] No price data (delisted or ticker change)")
+                return None, False
+            if YFTzMissingError and isinstance(e, YFTzMissingError):
+                print(f"[{sym}] Timezone data missing")
+                return None, False
             if is_rate_limit(e):
                 wait = RATE_LIMIT_WAIT + random.uniform(0, 5)
                 print(f"[{sym}] Rate limit (attempt {attempt+1}/{MAX_RETRIES}), "
@@ -184,18 +217,37 @@ def fetch_single(sym, start, end):
                 time.sleep(wait)
             else:
                 print(f"[{sym}] Error: {type(e).__name__}: {e}")
-                return None
-    print(f"[{sym}] Giving up after {MAX_RETRIES} attempts")
-    return None
+                return None, False
+    print(f"[{sym}] Giving up after {MAX_RETRIES} rate-limit retries")
+    return None, True   # exhausted retries — signal RL to caller
 
 def fetch_symbols(symbols, start, end):
     """
     Pure sequential fetch — one symbol at a time with INTER_SYMBOL gap.
-    No bulk download (bulk is what triggers mass rate limits on Render's shared IP).
+    Ticker.history() is used so rate limits raise exceptions (yf.download swallows them).
+    Two safety valves:
+      - MAX_BATCH_RL_HITS: abort batch when Yahoo is clearly blocking this IP
+      - MAX_BATCH_SECS: return partial results before HTML client timeout fires
     """
     result, failed = {}, []
+    batch_t0  = time.time()
+    rl_hits   = 0
     for i, sym in enumerate(symbols):
-        rows = fetch_single(sym, start, end)
+        # Safety cutoff — return partial results before HTML client times out
+        if time.time() - batch_t0 > MAX_BATCH_SECS:
+            remaining = symbols[i:]
+            failed.extend(remaining)
+            print(f"[batch] Safety cutoff after {MAX_BATCH_SECS}s — skipping {len(remaining)} remaining")
+            break
+        # Rate-limit abort — Yahoo is blocking this IP; remaining symbols will all fail
+        if rl_hits >= MAX_BATCH_RL_HITS:
+            remaining = symbols[i:]
+            failed.extend(remaining)
+            print(f"[batch] RL abort after {rl_hits} rate-limit hits — skipping {len(remaining)} remaining")
+            break
+        rows, was_rl = fetch_single(sym, start, end)
+        if was_rl:
+            rl_hits += 1
         if rows:
             result[sym] = rows
         else:
@@ -212,7 +264,6 @@ def health():
     return cors_response({
         "status":  "ok",
         "service": "TradeEdge API",
-        "version": "2.1-breeze",
         "time":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "symbols": len(ALL_SYMBOLS),
     })
@@ -251,177 +302,6 @@ def sync_today():
         "grandTotal":    len(ALL_SYMBOLS),
         "done":          (offset + limit) >= len(ALL_SYMBOLS),
     })
-
-
-
-
-
-# ── Breeze API Proxy ──────────────────────────────────────────────────────────
-# Uses the official breeze-connect SDK which handles SHA256 checksum correctly.
-# Install: pip install breeze-connect
-# The SDK's generate_session() initialises auth; get_historical_data_v2() fetches OHLC.
-
-import hashlib as _hashlib
-import json as _json
-
-BREEZE_API_BASE = 'https://api.icicidirect.com/breezeapi/api/v1'
-
-def _breeze_checksum(timestamp, payload_str, secret_key):
-    raw = timestamp + payload_str + secret_key
-    return 'token ' + _hashlib.sha256(raw.encode('utf-8')).hexdigest()
-
-def _breeze_fetch_ohlc(api_key, secret_key, session_token, stock_code, exchange_code, from_date, to_date, product_type='cash'):
-    """
-    Fetch daily OHLC from Breeze using the official SDK.
-    Falls back to raw REST if SDK not installed.
-    """
-    try:
-        from breeze_connect import BreezeConnect
-        breeze = BreezeConnect(api_key=api_key)
-        breeze.generate_session(api_secret=secret_key, session_token=session_token)
-        resp = breeze.get_historical_data_v2(
-            interval='1day',
-            from_date=from_date,   # e.g. "2025-04-10T07:00:00.000Z"
-            to_date=to_date,
-            stock_code=stock_code,
-            exchange_code=exchange_code,
-            product_type='cash',
-        )
-        if resp.get('Status') != 200:
-            return None, resp.get('Error') or 'Breeze error'
-        candles = resp.get('Success') or []
-        return candles, None
-
-    except ImportError:
-        # SDK not available — use raw REST with manual checksum
-        import requests as _req
-        payload = _json.dumps({
-            'interval':      '1day',
-            'from_date':     from_date,
-            'to_date':       to_date,
-            'stock_code':    stock_code,
-            'exchange_code': exchange_code,
-            'product_type':  'cash',
-        }, separators=(',', ':'))
-        ts = datetime.now().__class__.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
-        headers = {
-            'Content-Type':   'application/json',
-            'X-AppKey':       api_key,
-            'X-SessionToken': session_token,
-            'X-Timestamp':    ts,
-            'X-Checksum':     _breeze_checksum(ts, payload, secret_key),
-        }
-        url = f'{BREEZE_API_BASE}/historicalcharts'
-        r = _req.get(url, headers=headers, data=payload, timeout=20)
-        data = r.json()
-        if data.get('Status') != 200:
-            return None, data.get('Error') or f'HTTP {r.status_code}'
-        return data.get('Success') or [], None
-
-def _parse_breeze_candles(candles):
-    rows = []
-    for c in candles:
-        d = (c.get('datetime') or c.get('date') or '')[:10]
-        try:
-            o  = float(c.get('open',  0))
-            h  = float(c.get('high',  0))
-            l  = float(c.get('low',   0))
-            cl = float(c.get('close', 0))
-            if d and o > 0:
-                rows.append({'date': d, 'open': round(o,2), 'high': round(h,2),
-                             'low': round(l,2), 'close': round(cl,2), 'adjClose': round(cl,2)})
-        except Exception:
-            continue
-    return rows
-
-
-@app.route('/breeze-historical')
-def breeze_historical():
-    """
-    Proxy: fetch one symbol's OHLC from Breeze and return clean rows.
-    Query params: api_key, secret_key, session_token, stock_code, exchange_code, from_date, to_date
-    """
-    api_key       = request.args.get('api_key',       '').strip()
-    secret_key    = request.args.get('secret_key',    '').strip()
-    session_token = request.args.get('session_token', '').strip()
-    stock_code    = request.args.get('stock_code',    '').strip()
-    exchange_code = request.args.get('exchange_code', 'NSE').strip()
-    product_type  = request.args.get('product_type',  'cash').strip()
-    from_date     = request.args.get('from_date',     '').strip()
-    to_date       = request.args.get('to_date',       '').strip()
-
-    if not all([api_key, secret_key, session_token, stock_code, from_date, to_date]):
-        return cors_response({'status': 'error', 'message': 'Missing required params'}, 400)
-
-    # Normalise dates to ISO format Breeze expects
-    def iso(d):
-        return d if 'T' in d else d + 'T07:00:00.000Z'
-
-    try:
-        candles, err = _breeze_fetch_ohlc(
-            api_key, secret_key, session_token,
-            stock_code, exchange_code, iso(from_date), iso(to_date),
-            product_type=product_type
-        )
-        if err:
-            return cors_response({'status': 'error', 'message': err}, 400)
-        rows = _parse_breeze_candles(candles or [])
-        return cors_response({'status': 'ok', 'rows': rows, 'count': len(rows)})
-    except Exception as e:
-        print(f'[Breeze] {stock_code} error: {e}')
-        return cors_response({'status': 'error', 'message': str(e)}, 500)
-
-
-@app.route('/breeze-test')
-def breeze_test():
-    """Quick diagnostic — tests one symbol and returns raw Breeze response for debugging."""
-    api_key       = request.args.get('api_key',       '').strip()
-    secret_key    = request.args.get('secret_key',    '').strip()
-    session_token = request.args.get('session_token', '').strip()
-
-    if not all([api_key, secret_key, session_token]):
-        return cors_response({'status': 'error', 'message': 'Need api_key, secret_key, session_token'}, 400)
-
-    from_date = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d') + 'T07:00:00.000Z'
-    to_date   = datetime.today().strftime('%Y-%m-%d') + 'T07:00:00.000Z'
-
-    try:
-        from breeze_connect import BreezeConnect
-        sdk_available = True
-        breeze = BreezeConnect(api_key=api_key)
-        breeze.generate_session(api_secret=secret_key, session_token=session_token)
-        resp = breeze.get_historical_data_v2(
-            interval='1day', from_date=from_date, to_date=to_date,
-            stock_code='ITC', exchange_code='NSE', product_type='cash',
-        )
-        return cors_response({
-            'status': 'ok', 'sdk': 'breeze-connect', 'sdk_available': True,
-            'breeze_status': resp.get('Status'), 'error': resp.get('Error'),
-            'rows': len(resp.get('Success') or []), 'raw_sample': (resp.get('Success') or [{}])[:2],
-        })
-    except ImportError:
-        sdk_available = False
-        # Fallback raw REST test
-        import requests as _req
-        payload = _json.dumps({
-            'interval': '1day', 'from_date': from_date, 'to_date': to_date,
-            'stock_code': 'ITC', 'exchange_code': 'NSE', 'product_type': 'cash',
-        }, separators=(',', ':'))
-        ts = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')
-        headers = {
-            'Content-Type': 'application/json',
-            'X-AppKey': api_key, 'X-SessionToken': session_token,
-            'X-Timestamp': ts,
-            'X-Checksum': _breeze_checksum(ts, payload, secret_key),
-        }
-        r = _req.get(f'{BREEZE_API_BASE}/historicalcharts', headers=headers, data=payload, timeout=20)
-        return cors_response({
-            'status': 'ok', 'sdk': 'raw-rest', 'sdk_available': False,
-            'http_status': r.status_code, 'raw': r.json(),
-        })
-    except Exception as e:
-        return cors_response({'status': 'error', 'sdk_available': sdk_available, 'message': str(e)}, 500)
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
