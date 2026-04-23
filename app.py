@@ -305,49 +305,30 @@ def sync_today():
         "done":          (offset + limit) >= len(ALL_SYMBOLS),
     })
 
-# ── Futures endpoint ──────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
+# ── /futures endpoint ─────────────────────────────────────────────────────────
 #
 # GET /futures?symbols=LTIM,INFY,TCS
 #
-# For each symbol fetches:
-#   - Spot price (last close from Ticker.history 5d)
-#   - Near month futures  (Yahoo ticker: SYMBOL-I.NS)
-#   - Far  month futures  (Yahoo ticker: SYMBOL-II.NS)
-#   - 50 days of close prices for EMA20/EMA50 trend
-#
-# Returns:
-# {
-#   "status": "ok",
-#   "data": {
-#     "LTIM": { "spot": 4531.5, "nearFut": 4495.0, "farFut": 4360.5,
-#               "closes": [...50 daily closes...], "error": null },
-#     "INFY": { ... }
-#   },
-#   "failed": ["XYZ"],
-#   "elapsed": 4.2
-# }
-#
-# Design notes:
-#   - Uses same Ticker.history() pattern as /sync-today (raises rate limits properly)
-#   - Futures tickers tried first via Yahoo (-I.NS / -II.NS suffix)
-#   - If futures not found on Yahoo, nearFut/farFut returned as null
-#     (frontend falls back to NSE API or shows N/A)
-#   - INTER_SYMBOL gap applied between spot fetches to avoid rate limits
-#   - Futures fetched with short 5d window — only need latest price
+# Returns per symbol: spot, nearFut, farFut, closes[], error
+# Uses same Ticker.history() + rate-limit pattern as /sync-today
 
 def fetch_latest_price(ticker_str):
-    """Fetch the most recent closing price for a ticker. Returns float or None."""
+    """Return most recent close for a ticker, or None on any error."""
     for attempt in range(2):
         try:
-            tk = yf.Ticker(ticker_str)
-            df = tk.history(period="5d", interval="1d",
-                            auto_adjust=False, actions=False)
+            tk  = yf.Ticker(ticker_str)
+            df  = tk.history(period="5d", interval="1d",
+                             auto_adjust=False, actions=False)
             if df is not None and not df.empty:
                 cols = [str(c).lower().replace(" ", "_") for c in df.columns]
                 df.columns = cols
                 if "close" in df.columns:
                     closes = df["close"].dropna()
-                    if len(closes) > 0:
+                    if len(closes):
                         return round(float(closes.iloc[-1]), 2)
             return None
         except Exception as e:
@@ -358,13 +339,13 @@ def fetch_latest_price(ticker_str):
     return None
 
 def fetch_close_series(ticker_str, days=60):
-    """Fetch last N days of daily closes for EMA calc. Returns list[float] or []."""
+    """Return list of daily closes for last N days, or [] on error."""
     try:
-        tk     = yf.Ticker(ticker_str)
-        end    = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
-        start  = (datetime.today() - timedelta(days=days)).strftime("%Y-%m-%d")
-        df     = tk.history(start=start, end=end, interval="1d",
-                            auto_adjust=False, actions=False)
+        end   = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        start = (datetime.today() - timedelta(days=days)).strftime("%Y-%m-%d")
+        tk    = yf.Ticker(ticker_str)
+        df    = tk.history(start=start, end=end, interval="1d",
+                           auto_adjust=False, actions=False)
         if df is None or df.empty:
             return []
         cols = [str(c).lower().replace(" ", "_") for c in df.columns]
@@ -375,9 +356,12 @@ def fetch_close_series(ticker_str, days=60):
     except Exception:
         return []
 
-@app.route("/futures")
+@app.route("/futures", methods=["GET", "OPTIONS"])
 def futures_endpoint():
-    raw     = request.args.get("symbols", "").strip()
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    raw = request.args.get("symbols", "").strip()
     if not raw:
         return cors_response({"error": "symbols param required"}, 400)
 
@@ -385,72 +369,48 @@ def futures_endpoint():
     if len(symbols) > 60:
         return cors_response({"error": "max 60 symbols per request"}, 400)
 
-    t0     = time.time()
-    result = {}
-    failed = []
+    t0, result, failed = time.time(), {}, []
 
     for i, sym in enumerate(symbols):
-        # Safety cutoff — same pattern as /sync-today
         if time.time() - t0 > MAX_BATCH_SECS:
             failed.extend(symbols[i:])
             print(f"[futures] Safety cutoff — skipping {len(symbols[i:])} remaining")
             break
 
-        yf_sym  = get_yf_ticker(sym)           # e.g. LTIM.NS
-        # Yahoo NSE futures tickers follow pattern SYMBOL-I.NS / SYMBOL-II.NS
-        # These work for liquid F&O names; returns None if not listed on Yahoo
-        base    = sym if sym.endswith(".NS") else sym
-        near_tk = f"{base}-I.NS"
-        far_tk  = f"{base}-II.NS"
+        yf_sym  = get_yf_ticker(sym)
+        near_tk = f"{sym}-I.NS"
+        far_tk  = f"{sym}-II.NS"
 
         try:
-            # 1. Spot + close series (60d for EMA50)
-            closes  = fetch_close_series(yf_sym, days=60)
-            spot    = closes[-1] if closes else fetch_latest_price(yf_sym)
-
+            closes   = fetch_close_series(yf_sym, days=60)
+            spot     = closes[-1] if closes else fetch_latest_price(yf_sym)
             if not spot:
                 failed.append(sym)
                 result[sym] = {"spot": None, "nearFut": None, "farFut": None,
                                "closes": [], "error": "No spot data"}
                 continue
 
-            # 2. Near month futures
             time.sleep(0.4)
             near_fut = fetch_latest_price(near_tk)
-
-            # 3. Far month futures
             time.sleep(0.4)
             far_fut  = fetch_latest_price(far_tk)
 
-            result[sym] = {
-                "spot":    spot,
-                "nearFut": near_fut,
-                "farFut":  far_fut,
-                "closes":  closes,
-                "error":   None,
-            }
+            result[sym] = {"spot": spot, "nearFut": near_fut,
+                           "farFut": far_fut, "closes": closes, "error": None}
             print(f"[futures] {sym}: spot={spot} near={near_fut} far={far_fut}")
 
         except Exception as e:
             failed.append(sym)
             result[sym] = {"spot": None, "nearFut": None, "farFut": None,
                            "closes": [], "error": str(e)}
-            print(f"[futures] {sym} error: {e}")
+            print(f"[futures] {sym} error: {type(e).__name__}: {e}")
 
-        # Inter-symbol gap between spot fetches
         if i < len(symbols) - 1:
             time.sleep(INTER_SYMBOL)
 
     return cors_response({
-        "status":  "ok",
-        "data":    result,
-        "failed":  failed,
+        "status": "ok", "data": result, "failed": failed,
         "elapsed": round(time.time() - t0, 1),
-        "asOf":    datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "count":   len(symbols),
+        "asOf": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "count": len(symbols),
     })
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
