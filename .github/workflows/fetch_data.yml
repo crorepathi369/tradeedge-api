@@ -81,3 +81,12 @@ jobs:
           ls -la ./tradeedge_data/*.csv 2>/dev/null | wc -l | xargs echo "CSV files:"
           echo "=== Last modified ==="
           ls -lt ./tradeedge_data/*.csv 2>/dev/null | head -5
+
+      # 7. Wake Render so it's ready when user opens TradeEdge
+      - name: Wake Render service
+        run: |
+          echo "Pinging Render to wake it up..."
+          curl -s https://tradeedge-api.onrender.com/ || true
+          sleep 10
+          curl -s https://tradeedge-api.onrender.com/pull-from-github || true
+          echo "Render is warm and data is pulled!"
