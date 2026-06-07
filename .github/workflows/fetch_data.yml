@@ -1,0 +1,83 @@
+name: TradeEdge Daily Fetch
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+on:
+  # Automatic: 3:15 PM IST = 09:45 UTC, Monday–Friday
+  schedule:
+    - cron: '45 9 * * 1-5'
+
+  # Manual trigger from GitHub Actions UI (for testing)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Days of data to fetch (default 5)'
+        required: false
+        default: '5'
+      symbols:
+        description: 'Specific symbols (leave empty for all F&O)'
+        required: false
+        default: ''
+
+# ── Job ───────────────────────────────────────────────────────────────────────
+jobs:
+  fetch-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45        # kill job if it hangs beyond 45 min
+
+    steps:
+
+      # 1. Checkout main branch (has tradeedge_fetch.py + push_incr_data.py)
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: |
+          pip install yfinance pandas requests
+
+      # 4. Fetch incremental OHLC data from Yahoo Finance
+      #    GitHub Actions runs on Microsoft Azure — different IPs each run,
+      #    Yahoo Finance does NOT block these reliably. Works much better than Render.
+      - name: Fetch incremental data
+        run: |
+          DAYS="${{ github.event.inputs.days || '5' }}"
+          SYMBOLS="${{ github.event.inputs.symbols }}"
+
+          if [ -n "$SYMBOLS" ]; then
+            echo "Fetching specific symbols: $SYMBOLS"
+            python tradeedge_fetch.py --symbols $SYMBOLS --merge --days $DAYS --outdir ./tradeedge_data --delay 1.2
+          else
+            echo "Fetching full F&O universe — last $DAYS days"
+            python tradeedge_fetch.py --fo --merge --days $DAYS --outdir ./tradeedge_data --delay 1.2
+          fi
+
+      # 5. Push updated CSVs to the data branch
+      - name: Push CSVs to data branch
+        env:
+          GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO:         ${{ github.repository }}
+          GITHUB_DATA_BRANCH:  data
+          TRADEEDGE_DATA_DIR:  ./tradeedge_data
+          RENDER_API_URL:      ${{ secrets.RENDER_API_URL }}
+          FETCH_SECRET:        ${{ secrets.FETCH_SECRET }}
+        run: |
+          python push_incr_data.py --all
+
+      # 6. Summary — print what was fetched
+      - name: Print summary
+        if: always()
+        run: |
+          echo "=== Data directory contents ==="
+          ls -la ./tradeedge_data/*.csv 2>/dev/null | wc -l | xargs echo "CSV files:"
+          echo "=== Last modified ==="
+          ls -lt ./tradeedge_data/*.csv 2>/dev/null | head -5
