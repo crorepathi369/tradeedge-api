@@ -993,3 +993,4 @@ def futures_endpoint():
         "asOf": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "count": len(symbols),
     })
+
