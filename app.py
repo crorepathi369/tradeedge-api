@@ -708,6 +708,136 @@ def restore_status():
     })
 
 
+# ── Pull job state — tracks background pull from GitHub ───────────────────────
+_pull_status = {
+    "running":    False,
+    "startedAt":  None,
+    "finishedAt": None,
+    "downloaded": 0,
+    "skipped":    0,
+    "failed":     0,
+    "log":        [],
+}
+
+def _do_pull_from_github():
+    """
+    Background worker: pulls ALL files from GitHub data branch into DATA_DIR.
+    Unlike restore_data_from_github() which skips existing files,
+    this OVERWRITES existing files so Render always gets the latest pushed CSVs.
+    """
+    import urllib.request, urllib.error, json as _json
+    global _pull_status
+
+    token  = os.environ.get("GITHUB_TOKEN", "")
+    repo   = os.environ.get("GITHUB_REPO",        "crorepathi369/tradeedge-api")
+    branch = os.environ.get("GITHUB_DATA_BRANCH", "data")
+
+    _pull_status.update({
+        "running": True, "startedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "finishedAt": None, "downloaded": 0, "skipped": 0, "failed": 0, "log": [],
+    })
+
+    def _log(msg):
+        print(msg)
+        _pull_status["log"].append(msg)
+        if len(_pull_status["log"]) > 100:
+            _pull_status["log"] = _pull_status["log"][-100:]
+
+    if not token:
+        _log("[pull] GITHUB_TOKEN not set — cannot pull")
+        _pull_status["running"] = False
+        return
+
+    _log(f"[pull] Fetching file tree from {repo}@{branch}")
+
+    # Step 1: get file tree
+    tree_url = f"https://api.github.com/repos/{repo}/git/trees/{branch}?recursive=1"
+    req = urllib.request.Request(tree_url, headers={
+        "Authorization": f"token {token}",
+        "Accept":        "application/vnd.github.v3+json",
+        "User-Agent":    "TradeEdge-App",
+    })
+    try:
+        tree = _json.loads(urllib.request.urlopen(req, timeout=30).read())
+    except Exception as e:
+        _log(f"[pull] Tree fetch failed: {e}")
+        _pull_status["running"] = False
+        return
+
+    files = [
+        f["path"] for f in tree.get("tree", [])
+        if f["type"] == "blob" and (
+            f["path"].endswith(".csv") or f["path"] == "SECTOR_MAP.json"
+        )
+    ]
+    _log(f"[pull] {len(files)} files found — downloading all (overwrite mode)")
+
+    downloaded = skipped = failed = 0
+
+    for filename in files:
+        dest    = DATA_DIR / filename
+        raw_url = f"https://raw.githubusercontent.com/{repo}/{branch}/{filename}"
+        raw_req = urllib.request.Request(raw_url, headers={
+            "Authorization": f"token {token}",
+            "User-Agent":    "TradeEdge-App",
+        })
+        try:
+            data = urllib.request.urlopen(raw_req, timeout=30).read()
+            dest.write_bytes(data)
+            downloaded += 1
+        except Exception as e:
+            _log(f"[pull] ✗ {filename}: {e}")
+            failed += 1
+
+        # Update counts live so /pull-status shows progress
+        _pull_status["downloaded"] = downloaded
+        _pull_status["failed"]     = failed
+
+    _pull_status.update({
+        "running":    False,
+        "finishedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "downloaded": downloaded,
+        "skipped":    skipped,
+        "failed":     failed,
+    })
+    _log(f"[pull] Done — downloaded={downloaded}  failed={failed}")
+
+
+@app.route("/pull-from-github")
+def pull_from_github():
+    """
+    Trigger an immediate pull of all CSVs from GitHub data branch → Render disk.
+    Call this after running push_incr_data.py locally to make Render serve
+    the fresh data right away without waiting for a restart.
+
+    Protected by FETCH_SECRET env var (same secret as /run-fetch).
+    Poll /pull-status for progress.
+    """
+    secret = os.environ.get("FETCH_SECRET", "")
+    if secret and request.args.get("secret", "") != secret:
+        return cors_response({"error": "Unauthorized"}, 401)
+
+    if _pull_status["running"]:
+        return cors_response({
+            "job_started": False,
+            "reason":      "pull already running",
+            "status":      _pull_status,
+        })
+
+    threading.Thread(target=_do_pull_from_github, daemon=True).start()
+    return cors_response({
+        "job_started": True,
+        "message":     "Pull started in background. Poll /pull-status for progress.",
+        "dataDir":     str(DATA_DIR),
+    })
+
+
+@app.route("/pull-status")
+def pull_status():
+    """Poll this to monitor the background pull started by /pull-from-github."""
+    return cors_response(_pull_status)
+
+
 @app.route("/data/manifest")
 def data_manifest():
     """
