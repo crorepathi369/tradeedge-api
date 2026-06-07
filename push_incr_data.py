@@ -35,9 +35,11 @@ if _env_file.exists():
             os.environ.setdefault(_k.strip(), _v.strip())
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-TOKEN  = os.environ.get("GITHUB_TOKEN", "")
-REPO   = os.environ.get("GITHUB_REPO",        "crorepathi369/tradeedge-api")
-BRANCH = os.environ.get("GITHUB_DATA_BRANCH", "data")
+TOKEN           = os.environ.get("GITHUB_TOKEN", "")
+REPO            = os.environ.get("GITHUB_REPO",        "crorepathi369/tradeedge-api")
+BRANCH          = os.environ.get("GITHUB_DATA_BRANCH", "data")
+RENDER_API_URL  = os.environ.get("RENDER_API_URL",     "https://tradeedge-api.onrender.com")
+FETCH_SECRET    = os.environ.get("FETCH_SECRET",       "")
 
 def _find_data_dir() -> Path:
     """
@@ -222,6 +224,20 @@ def main():
         DATA_DIR = Path(args.data_dir)
 
     # ── Validate ───────────────────────────────────────────────────────────────
+    # Re-read token at runtime (GitHub Actions sets it as env var after .env load)
+    global TOKEN, REPO, BRANCH, RENDER_API_URL, FETCH_SECRET
+    TOKEN          = os.environ.get("GITHUB_TOKEN", TOKEN)
+    REPO           = os.environ.get("GITHUB_REPO",        REPO)
+    BRANCH         = os.environ.get("GITHUB_DATA_BRANCH", BRANCH)
+    RENDER_API_URL = os.environ.get("RENDER_API_URL",     RENDER_API_URL)
+    FETCH_SECRET   = os.environ.get("FETCH_SECRET",       FETCH_SECRET)
+
+    # In GitHub Actions, GITHUB_REPOSITORY is set automatically
+    if not REPO or REPO == "crorepathi369/tradeedge-api":
+        gh_repo = os.environ.get("GITHUB_REPOSITORY", "")
+        if gh_repo:
+            REPO = gh_repo
+
     if not TOKEN:
         print("✗ GITHUB_TOKEN not set.")
         print("  Set it as an environment variable or add to a .env file:")
@@ -290,13 +306,39 @@ def main():
         print(f"  ✓ {ok} pushed  ({created} new, {updated} updated)  |  ✗ {failed} failed")
         print(f"  Time: {elapsed}s")
         if ok:
-            print(f"\n  Render will serve updated data immediately via /data/<symbol>.csv")
-            print(f"  On next Render restart, restore pulls these files automatically.")
+            # ── Auto-trigger Render to pull fresh CSVs immediately ────────────
+            _trigger_render_pull()
     if failed:
         print(f"\n  ✗ {failed} file(s) failed — check GITHUB_TOKEN permissions (needs 'repo' scope)")
     print(f"{'='*60}\n")
 
     sys.exit(1 if failed and not ok else 0)
+
+
+def _trigger_render_pull():
+    """
+    After a successful push to GitHub, tell Render to pull the fresh CSVs
+    immediately via /pull-from-github — no restart needed.
+    """
+    if not RENDER_API_URL:
+        return
+
+    url = RENDER_API_URL.rstrip("/") + "/pull-from-github"
+    if FETCH_SECRET:
+        url += f"?secret={FETCH_SECRET}"
+
+    print(f"\n  Triggering Render pull → {RENDER_API_URL}/pull-from-github")
+    req = urllib.request.Request(url, headers={"User-Agent": "TradeEdge-push-incr"})
+    try:
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        if resp.get("job_started"):
+            print(f"  ✓ Render pull started — fresh CSVs will be live in ~2 min")
+            print(f"  ✓ Monitor: {RENDER_API_URL}/pull-status")
+        else:
+            print(f"  ⚠ Render pull not started: {resp.get('reason', 'unknown')}")
+    except Exception as e:
+        print(f"  ⚠ Could not trigger Render pull: {e}")
+        print(f"  Manual trigger: {url}")
 
 
 if __name__ == "__main__":
