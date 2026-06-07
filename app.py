@@ -51,6 +51,86 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 DATA_DIR = Path(os.environ.get("TRADEEDGE_DATA_DIR", "./tradeedge_data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# ── GitHub restore — pulls CSVs from 'data' branch on every startup ───────────
+def restore_data_from_github():
+    """
+    On startup, download all CSVs + SECTOR_MAP.json from the GitHub 'data' branch
+    into DATA_DIR. Only downloads files that don't exist yet — incremental updates
+    (written by /run-fetch) are kept as-is.
+
+    Required env vars:
+        GITHUB_TOKEN       — personal access token with 'repo' scope
+        GITHUB_REPO        — e.g. crorepathi369/tradeedge-api
+        GITHUB_DATA_BRANCH — branch name, default 'data'
+    """
+    import urllib.request, urllib.error, json as _json
+
+    token  = os.environ.get("GITHUB_TOKEN", "")
+    repo   = os.environ.get("GITHUB_REPO", "crorepathi369/tradeedge-api")
+    branch = os.environ.get("GITHUB_DATA_BRANCH", "data")
+
+    if not token:
+        print("[restore] GITHUB_TOKEN not set — skipping GitHub restore")
+        return
+
+    print(f"[restore] Starting restore from github:{repo}@{branch} → {DATA_DIR}")
+
+    # Step 1: fetch the full file tree of the data branch
+    tree_url = f"https://api.github.com/repos/{repo}/git/trees/{branch}?recursive=1"
+    req = urllib.request.Request(tree_url, headers={
+        "Authorization": f"token {token}",
+        "Accept":        "application/vnd.github.v3+json",
+        "User-Agent":    "TradeEdge-App",
+    })
+    try:
+        tree = _json.loads(urllib.request.urlopen(req, timeout=30).read())
+    except Exception as e:
+        print(f"[restore] GitHub tree fetch failed: {e}")
+        return
+
+    files = [
+        f["path"] for f in tree.get("tree", [])
+        if f["type"] == "blob" and (
+            f["path"].endswith(".csv") or f["path"] == "SECTOR_MAP.json"
+        )
+    ]
+    print(f"[restore] {len(files)} files found in data branch")
+
+    # Step 2: download each file that isn't already on disk
+    downloaded = 0
+    skipped    = 0
+    failed     = 0
+
+    for filename in files:
+        dest = DATA_DIR / filename          # filename is just e.g. "RELIANCE.csv"
+        if dest.exists():
+            skipped += 1
+            continue                        # already present — keep local version
+
+        raw_url = (
+            f"https://raw.githubusercontent.com/{repo}/{branch}/{filename}"
+        )
+        raw_req = urllib.request.Request(raw_url, headers={
+            "Authorization": f"token {token}",
+            "User-Agent":    "TradeEdge-App",
+        })
+        try:
+            data = urllib.request.urlopen(raw_req, timeout=30).read()
+            dest.write_bytes(data)
+            downloaded += 1
+        except Exception as e:
+            print(f"[restore] ✗ {filename}: {e}")
+            failed += 1
+
+    print(
+        f"[restore] Done — downloaded={downloaded}  "
+        f"skipped(already present)={skipped}  failed={failed}"
+    )
+
+# Run restore in a background thread so Flask starts up immediately
+# (Render health check hits '/' within 30s — we can't block startup)
+threading.Thread(target=restore_data_from_github, daemon=True).start()
+
 # ── Fetch job state — prevents overlapping runs ────────────────────────────────
 _fetch_lock   = threading.Lock()
 _fetch_status = {
@@ -613,6 +693,19 @@ def run_fetch():
 def fetch_status():
     """Poll this to monitor the background fetch job started by /run-fetch."""
     return cors_response(_fetch_status)
+
+
+@app.route("/restore-status")
+def restore_status():
+    """Check how many CSVs are currently on disk — proxy for restore progress."""
+    csvs = list(DATA_DIR.glob("*.csv"))
+    has_sector_map = (DATA_DIR / "SECTOR_MAP.json").exists()
+    return cors_response({
+        "csvCount":     len(csvs),
+        "hasSectorMap": has_sector_map,
+        "dataDir":      str(DATA_DIR),
+        "symbols":      sorted(f.stem for f in csvs),
+    })
 
 
 @app.route("/data/manifest")
