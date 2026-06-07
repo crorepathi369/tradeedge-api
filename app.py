@@ -12,13 +12,14 @@ Key design decisions:
   6. actions=False — skips dividend/split data, faster fetches
 """
 from __future__ import annotations
-import os, time, random, warnings
+import os, time, random, warnings, threading
+from pathlib import Path
 
 # yfinance uses pd.Timestamp.utcnow() which is deprecated in pandas 2.x — suppress the noise
 warnings.filterwarnings('ignore', message='.*utcnow.*', category=FutureWarning)
 warnings.filterwarnings('ignore', message='.*Timestamp.utcnow.*', category=FutureWarning)
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, send_from_directory
 from flask_cors import CORS
 
 try:
@@ -45,6 +46,23 @@ except ImportError:
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
+# ── Data directory — CSVs written here by /run-fetch, served by /data/ ────────
+DATA_DIR = Path(os.environ.get("TRADEEDGE_DATA_DIR", "./tradeedge_data"))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── Fetch job state — prevents overlapping runs ────────────────────────────────
+_fetch_lock   = threading.Lock()
+_fetch_status = {
+    "running":    False,
+    "startedAt":  None,
+    "finishedAt": None,
+    "ok":         0,
+    "failed":     0,
+    "failedSyms": [],
+    "lastError":  None,
+    "log":        [],        # last N log lines
+}
 
 def cors_response(data, status=200):
     resp = make_response(jsonify(data), status)
@@ -130,6 +148,75 @@ ALL_SYMBOLS = [
 
 def get_yf_ticker(s):
     return YAHOO_TICKER_MAP.get(s, s + ".NS")
+
+# ── Sector map — written to SECTOR_MAP.json by /run-fetch ─────────────────────
+STOCK_SECTOR_MAP = {
+    "TCS":"SECTOR_IT","INFY":"SECTOR_IT","HCLTECH":"SECTOR_IT","WIPRO":"SECTOR_IT",
+    "TECHM":"SECTOR_IT","LTIM":"SECTOR_IT","MPHASIS":"SECTOR_IT","COFORGE":"SECTOR_IT",
+    "KPITTECH":"SECTOR_IT","PERSISTENT":"SECTOR_IT","TATAELXSI":"SECTOR_IT",
+    "OFSS":"SECTOR_IT","NAUKRI":"SECTOR_IT","BIRLASOFT":"SECTOR_IT","LTTS":"SECTOR_IT",
+    "HDFCBANK":"SECTOR_BANK","ICICIBANK":"SECTOR_BANK","SBIN":"SECTOR_BANK",
+    "KOTAKBANK":"SECTOR_BANK","AXISBANK":"SECTOR_BANK","INDUSINDBK":"SECTOR_BANK",
+    "BANKBARODA":"SECTOR_BANK","PNB":"SECTOR_BANK","CANBK":"SECTOR_BANK",
+    "FEDERALBNK":"SECTOR_BANK","IDFCFIRSTB":"SECTOR_BANK","AUBANK":"SECTOR_BANK",
+    "RBLBANK":"SECTOR_BANK","BANDHANBNK":"SECTOR_BANK","YESBANK":"SECTOR_BANK",
+    "UNIONBANK":"SECTOR_BANK","IDBI":"SECTOR_BANK",
+    "BAJFINANCE":"SECTOR_FINANCE","BAJAJFINSV":"SECTOR_FINANCE","SHRIRAMFIN":"SECTOR_FINANCE",
+    "CHOLAFIN":"SECTOR_FINANCE","MUTHOOTFIN":"SECTOR_FINANCE","SBICARD":"SECTOR_FINANCE",
+    "SBILIFE":"SECTOR_FINANCE","HDFCLIFE":"SECTOR_FINANCE","HDFCAMC":"SECTOR_FINANCE",
+    "JIOFIN":"SECTOR_FINANCE","ABCAPITAL":"SECTOR_FINANCE","LTF":"SECTOR_FINANCE",
+    "POLICYBZR":"SECTOR_FINANCE","CDSL":"SECTOR_FINANCE","MCX":"SECTOR_FINANCE",
+    "360ONE":"SECTOR_FINANCE","ICICIGI":"SECTOR_FINANCE","MANAPPURAM":"SECTOR_FINANCE",
+    "LICHSGFIN":"SECTOR_FINANCE","M&MFIN":"SECTOR_FINANCE","PNBHOUSING":"SECTOR_FINANCE",
+    "SUNPHARMA":"SECTOR_PHARMA","DRREDDY":"SECTOR_PHARMA","CIPLA":"SECTOR_PHARMA",
+    "DIVISLAB":"SECTOR_PHARMA","AUROPHARMA":"SECTOR_PHARMA","LUPIN":"SECTOR_PHARMA",
+    "BIOCON":"SECTOR_PHARMA","ALKEM":"SECTOR_PHARMA","TORNTPHARM":"SECTOR_PHARMA",
+    "GLENMARK":"SECTOR_PHARMA","MANKIND":"SECTOR_PHARMA","MAXHEALTH":"SECTOR_PHARMA",
+    "APOLLOHOSP":"SECTOR_PHARMA","IPCALAB":"SECTOR_PHARMA","LALPATHLAB":"SECTOR_PHARMA",
+    "LAURUSLABS":"SECTOR_PHARMA","ZYDUSLIFE":"SECTOR_PHARMA","GLAND":"SECTOR_PHARMA",
+    "SRF":"SECTOR_PHARMA","PIDILITIND":"SECTOR_PHARMA","UPL":"SECTOR_PHARMA",
+    "MARUTI":"SECTOR_AUTO","BAJAJ-AUTO":"SECTOR_AUTO","M&M":"SECTOR_AUTO",
+    "EICHERMOT":"SECTOR_AUTO","TVSMOTOR":"SECTOR_AUTO","HEROMOTOCO":"SECTOR_AUTO",
+    "BOSCHLTD":"SECTOR_AUTO","BHARATFORG":"SECTOR_AUTO","MOTHERSON":"SECTOR_AUTO",
+    "APOLLOTYRE":"SECTOR_AUTO","ASHOKLEY":"SECTOR_AUTO","BALKRISIND":"SECTOR_AUTO",
+    "EXIDEIND":"SECTOR_AUTO","TIINDIA":"SECTOR_AUTO","CUMMINSIND":"SECTOR_AUTO",
+    "HINDUNILVR":"SECTOR_FMCG","ITC":"SECTOR_FMCG","NESTLEIND":"SECTOR_FMCG",
+    "BRITANNIA":"SECTOR_FMCG","DABUR":"SECTOR_FMCG","MARICO":"SECTOR_FMCG",
+    "COLPAL":"SECTOR_FMCG","GODREJCP":"SECTOR_FMCG","TATACONSUM":"SECTOR_FMCG",
+    "VBL":"SECTOR_FMCG","KALYANKJIL":"SECTOR_FMCG","TITAN":"SECTOR_FMCG",
+    "TRENT":"SECTOR_FMCG","PAGEIND":"SECTOR_FMCG","DMART":"SECTOR_FMCG",
+    "JUBLFOOD":"SECTOR_FMCG","NYKAA":"SECTOR_FMCG","ETERNAL":"SECTOR_FMCG",
+    "ASIANPAINT":"SECTOR_FMCG","BERGEPAINT":"SECTOR_FMCG","EMAMILTD":"SECTOR_FMCG",
+    "UBL":"SECTOR_FMCG","MCDOWELL-N":"SECTOR_FMCG","RADICO":"SECTOR_FMCG",
+    "INDHOTEL":"SECTOR_FMCG","PVRINOX":"SECTOR_FMCG","STAR":"SECTOR_FMCG",
+    "TATASTEEL":"SECTOR_METAL","JSWSTEEL":"SECTOR_METAL","HINDALCO":"SECTOR_METAL",
+    "VEDL":"SECTOR_METAL","SAIL":"SECTOR_METAL","NMDC":"SECTOR_METAL",
+    "HINDZINC":"SECTOR_METAL","JINDALSTEL":"SECTOR_METAL","NATIONALUM":"SECTOR_METAL",
+    "DLF":"SECTOR_REALTY","GODREJPROP":"SECTOR_REALTY","OBEROIRLTY":"SECTOR_REALTY",
+    "LODHA":"SECTOR_REALTY","PRESTIGE":"SECTOR_REALTY","PHOENIXLTD":"SECTOR_REALTY",
+    "NBCC":"SECTOR_REALTY","HUDCO":"SECTOR_REALTY","IRB":"SECTOR_REALTY",
+    "RELIANCE":"SECTOR_ENERGY","ONGC":"SECTOR_ENERGY","NTPC":"SECTOR_ENERGY",
+    "POWERGRID":"SECTOR_ENERGY","BPCL":"SECTOR_ENERGY","IOC":"SECTOR_ENERGY",
+    "HINDPETRO":"SECTOR_ENERGY","GAIL":"SECTOR_ENERGY","PETRONET":"SECTOR_ENERGY",
+    "TATAPOWER":"SECTOR_ENERGY","JSWENERGY":"SECTOR_ENERGY","ADANIGREEN":"SECTOR_ENERGY",
+    "ADANIENSOL":"SECTOR_ENERGY","NHPC":"SECTOR_ENERGY","SUZLON":"SECTOR_ENERGY",
+    "TORNTPOWER":"SECTOR_ENERGY","SJVN":"SECTOR_ENERGY","RPOWER":"SECTOR_ENERGY",
+    "CESC":"SECTOR_ENERGY","IGL":"SECTOR_ENERGY","MGL":"SECTOR_ENERGY",
+    "LT":"SECTOR_INFRA","ABB":"SECTOR_INFRA","SIEMENS":"SECTOR_INFRA",
+    "BEL":"SECTOR_INFRA","HAL":"SECTOR_INFRA","BHEL":"SECTOR_INFRA",
+    "CGPOWER":"SECTOR_INFRA","POLYCAB":"SECTOR_INFRA","HAVELLS":"SECTOR_INFRA",
+    "KEI":"SECTOR_INFRA","DIXON":"SECTOR_INFRA","ADANIPORTS":"SECTOR_INFRA",
+    "ADANIENT":"SECTOR_INFRA","INDIGO":"SECTOR_INFRA","DELHIVERY":"SECTOR_INFRA",
+    "ULTRACEMCO":"SECTOR_INFRA","AMBUJACEM":"SECTOR_INFRA","SHREECEM":"SECTOR_INFRA",
+    "GRASIM":"SECTOR_INFRA","ACC":"SECTOR_INFRA","CONCOR":"SECTOR_INFRA",
+    "AMBER":"SECTOR_INFRA","VOLTAS":"SECTOR_INFRA","WHIRLPOOL":"SECTOR_INFRA",
+    "COALINDIA":"SECTOR_PSU","RECLTD":"SECTOR_PSU","PFC":"SECTOR_PSU",
+    "IRFC":"SECTOR_PSU","LICI":"SECTOR_PSU","TATACHEM":"SECTOR_PHARMA",
+    "COROMANDEL":"SECTOR_PHARMA","CHAMBLFERT":"SECTOR_PHARMA",
+    "PAYTM":"SECTOR_FINANCE","INDIAMART":"SECTOR_IT","BSE":"SECTOR_FINANCE",
+    "CAMS":"SECTOR_FINANCE","IIFL":"SECTOR_FINANCE","TATAMOTORS":"SECTOR_AUTO",
+    "TATACOMM":"SECTOR_IT",
+}
 
 # ── Parsing ───────────────────────────────────────────────────────────────────
 
@@ -308,11 +395,14 @@ def fetch_symbols(symbols, start, end):
 
 @app.route("/")
 def health():
+    csv_count = len(list(DATA_DIR.glob("*.csv"))) if DATA_DIR.exists() else 0
     return cors_response({
-        "status":  "ok",
-        "service": "TradeEdge API",
-        "time":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "symbols": len(ALL_SYMBOLS),
+        "status":   "ok",
+        "service":  "TradeEdge API",
+        "time":     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "symbols":  len(ALL_SYMBOLS),
+        "csvFiles": csv_count,
+        "dataDir":  str(DATA_DIR),
     })
 
 @app.route("/sync-today")
@@ -398,6 +488,178 @@ def sync_range():
         "grandTotal":    len(ALL_SYMBOLS),
         "done":          (offset + limit) >= len(ALL_SYMBOLS),
     })
+
+def _do_fetch_job():
+    """
+    Background worker: incremental fetch for all F&O symbols, saves CSVs to DATA_DIR.
+    Runs in a daemon thread so it never blocks Flask request handlers.
+    """
+    import json as _json
+    global _fetch_status
+
+    end   = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+    start = (datetime.today() - timedelta(days=5)).strftime("%Y-%m-%d")
+
+    _fetch_status.update({
+        "running": True, "startedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "finishedAt": None, "ok": 0, "failed": 0,
+        "failedSyms": [], "lastError": None, "log": [],
+    })
+
+    def _log(msg):
+        print(msg)
+        _fetch_status["log"].append(msg)
+        if len(_fetch_status["log"]) > 200:
+            _fetch_status["log"] = _fetch_status["log"][-200:]
+
+    _log(f"[fetch-job] Started — {start} → {end}  symbols={len(ALL_SYMBOLS)}")
+
+    # Fetch all symbols in batches of 10 (reuse existing bulk fetch logic)
+    BATCH = 10
+    ok_count, fail_syms = 0, []
+
+    for i in range(0, len(ALL_SYMBOLS), BATCH):
+        batch = ALL_SYMBOLS[i:i + BATCH]
+        try:
+            result, failed = fetch_symbols(batch, start, end)
+        except Exception as e:
+            _log(f"[fetch-job] batch {i}–{i+BATCH} exception: {e}")
+            fail_syms.extend(batch)
+            continue
+
+        # Write / merge each symbol's CSV
+        for sym, rows in result.items():
+            csv_path = DATA_DIR / f"{sym}.csv"
+            try:
+                new_df = pd.DataFrame(rows)
+                new_df.rename(columns={"adjClose": "adj_close"}, inplace=True)
+                col_order = ["date","open","high","low","close","adj_close","volume"]
+                for c in col_order:
+                    if c not in new_df.columns:
+                        new_df[c] = 0
+                new_df = new_df[col_order]
+
+                if csv_path.exists():
+                    old_df  = pd.read_csv(csv_path, dtype=str)
+                    merged  = pd.concat([old_df, new_df.astype(str)], ignore_index=True)
+                    merged.drop_duplicates(subset="date", keep="last", inplace=True)
+                    merged.sort_values("date", inplace=True)
+                    merged.to_csv(csv_path, index=False)
+                else:
+                    new_df.to_csv(csv_path, index=False)
+
+                ok_count += 1
+            except Exception as e:
+                _log(f"[fetch-job] CSV write error {sym}: {e}")
+                fail_syms.append(sym)
+
+        fail_syms.extend(failed)
+        _fetch_status["ok"]      = ok_count
+        _fetch_status["failed"]  = len(fail_syms)
+        _fetch_status["failedSyms"] = fail_syms
+        _log(f"[fetch-job] batch {i//BATCH + 1}/{-(-len(ALL_SYMBOLS)//BATCH)}  ok={ok_count}  fail={len(fail_syms)}")
+
+    # Write SECTOR_MAP.json
+    try:
+        import json as _json2
+        sector_map_path = DATA_DIR / "SECTOR_MAP.json"
+        _json2.dump(STOCK_SECTOR_MAP, open(sector_map_path, "w"), indent=2)
+        _log(f"[fetch-job] SECTOR_MAP.json saved")
+    except Exception as e:
+        _log(f"[fetch-job] SECTOR_MAP.json write failed: {e}")
+
+    _fetch_status.update({
+        "running":    False,
+        "finishedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ok":         ok_count,
+        "failed":     len(fail_syms),
+        "failedSyms": fail_syms,
+    })
+    _log(f"[fetch-job] Done — ok={ok_count}  failed={len(fail_syms)}")
+
+
+@app.route("/run-fetch")
+def run_fetch():
+    """
+    Trigger the daily fetch job.
+    Call this from cron-job.org at 15:20 IST (09:50 UTC) Mon–Fri.
+    Protected by FETCH_SECRET env var — pass as ?secret=xxx.
+
+    Returns immediately with job_started=true; poll /fetch-status for progress.
+    If a job is already running, returns job_started=false.
+    """
+    secret = os.environ.get("FETCH_SECRET", "")
+    if secret and request.args.get("secret", "") != secret:
+        return cors_response({"error": "Unauthorized"}, 401)
+
+    if _fetch_status["running"]:
+        return cors_response({
+            "job_started": False,
+            "reason":      "already running",
+            "status":      _fetch_status,
+        })
+
+    t = threading.Thread(target=_do_fetch_job, daemon=True)
+    t.start()
+    return cors_response({
+        "job_started": True,
+        "symbols":     len(ALL_SYMBOLS),
+        "dataDir":     str(DATA_DIR),
+        "message":     "Fetch started in background. Poll /fetch-status for progress.",
+    })
+
+
+@app.route("/fetch-status")
+def fetch_status():
+    """Poll this to monitor the background fetch job started by /run-fetch."""
+    return cors_response(_fetch_status)
+
+
+@app.route("/data/manifest")
+def data_manifest():
+    """
+    Return list of available CSV symbols + last-modified timestamps.
+    Used by TradeEdge.html loadFromCloud() to discover available symbols.
+    """
+    files = {}
+    for f in sorted(DATA_DIR.glob("*.csv")):
+        st = f.stat()
+        files[f.stem.upper()] = {"mtime": round(st.st_mtime), "size": st.st_size}
+    sector_map = DATA_DIR / "SECTOR_MAP.json"
+    return cors_response({
+        "status":       "ok",
+        "count":        len(files),
+        "symbols":      files,
+        "hasSectorMap": sector_map.exists(),
+        "asOf":         datetime.now().strftime("%Y-%m-%d %H:%M"),
+    })
+
+
+@app.route("/data/<path:filename>")
+def serve_data_file(filename):
+    """
+    Serve a single CSV or SECTOR_MAP.json from DATA_DIR.
+    Cache-Control: no-cache so TradeEdge.html always gets the latest data.
+    """
+    lower = filename.lower()
+    if not (lower.endswith(".csv") or lower == "sector_map.json"):
+        return cors_response({"error": "Only .csv and SECTOR_MAP.json files are served"}, 403)
+
+    file_path = DATA_DIR / filename
+    if not file_path.exists():
+        return cors_response({"error": f"{filename} not found — run /run-fetch first"}, 404)
+
+    try:
+        file_path.resolve().relative_to(DATA_DIR.resolve())
+    except ValueError:
+        return cors_response({"error": "Invalid path"}, 400)
+
+    mime = "application/json" if lower.endswith(".json") else "text/csv"
+    resp = send_from_directory(DATA_DIR.resolve(), filename, mimetype=mime)
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
