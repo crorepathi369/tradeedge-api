@@ -5614,6 +5614,139 @@ async function saveAllCSVs() {
   alert(`✅ Downloaded: ${zipName}\n\nContains ${syms.length} CSV files (${sizeMB} MB)\n\nTo use:\n1. Unzip the file\n2. Replace your tradeedge_data/ folder with the unzipped folder\n3. Next session: 📂 Load from the updated folder`);
 }
 
+// ── Load From Cloud — fetch all CSVs from Render /data/ endpoint ──────────────
+async function loadFromCloud() {
+  if (!TRADEEDGE_API_URL) {
+    alert('TradeEdge API not configured.\n\nSet TRADEEDGE_API_URL in the script.');
+    return;
+  }
+
+  const overlay  = document.getElementById('csvLoadOverlay');
+  const bar      = document.getElementById('csvLoadBar');
+  const label    = document.getElementById('csvLoadLabel');
+  const countEl  = document.getElementById('csvLoadCount');
+  overlay.style.display = 'flex';
+  bar.style.width = '0%';
+  label.textContent = 'Contacting cloud server…';
+  countEl.textContent = '';
+
+  const cloudBtn    = document.getElementById('cloudBtn');
+  const mobCloudBtn = document.getElementById('mobCloudBtn');
+  const cloudBarBtn = document.getElementById('cloudBarBtn');
+  [cloudBtn, mobCloudBtn, cloudBarBtn].forEach(b => { if (b) b.disabled = true; });
+
+  let cancelled = false;
+  let cancelEl  = document.getElementById('cloudCancelBtn');
+  if (!cancelEl) {
+    cancelEl = document.createElement('button');
+    cancelEl.id = 'cloudCancelBtn';
+    cancelEl.textContent = '✕ Cancel';
+    cancelEl.style.cssText = 'margin-top:10px;padding:4px 14px;border-radius:6px;border:1px solid #e07070;'
+      + 'background:transparent;color:#e07070;font-family:\'DM Mono\',monospace;font-size:11px;cursor:pointer;';
+    cancelEl.onclick = () => { cancelled = true; };
+    overlay.appendChild(cancelEl);
+  } else {
+    cancelEl.style.display = '';
+    cancelled = false;
+  }
+
+  try {
+    // Step 1: fetch manifest
+    label.textContent = 'Fetching manifest…';
+    const manifestRes = await fetch(TRADEEDGE_API_URL + '/data/manifest');
+    if (!manifestRes.ok) throw new Error('Manifest fetch failed: ' + manifestRes.status);
+    const manifest = await manifestRes.json();
+
+    if (!manifest.symbols || !Object.keys(manifest.symbols).length) {
+      overlay.style.display = 'none';
+      alert('No CSV files found on the server yet.\n\nWait for the 3 PM GitHub Actions run to complete.');
+      return;
+    }
+
+    const universe   = new Set(getActiveUniverse());
+    const allSymbols = Object.keys(manifest.symbols).filter(s => universe.has(s));
+    const total      = allSymbols.length;
+    countEl.textContent = `0 / ${total} symbols`;
+
+    // Step 2: fetch CSVs in parallel batches of 12
+    const BATCH = 12;
+    let loaded = 0, failed = 0;
+
+    for (let i = 0; i < allSymbols.length; i += BATCH) {
+      if (cancelled) break;
+      const batch = allSymbols.slice(i, i + BATCH);
+      bar.style.width  = Math.round(i / total * 100) + '%';
+      label.textContent = batch[0] + (batch.length > 1 ? ` … ${batch[batch.length-1]}` : '');
+      countEl.textContent = `${loaded} / ${total} symbols`;
+
+      if (i % (BATCH * 3) === 0) await new Promise(r => setTimeout(r, 0));
+
+      await Promise.all(batch.map(async sym => {
+        try {
+          const res = await fetch(TRADEEDGE_API_URL + '/data/' + sym + '.csv');
+          if (!res.ok) { failed++; return; }
+          const text  = await res.text();
+          const lines = text.trim().split('\n');
+          if (lines.length < 2) { failed++; return; }
+          const header = lines[0].toLowerCase().replace(/\r/g,'').split(',');
+          const di = header.indexOf('date'), oi = header.indexOf('open'),
+                hi = header.indexOf('high'), li = header.indexOf('low'),
+                ci = header.indexOf('close'), ai = header.indexOf('adj_close');
+          if ([di,oi,hi,li,ci].some(x => x === -1)) { failed++; return; }
+          const ohlc = lines.slice(1).map(l => {
+            const c = l.replace(/\r/g,'').split(',');
+            const row = { date: c[di].slice(0,10), open: +c[oi], high: +c[hi], low: +c[li], close: +c[ci] };
+            if (ai !== -1 && c[ai]) row.adjClose = +c[ai];
+            return row;
+          }).filter(r => r.open && r.close && r.date && isValidTradingDay(r.date));
+          if (!ohlc.length) { failed++; return; }
+          ohlc.sort((a,b) => a.date.localeCompare(b.date));
+          if (_loadedOHLC[sym]) {
+            const existing = new Set(_loadedOHLC[sym].map(c => c.date));
+            const newRows  = ohlc.filter(r => !existing.has(r.date));
+            if (newRows.length)
+              _loadedOHLC[sym] = [..._loadedOHLC[sym], ...newRows].sort((a,b)=>a.date.localeCompare(b.date));
+          } else {
+            _loadedOHLC[sym] = ohlc;
+          }
+          loaded++;
+        } catch { failed++; }
+      }));
+    }
+
+    // Step 3: save to IndexedDB
+    bar.style.width   = '98%';
+    label.textContent = 'Saving to IndexedDB…';
+    countEl.textContent = `${loaded} symbol(s) — caching in browser…`;
+    let idbSaved = 0;
+    try { idbSaved = await _idbSaveAll(); } catch(e) { console.warn('[cloud] IDB save failed:', e); }
+
+    _lastTodaySyncTime = Date.now();
+    allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null;
+
+    bar.style.width = '100%';
+    const ready = getAllLoadedSymbols().length;
+    if (cancelled) {
+      label.textContent = `⏹ Cancelled — ${loaded} symbols loaded`;
+    } else {
+      label.textContent  = `✅ Cloud load complete${failed ? ' · ⚠ ' + failed + ' failed' : ''}`;
+      countEl.textContent = `${ready} symbols ready · cached (${idbSaved})`;
+    }
+    updateDataStatusBar();
+    await new Promise(r => setTimeout(r, 1800));
+    overlay.style.display = 'none';
+    if (cancelEl) cancelEl.style.display = 'none';
+
+  } catch(err) {
+    overlay.style.display = 'none';
+    console.error('[loadFromCloud]', err);
+    alert('Cloud load failed: ' + err.message
+      + '\n\nMake sure the Render service is running and data has been fetched.');
+  } finally {
+    [cloudBtn, mobCloudBtn, cloudBarBtn].forEach(b => { if (b) b.disabled = false; });
+  }
+}
+
 // ── Sync Today — fetch via SSE stream with live progress ─────────────────────
 async function syncToday() {
   if (!TRADEEDGE_API_URL) {
