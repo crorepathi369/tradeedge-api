@@ -5,6 +5,7 @@ on:
   # Automatic: 3:00 PM IST = 09:30 UTC, Monday–Friday
   schedule:
     - cron: '30 9 * * 1-5'
+    - cron: '30 11 * * 1-5'
 
   # Manual trigger from GitHub Actions UI (for testing)
   workflow_dispatch:
@@ -12,7 +13,7 @@ on:
       days:
         description: 'Days of data to fetch (default 5)'
         required: false
-        default: '5'
+        default: '730'
       symbols:
         description: 'Specific symbols (leave empty for all F&O)'
         required: false
