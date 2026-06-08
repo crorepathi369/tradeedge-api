@@ -544,18 +544,27 @@
 
       <!-- Upload -->
       <div class="scanner-panel">
-        <div class="scanner-panel-title">DATA FOLDER</div>
+        <div class="scanner-panel-title">DATA SOURCE</div>
         <input type="file" id="folderInput" webkitdirectory mozdirectory style="display:none" />
         <input type="file" id="fileInput" accept=".csv,.json" multiple style="display:none" />
-        <div class="upload-zone" id="uploadZone" style="padding:16px;margin-bottom:0;border-radius:8px">
-          <div style="font-size:22px;margin-bottom:6px">📂</div>
-          <div style="font-size:12px;font-weight:700;margin-bottom:8px">Drag folder here</div>
-          <div style="display:flex;gap:6px;justify-content:center">
-            <button class="upload-btn-primary" style="font-size:11px;padding:6px 12px" onclick="document.getElementById('folderInput').click()">📁 Folder</button>
-            <button class="upload-btn-secondary" style="font-size:11px;padding:6px 12px" onclick="document.getElementById('fileInput').click()">📄 Files</button>
-          </div>
+
+        <!-- Cloud load button — primary -->
+        <button id="cloudLoadBtn" onclick="loadFromCloud()"
+          style="width:100%;padding:10px;background:#1a6e4a;color:#fff;border:none;border-radius:8px;
+                 font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer;
+                 display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px">
+          ☁️ Load from Cloud
+        </button>
+
+        <!-- Local folder fallback -->
+        <div style="display:flex;gap:6px;justify-content:center;margin-bottom:4px">
+          <button class="upload-btn-secondary" style="font-size:10px;padding:5px 10px;flex:1"
+            onclick="document.getElementById('folderInput').click()">📁 Local Folder</button>
+          <button class="upload-btn-secondary" style="font-size:10px;padding:5px 10px;flex:1"
+            onclick="document.getElementById('fileInput').click()">📄 Files</button>
         </div>
-        <!-- Load progress bar — shown while files are being read -->
+
+        <!-- Load progress bar -->
         <div id="loadProgressWrap" style="display:none;margin-top:8px">
           <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:4px">
             <span id="loadProgressText">Loading files...</span>
@@ -1382,6 +1391,116 @@ async function collectEntryFiles(entry, files) {
     const reader = entry.createReader();
     const entries = await new Promise(res => reader.readEntries(res));
     for (const e of entries) await collectEntryFiles(e, files);
+  }
+}
+
+// ── Load From Cloud — fetch all CSVs from Render /data/ endpoint ──────────────
+const TRADEEDGE_API_URL = 'https://tradeedge-api.onrender.com';
+
+async function loadFromCloud() {
+  const btn  = document.getElementById('cloudLoadBtn');
+  const wrap = document.getElementById('loadProgressWrap');
+  const fill = document.getElementById('loadProgressFill');
+  const text = document.getElementById('loadProgressText');
+  const count= document.getElementById('loadProgressCount');
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading…'; }
+  if (wrap) wrap.style.display = 'block';
+  if (fill) fill.style.width = '0%';
+  if (text) text.textContent = 'Contacting cloud server…';
+  if (count) count.textContent = '';
+
+  try {
+    // Step 1: fetch manifest
+    const manifestRes = await fetch(TRADEEDGE_API_URL + '/data/manifest');
+    if (!manifestRes.ok) throw new Error('Manifest fetch failed: ' + manifestRes.status);
+    const manifest = await manifestRes.json();
+
+    const symbols = Object.keys(manifest.symbols || {});
+    if (!symbols.length) {
+      alert('No data found on cloud server.\nWait for the 3 PM GitHub Actions run to complete.');
+      return;
+    }
+
+    const total = symbols.length + (manifest.hasSectorMap ? 1 : 0);
+    let done = 0;
+
+    const updateProg = (name) => {
+      done++;
+      const pct = Math.round(done / total * 100);
+      if (fill)  fill.style.width  = pct + '%';
+      if (text)  text.textContent  = `Loading ${name}…`;
+      if (count) count.textContent = `${done} / ${total}`;
+    };
+
+    // Step 2: fetch SECTOR_MAP.json first if available
+    if (manifest.hasSectorMap) {
+      try {
+        const smRes  = await fetch(TRADEEDGE_API_URL + '/data/SECTOR_MAP.json');
+        if (smRes.ok) {
+          const smText = await smRes.text();
+          // Create a synthetic File object from fetched text
+          const smFile = new File([smText], 'SECTOR_MAP.json', { type: 'application/json' });
+          await loadSectorMap(smFile);
+        }
+        updateProg('SECTOR_MAP.json');
+      } catch(e) { console.warn('[cloud] SECTOR_MAP failed:', e); }
+    }
+
+    // Step 3: fetch CSVs in parallel batches
+    const BATCH = 15;
+    for (let i = 0; i < symbols.length; i += BATCH) {
+      const batch = symbols.slice(i, i + BATCH);
+      if (i % (BATCH * 2) === 0) await new Promise(r => setTimeout(r, 0));
+
+      await Promise.all(batch.map(async sym => {
+        try {
+          const res = await fetch(TRADEEDGE_API_URL + '/data/' + sym + '.csv');
+          if (!res.ok) { updateProg(sym); return; }
+          const csvText = await res.text();
+
+          // Create synthetic File object — handleFiles expects File objects
+          const file = new File([csvText], sym + '.csv', { type: 'text/csv' });
+
+          // Parse and add directly (skip duplicate check overhead)
+          const stem = sym;
+          if (/^(nifty50|nifty_50|nsei|nifty)$/i.test(stem)) {
+            await loadNifty(file);
+          } else if (/^SECTOR_/i.test(stem)) {
+            await loadSectorCSV(stem.toUpperCase(), file);
+          } else {
+            if (!loadedFiles.find(x => x.name === file.name)) {
+              const data = parseCSV(csvText);
+              loadedFiles.push({ name: file.name, file, data });
+            }
+          }
+          updateProg(sym);
+        } catch(e) {
+          console.warn('[cloud] Failed:', sym, e);
+          updateProg(sym);
+        }
+      }));
+    }
+
+    // Sort and finalise
+    loadedFiles.sort((a, b) => a.name.localeCompare(b.name));
+    if (fill)  fill.style.width  = '100%';
+    if (text)  text.textContent  = `✅ ${loadedFiles.length} symbols loaded from cloud`;
+    if (count) count.textContent = '';
+
+    updateFileCountBar();
+    updateScanBtn();
+    updateBtBtn();
+    saveToCache();
+
+    setTimeout(() => { if (wrap) wrap.style.display = 'none'; }, 2000);
+
+  } catch(err) {
+    console.error('[loadFromCloud]', err);
+    if (text) text.textContent = '✗ Cloud load failed: ' + err.message;
+    alert('Cloud load failed:\n' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '☁️ Load from Cloud'; }
   }
 }
 
@@ -3181,6 +3300,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     runScan();
   } else {
     updateCacheStatus(null);
+    // No cache — if running from cloud (https), auto-trigger cloud load
+    if (window.location.href.startsWith('https://')) {
+      setTimeout(() => loadFromCloud(), 500);
+    }
   }
 });
 </script>
