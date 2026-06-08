@@ -4321,8 +4321,16 @@ function launchSRScanner() {
     return;
   }
 
-  // Desktop file:// — path replacement works reliably
+  // Cloud / GitHub Pages — construct sibling URL directly
   const current = window.location.href;
+  if (current.startsWith('https://') || current.startsWith('http://')) {
+    const lastSlash = current.lastIndexOf('/');
+    const base = current.substring(0, lastSlash + 1);
+    window.location.href = base + 'TradeEdgeAI.html';
+    return;
+  }
+
+  // Desktop file:// — path replacement works reliably
   if (current.startsWith('file://')) {
     const lastSlash = current.lastIndexOf('/');
     window.location.href = current.substring(0, lastSlash + 1) + 'TradeEdgeAI.html';
