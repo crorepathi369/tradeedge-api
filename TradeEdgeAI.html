@@ -1337,34 +1337,42 @@ function updateApiStatus() {
 // ═══════════════════════════════════════════════
 //  FILE HANDLING
 // ═══════════════════════════════════════════════
+let _filesLoading = false;   // declared early so loadFromCloud can reference it
+
 const uploadZone  = document.getElementById('uploadZone');
 const fileInput   = document.getElementById('fileInput');
 const folderInput = document.getElementById('folderInput');
 
 // Folder picker
-folderInput.addEventListener('change', () => {
-  handleFiles([...folderInput.files]);
-  folderInput.value = '';
-});
+if (folderInput) {
+  folderInput.addEventListener('change', () => {
+    handleFiles([...folderInput.files]);
+    folderInput.value = '';
+  });
+}
 
 // File picker
-fileInput.addEventListener('change', () => {
-  handleFiles([...fileInput.files]);
-  fileInput.value = '';
-});
+if (fileInput) {
+  fileInput.addEventListener('change', () => {
+    handleFiles([...fileInput.files]);
+    fileInput.value = '';
+  });
+}
 
 // Drag-and-drop — works for both folders and files
-uploadZone.addEventListener('dragover', e => {
-  e.preventDefault();
-  uploadZone.classList.add('drag-over');
-});
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-uploadZone.addEventListener('drop', async e => {
-  e.preventDefault();
-  uploadZone.classList.remove('drag-over');
-  const files = await getFilesFromDrop(e.dataTransfer);
-  handleFiles(files);
-});
+if (uploadZone) {
+  uploadZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadZone.classList.add('drag-over');
+  });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', async e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const files = await getFilesFromDrop(e.dataTransfer);
+    handleFiles(files);
+  });
+}
 
 // Recursively extract files from dropped folders using DataTransferItemList
 async function getFilesFromDrop(dataTransfer) {
@@ -1600,8 +1608,6 @@ function updateBtBtn() {
   const btn = document.getElementById('btRunBtn');
   if (btn) btn.disabled = loadedFiles.length === 0 || _filesLoading;
 }
-let _filesLoading = false;
-
 // ═══════════════════════════════════════════════
 //  CSV PARSER
 // ═══════════════════════════════════════════════
