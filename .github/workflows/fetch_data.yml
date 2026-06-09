@@ -89,7 +89,39 @@ jobs:
           echo "  Sample dates in RELIANCE.csv:"
           tail -3 tradeedge_data/RELIANCE.csv 2>/dev/null || echo "  (not found)"
 
-      # 6. Fetch incremental OHLC data from Yahoo Finance
+      # 6. Backfill any thin CSVs (< 100 rows) with full 2-year history
+      #    Covers symbols added after the initial fetch (e.g. LAURUSLABS, LICI, LODHA, MCX)
+      #    Runs a full fetch (no --merge) only for those symbols, then normal incr fetch follows
+      - name: Backfill thin CSVs
+        run: |
+          THIN=$(python3 - <<'EOF'
+import os
+from pathlib import Path
+d = Path("./tradeedge_data")
+EXCLUDE = {"LTIM"}
+thin = []
+for f in sorted(d.glob("*.csv")):
+    if f.stem.upper() in EXCLUDE:
+        continue
+    try:
+        rows = sum(1 for _ in open(f)) - 1  # subtract header
+        if rows < 100:
+            thin.append(f.stem)
+    except:
+        pass
+print(" ".join(thin))
+EOF
+)
+          if [ -z "$THIN" ]; then
+            echo "✓ No thin CSVs found — all symbols have sufficient history"
+          else
+            echo "⚠ Thin CSVs detected (< 100 rows): $THIN"
+            echo "Running full 2-year backfill for these symbols..."
+            python tradeedge_fetch.py --symbols $THIN --outdir ./tradeedge_data --delay 1.2
+            echo "✓ Backfill complete"
+          fi
+
+      # 7. Fetch incremental OHLC data from Yahoo Finance
       #    Now --merge appends to existing history instead of starting fresh
       - name: Fetch incremental data
         run: |
@@ -104,7 +136,7 @@ jobs:
             python tradeedge_fetch.py --fo --merge --days $DAYS --outdir ./tradeedge_data --delay 1.2
           fi
 
-      # 7. Push updated CSVs to the data branch + auto-trigger Render pull
+      # 8. Push updated CSVs to the data branch + auto-trigger Render pull
       - name: Push CSVs to data branch
         env:
           GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
@@ -116,7 +148,7 @@ jobs:
         run: |
           python push_incr_data.py --all
 
-      # 8. Verify Render has the fresh data
+      # 9. Verify Render has the fresh data
       - name: Verify Render pull completed
         run: |
           RENDER_URL="${{ secrets.RENDER_API_URL }}"
@@ -132,7 +164,7 @@ jobs:
           echo "✓ Render has $COUNT CSVs ready to serve"
           echo "✓ TradeEdge is ready at: https://crorepathi369.github.io/tradeedge-api/"
 
-      # 9. Summary
+      # 10. Summary
       - name: Print summary
         if: always()
         run: |
