@@ -1,16 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- PWA Manifest — paste these lines inside <head> in TradeEdge.html -->
-<link rel="manifest" href="manifest.json">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="TradeEdge">
-<meta name="theme-color" content="#e8600a">
-<link rel="apple-touch-icon" href="icon-192.png">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TradeEdge</title>
+<title>TradeEdge — NSE/BSE Strategy Backtester</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23c8500a'/><text x='50%25' y='55%25' dominant-baseline='central' text-anchor='middle' font-family='sans-serif' font-weight='700' font-size='13' fill='white'>TE</text></svg>">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap');
@@ -1525,6 +1518,8 @@
       position: relative;
     }
     #mobLoadBtn  { background: rgba(255,255,255,0.1); }
+    #mobCloudBtn { background: rgba(255,255,255,0.1); }
+    #mobRefreshBtn { background: rgba(255,255,255,0.1); }
     #mobTodayBtn { background: rgba(255,255,255,0.1); }
     #mobSyncBtn  { background: var(--accent); }
     .mob-icon-btn:active { opacity: 0.7; transform: scale(0.93); }
@@ -2510,7 +2505,11 @@
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:10px;">
         <button class="sort-btn" onclick="loadFromCSV()">📂 Load Data Folder</button>
         <button class="sort-btn" onclick="loadFromCloud()" id="cloudBarBtn"
+          style="background:var(--text);color:var(--surface);border-color:var(--text);"
           title="Fetch all CSVs from your Render cloud server">☁️ Load Cloud</button>
+        <button class="sort-btn" onclick="loadFromCloud()" id="refreshBarBtn"
+          style="background:var(--text);color:var(--surface);border-color:var(--text);"
+          title="Refresh data from cloud">🔄 Refresh</button>
         <button class="sort-btn" onclick="showCacheStatus()" title="Shows IndexedDB cache status.">🗄 Cache</button>
         <button class="sort-btn" onclick="purgeAllCache()" style="color:var(--bear);">✕ Clear Cache</button>
       </div>
@@ -2707,7 +2706,7 @@
           No data loaded
         </div>
         <div id="scannerGateMsg" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);">
-          Load data using 📂 Load Data Folder or ⚡ Sync to use the Live Scanner.
+          Load data using ☁️ Load Cloud or 📂 Load Data Folder to use the Live Scanner.
         </div>
       </div>
     </div>
@@ -8591,6 +8590,7 @@ updateDataStatusBar();
     <!-- Icon-only action buttons -->
     <button id="mobLoadBtn"  class="mob-icon-btn" onclick="loadFromCSV()" title="Load CSV files">📂</button>
     <button id="mobCloudBtn" class="mob-icon-btn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
+    <button id="mobRefreshBtn" class="mob-icon-btn" onclick="loadFromCloud()" title="Refresh data from cloud">🔄</button>
     <button class="mob-icon-btn" onclick="mobClearCache()" title="Clear IDB cache" style="background:rgba(220,60,60,0.18);color:var(--bear);">🗑</button>
   </div>
 
@@ -8605,6 +8605,7 @@ updateDataStatusBar();
       <div id="mobStratToggle">
         <button class="mob-strat-btn active" id="mobStOvernightBtn" onclick="mobSetStrategy('overnight')">🌙 Overnight Gap</button>
         <button class="mob-strat-btn" id="mobStIntradayBtn" onclick="mobSetStrategy('intraday')">⚡ Intraday Momentum</button>
+        <button class="mob-strat-btn" id="mobStSRBtn" onclick="launchSRScanner()" style="color:var(--accent);">🎯 S&amp;R</button>
       </div>
       <div style="flex:1;"></div>
       <!-- Cache status pill — moved here to free up Row 2 for date picker -->
@@ -8651,7 +8652,7 @@ updateDataStatusBar();
       <div id="mobEmpty">
         <div class="mob-empty-icon">📡</div>
         <div>Select a date and tap <strong>Scan</strong></div>
-        <div style="font-size:11px;margin-top:4px;color:var(--text3);">Load data first via 📂 or ⚡ Sync</div>
+        <div style="font-size:11px;margin-top:4px;color:var(--text3);">Load data via ☁️ Cloud or 📂 Folder</div>
       </div>
     </div>
     <!-- Strategy note — always visible at bottom -->
@@ -8699,10 +8700,6 @@ updateDataStatusBar();
     <button class="mob-tab-btn" id="mobTabTradesBtn" onclick="mobSwitchTab('trades')">
       <span class="mob-tab-icon">🏆</span>
       Stats
-    </button>
-    <button class="mob-tab-btn" onclick="launchSRScanner()">
-      <span class="mob-tab-icon">🎯</span>
-      S&R
     </button>
   </div>
 
@@ -9625,7 +9622,7 @@ async function _ensureMobTradesData() {
   try {
     const syms = getAllLoadedSymbols();
     if (!syms.length) {
-      _showMobTradesEmpty('Load data first via 📂 or ⚡ Sync');
+      _showMobTradesEmpty('Load data via ☁️ Cloud or 📂 Folder first');
       return;
     }
 
@@ -10534,7 +10531,15 @@ function _mobRefreshTradesTab() {
   const countEl = document.getElementById('csvLoadCount');
   try {
     const meta = await _idbGetMeta();
-    if (!meta || meta.count === 0) { updateDataStatusBar(); return; }
+    if (!meta || meta.count === 0) {
+      updateDataStatusBar();
+      // No cache — auto-load from cloud if on https
+      if (window.location.href.startsWith('https://')) {
+        console.log('[startup] No cache found — auto-loading from cloud…');
+        setTimeout(() => loadFromCloud(), 800);
+      }
+      return;
+    }
     if (overlay) { overlay.style.display = 'flex'; bar.style.width = '10%'; }
     if (label)   label.textContent   = 'Restoring from cache…';
     if (countEl) countEl.textContent = `${meta.count} symbols · last data: ${meta.lastDate || '?'}`;
