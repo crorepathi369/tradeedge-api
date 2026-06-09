@@ -8834,7 +8834,7 @@ let _mobActiveTab = 'scanner';
 
 
 let _mobTradesSubTab   = 'summary';   // 'summary' | 'daywise' | 'stockwise' | 'monthly' | 'insights'
-let _mobTradesStratTab = 'intraday'; // default to Momentum since that's what user is analyzing
+let _mobTradesStratTab = 'overnight'; // default to Gap tab
 let _mobTradeCache     = { overnight: null, intraday: null }; // null = not yet run
 let _mobTradesBuilding = false;
 let _lastScanDate      = null; // scan date of the last scanner run — Stats uses same date cap
