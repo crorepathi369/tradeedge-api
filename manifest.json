@@ -4,7 +4,6 @@
   "description": "NSE F&O Scanner & Backtester",
   "start_url": "/tradeedge-api/index.html",
   "scope": "/tradeedge-api/",
-  "scope": "/tradeedge/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#1a1a1a",
