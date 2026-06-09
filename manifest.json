@@ -1,0 +1,25 @@
+{
+  "name": "TradeEdge",
+  "short_name": "TradeEdge",
+  "description": "NSE F&O Scanner & Backtester",
+  "start_url": "/tradeedge/TradeEdge.html",
+  "scope": "/tradeedge/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1a1a",
+  "theme_color": "#e8600a",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
