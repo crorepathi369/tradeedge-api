@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TradeEdge">
 <title>TradeEdge</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23c8500a'/><text x='50%25' y='55%25' dominant-baseline='central' text-anchor='middle' font-family='sans-serif' font-weight='700' font-size='13' fill='white'>TE</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231a1a1a'/><text x='9' y='21' font-family='sans-serif' font-weight='700' font-size='14' fill='white'>T</text><text x='18' y='21' font-family='sans-serif' font-weight='700' font-size='14' fill='%23e8600a'>E</text></svg>">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap');
 
@@ -61,10 +61,11 @@
   /* Logo mark — rounded, gradient */
   .logo-mark {
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent) 0%, #e06520 100%);
-    box-shadow: 0 2px 8px rgba(200,80,10,0.4);
+    background: #1a1a1a;
+    border: 1px solid #333;
     width: 34px; height: 34px;
-    font-size: 15px;
+    font-size: 14px;
+    letter-spacing: -1px;
   }
 
   /* Brand name — sharper */
@@ -73,6 +74,23 @@
     letter-spacing: -0.8px;
   }
   .brand-name span { color: var(--accent); }
+
+  /* Desktop header icon buttons — matches mobile mob-icon-btn style */
+  .desk-icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .desk-icon-btn:hover { background: rgba(255,255,255,0.16); }
+  .desk-icon-btn:active { opacity: 0.7; transform: scale(0.93); }
+  .desk-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
   /* Header buttons — more refined */
   .header .btn {
@@ -349,7 +367,7 @@
 
   /* HEADER */
   .header {
-    background: var(--text);
+    background: #111110;
     color: #fff;
     padding: 18px 32px;
     display: flex;
@@ -358,7 +376,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    border-bottom: 3px solid var(--accent);
+    border-bottom: 2px solid var(--accent);
   }
   .header-brand {
     display: flex;
@@ -367,24 +385,27 @@
   }
   .logo-mark {
     width: 36px; height: 36px;
-    background: var(--accent);
+    background: #1a1a1a;
+    border: 1px solid #333;
     display: flex; align-items: center; justify-content: center;
     font-family: 'Syne', sans-serif;
     font-weight: 800;
-    font-size: 16px;
-    color: #fff;
+    font-size: 15px;
+    letter-spacing: -1px;
   }
   .brand-name {
     font-family: 'Syne', sans-serif;
     font-weight: 700;
     font-size: 20px;
     letter-spacing: -0.5px;
+    color: #fff;
   }
   .brand-sub {
-    font-size: 11px;
+    font-size: 8px;
     color: #aaa;
     font-family: 'DM Mono', monospace;
-    letter-spacing: 0.5px;
+    letter-spacing: 0px;
+    white-space: nowrap;
   }
   .header-status {
     display: flex;
@@ -2404,13 +2425,19 @@
 
 <div class="header">
   <div class="header-brand">
-    <div class="logo-mark">TE</div>
+    <div class="logo-mark"><span style="color:#fff;">T</span><span style="color:#e8600a;">E</span></div>
     <div>
-      <div class="brand-name">TradeEdge</div>
-      <div class="brand-sub">STRATEGY BACKTESTER · NSE/BSE</div>
+      <div class="brand-name">Trade<span>Edge</span></div>
+      <div class="brand-sub">TRADE WITH EDGE · NSE F&O</div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:12px;">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button class="desk-icon-btn" onclick="loadFromCSV()" title="Load CSV files">📂</button>
+    <button class="desk-icon-btn" id="cloudBarBtn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
+    <button class="desk-icon-btn" id="refreshBarBtn" onclick="loadFromCloud()" title="Refresh data from cloud">🔄</button>
+    <button class="desk-icon-btn" onclick="showCacheStatus()" title="Cache status">🗄</button>
+    <button class="desk-icon-btn" onclick="purgeAllCache()" title="Clear cache" style="color:var(--bear);">🗑</button>
+    <div style="width:1px;height:20px;background:rgba(255,255,255,0.15);margin:0 4px;"></div>
     <div class="header-status">
       <div class="status-dot" id="statusDot"></div>
       <span id="statusText">Ready</span>
@@ -2437,11 +2464,8 @@
         <span id="stDesc" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);white-space:nowrap;">
           Gap continuation · Enter D1 close · Exit D2 open/close</span>
       </div>
-      <!-- Centre: data status (clickable to expand) -->
-      <div onclick="toggleSection('dataStatusBody','dataStatusChevron')" style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:0;flex:1;"
-        onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
-        <span style="font-size:11px;color:var(--text3);flex-shrink:0;" id="dataStatusChevron">▶</span>
-        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;flex-shrink:0;">Data</span>
+      <!-- Centre: data status -->
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
         <span id="dataStatusText" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">No local data loaded.</span>
         <span id="lastDateBadge" style="display:none;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;background:var(--bull);color:#fff;padding:2px 9px;border-radius:20px;white-space:nowrap;flex-shrink:0;">
           <span id="lastDateVal"></span>
@@ -2458,20 +2482,7 @@
           onmouseout="this.style.background='none'">⚙ Configure</button>
       </div>
     </div>
-    <!-- Collapsible action buttons -->
-    <div id="dataStatusBody" class="section-body-hidden" style="padding:0 16px 12px;border-top:1px solid var(--border);">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:10px;">
-        <button class="sort-btn" onclick="loadFromCSV()">📂 Load Data Folder</button>
-        <button class="sort-btn" onclick="loadFromCloud()" id="cloudBarBtn"
-          style="background:var(--text);color:var(--surface);border-color:var(--text);"
-          title="Fetch all CSVs from your Render cloud server">☁️ Load Cloud</button>
-        <button class="sort-btn" onclick="loadFromCloud()" id="refreshBarBtn"
-          style="background:var(--text);color:var(--surface);border-color:var(--text);"
-          title="Refresh data from cloud">🔄 Refresh</button>
-        <button class="sort-btn" onclick="showCacheStatus()" title="Shows IndexedDB cache status.">🗄 Cache</button>
-        <button class="sort-btn" onclick="purgeAllCache()" style="color:var(--bear);">✕ Clear Cache</button>
-      </div>
-    </div>
+
   </div>
 </div>
 
@@ -5264,9 +5275,7 @@ function renderScannerIntraday(scanDate, longs, shorts, params) {
           background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--border);">
           SL ${params.idSlPct}% · TP ${params.idTpPct}% · Skip >${params.idSkipPct}%
         </span>
-        ${_getRankingMode() === 'expectancy' ? `<span style="font-family:'DM Mono',monospace;font-size:10px;
-          background:var(--gold-bg);color:var(--gold);padding:3px 8px;border-radius:5px;
-          border:1px solid var(--gold)30;">⚡ Expectancy rank</span>` : ''}
+
       </div>
     </div>
     ${noBacktestNote}
@@ -5454,9 +5463,7 @@ function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, 
           background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--border);">
           ${slDesc} &nbsp;·&nbsp; ${tpDesc}
         </span>
-        ${_getRankingMode() === 'expectancy' ? `<span style="font-family:'DM Mono',monospace;font-size:10px;
-          background:var(--gold-bg);color:var(--gold);padding:3px 8px;border-radius:5px;
-          border:1px solid var(--gold)30;">⚡ Expectancy rank</span>` : ''}
+
         ${wrThreshold > 0 ? `<span style="font-family:'DM Mono',monospace;font-size:10px;
           background:var(--bull-bg);color:var(--bull);padding:3px 8px;border-radius:5px;
           border:1px solid var(--bull)30;">WR ≥ ${wrThreshold}%</span>` : ''}
@@ -7941,7 +7948,10 @@ updateDataStatusBar();
 
   <!-- Header -->
   <div id="mobileHeader">
-    <div class="mob-logo">Trade<span>Edge</span></div>
+    <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0;">
+      <div class="mob-logo">Trade<span>Edge</span></div>
+      <div style="font-family:'DM Mono',monospace;font-size:8px;color:#888;letter-spacing:0.4px;white-space:nowrap;">TRADE WITH EDGE · NSE F&O</div>
+    </div>
 
     <!-- Data info: sym count + latest date, clearly readable -->
     <div id="mobDataInfo">
@@ -8770,8 +8780,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
       </div>`;
   };
 
-  const rankNote = _getRankingMode() === 'expectancy' ? ' &nbsp;·&nbsp; Expectancy rank' : '';
-  const capNote = maxTotal > 0 ? ` &nbsp;·&nbsp; top ${maxTotal} total${rankNote}` : '';
+  const capNote = maxTotal > 0 ? ` &nbsp;·&nbsp; top ${maxTotal} total` : '';
   let html = `<div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-bottom:8px;text-align:center;">
     ${fmtDate} &nbsp;·&nbsp; Trade ${nextFmt} &nbsp;·&nbsp; ${total} signals${capNote}
   </div>`;
