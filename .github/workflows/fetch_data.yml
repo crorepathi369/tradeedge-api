@@ -94,24 +94,24 @@ jobs:
       #    Runs a full fetch (no --merge) only for those symbols, then normal incr fetch follows
       - name: Backfill thin CSVs
         run: |
-          THIN=$(python3 - <<'EOF'
-import os
+          python3 -c "
+import os, sys
 from pathlib import Path
-d = Path("./tradeedge_data")
-EXCLUDE = {"LTIM"}
+d = Path('./tradeedge_data')
+EXCLUDE = {'LTIM'}
 thin = []
-for f in sorted(d.glob("*.csv")):
+for f in sorted(d.glob('*.csv')):
     if f.stem.upper() in EXCLUDE:
         continue
     try:
-        rows = sum(1 for _ in open(f)) - 1  # subtract header
+        rows = sum(1 for _ in open(f)) - 1
         if rows < 100:
             thin.append(f.stem)
     except:
         pass
-print(" ".join(thin))
-EOF
-)
+print(' '.join(thin))
+" > /tmp/thin_syms.txt
+          THIN=$(cat /tmp/thin_syms.txt)
           if [ -z "$THIN" ]; then
             echo "✓ No thin CSVs found — all symbols have sufficient history"
           else
