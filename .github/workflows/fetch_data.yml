@@ -33,6 +33,7 @@ jobs:
         with:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0       # need full history to access data branch
 
       # 2. Set up Python
       - name: Set up Python
@@ -47,7 +48,6 @@ jobs:
           pip install yfinance pandas requests
 
       # 4. Wake Render BEFORE fetch so it's warm by the time we need it
-      #    Render free tier sleeps after 15 min inactivity — wake it early
       - name: Wake Render (pre-fetch)
         run: |
           RENDER_URL="${{ secrets.RENDER_API_URL }}"
@@ -55,7 +55,6 @@ jobs:
             RENDER_URL="https://tradeedge-api.onrender.com"
           fi
           echo "Pinging Render to wake it up: $RENDER_URL"
-          # Try up to 3 times with 20s gap — Render cold start can take 30-60s
           for i in 1 2 3; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 40 "$RENDER_URL/" || echo "000")
             echo "  Attempt $i → HTTP $STATUS"
@@ -67,9 +66,30 @@ jobs:
             sleep 20
           done
 
-      # 5. Fetch incremental OHLC data from Yahoo Finance
-      #    GitHub Actions runs on Microsoft Azure — different IPs each run,
-      #    Yahoo Finance does NOT block these. Works much better than Render.
+      # 5. *** KEY FIX *** Restore existing CSVs from data branch FIRST
+      #    Without this, the runner starts with empty tradeedge_data/
+      #    and --merge has nothing to append to → overwrites 730-day history!
+      - name: Restore existing CSVs from data branch
+        run: |
+          echo "Fetching data branch..."
+          git fetch origin data
+
+          echo "Checking out existing CSVs into tradeedge_data/..."
+          mkdir -p tradeedge_data
+
+          # List all CSV and JSON files in data branch and restore them
+          git ls-tree -r origin/data --name-only | grep -E '\.(csv|json)$' | while read filepath; do
+            filename=$(basename "$filepath")
+            git show origin/data:"$filepath" > "tradeedge_data/$filename"
+          done
+
+          CSV_COUNT=$(ls tradeedge_data/*.csv 2>/dev/null | wc -l | tr -d ' ')
+          echo "✓ Restored $CSV_COUNT CSV files from data branch"
+          echo "  Sample dates in RELIANCE.csv:"
+          tail -3 tradeedge_data/RELIANCE.csv 2>/dev/null || echo "  (not found)"
+
+      # 6. Fetch incremental OHLC data from Yahoo Finance
+      #    Now --merge appends to existing history instead of starting fresh
       - name: Fetch incremental data
         run: |
           DAYS="${{ github.event.inputs.days || '5' }}"
@@ -83,7 +103,7 @@ jobs:
             python tradeedge_fetch.py --fo --merge --days $DAYS --outdir ./tradeedge_data --delay 1.2
           fi
 
-      # 6. Push updated CSVs to the data branch + auto-trigger Render pull
+      # 7. Push updated CSVs to the data branch + auto-trigger Render pull
       - name: Push CSVs to data branch
         env:
           GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
@@ -95,7 +115,7 @@ jobs:
         run: |
           python push_incr_data.py --all
 
-      # 7. Verify Render has the fresh data
+      # 8. Verify Render has the fresh data
       - name: Verify Render pull completed
         run: |
           RENDER_URL="${{ secrets.RENDER_API_URL }}"
@@ -104,22 +124,22 @@ jobs:
           fi
           echo "Waiting 15s for Render pull to complete..."
           sleep 15
-          # Check pull-status
           PULL=$(curl -s --max-time 20 "$RENDER_URL/pull-status" || echo "{}")
           echo "Pull status: $PULL"
-          # Check manifest — how many CSVs are on Render disk
           MANIFEST=$(curl -s --max-time 20 "$RENDER_URL/data/manifest" || echo "{}")
           COUNT=$(echo $MANIFEST | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('count',0))" 2>/dev/null || echo "unknown")
           echo "✓ Render has $COUNT CSVs ready to serve"
           echo "✓ TradeEdge is ready at: https://crorepathi369.github.io/tradeedge-api/"
 
-      # 8. Summary — print what was fetched
+      # 9. Summary
       - name: Print summary
         if: always()
         run: |
-          echo "=== Data directory contents ==="
-          ls -la ./tradeedge_data/*.csv 2>/dev/null | wc -l | xargs echo "CSV files:"
+          echo "=== Data directory ==="
+          ls tradeedge_data/*.csv 2>/dev/null | wc -l | xargs echo "CSV files:"
           echo "=== Last 5 modified ==="
-          ls -lt ./tradeedge_data/*.csv 2>/dev/null | head -5
+          ls -lt tradeedge_data/*.csv 2>/dev/null | head -5
+          echo "=== Sample — last 3 rows of RELIANCE.csv ==="
+          tail -3 tradeedge_data/RELIANCE.csv 2>/dev/null || echo "(not found)"
           echo "=== Done! Open TradeEdge and click Load Cloud ==="
           echo "    https://crorepathi369.github.io/tradeedge-api/"
