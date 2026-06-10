@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TradeEdge">
-<title>TradeEdge — NSE/BSE Strategy Backtester</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23c8500a'/><text x='50%25' y='55%25' dominant-baseline='central' text-anchor='middle' font-family='sans-serif' font-weight='700' font-size='13' fill='white'>TE</text></svg>">
+<title>TradeEdge</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231a1a1a'/><text x='9' y='21' font-family='sans-serif' font-weight='700' font-size='14' fill='white'>T</text><text x='18' y='21' font-family='sans-serif' font-weight='700' font-size='14' fill='%23e8600a'>E</text></svg>">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap');
 
@@ -61,10 +61,11 @@
   /* Logo mark — rounded, gradient */
   .logo-mark {
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent) 0%, #e06520 100%);
-    box-shadow: 0 2px 8px rgba(200,80,10,0.4);
+    background: #1a1a1a;
+    border: 1px solid #333;
     width: 34px; height: 34px;
-    font-size: 15px;
+    font-size: 14px;
+    letter-spacing: -1px;
   }
 
   /* Brand name — sharper */
@@ -74,6 +75,23 @@
   }
   .brand-name span { color: var(--accent); }
 
+  /* Desktop header icon buttons — matches mobile mob-icon-btn style */
+  .desk-icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .desk-icon-btn:hover { background: rgba(255,255,255,0.16); }
+  .desk-icon-btn:active { opacity: 0.7; transform: scale(0.93); }
+  .desk-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
   /* Header buttons — more refined */
   .header .btn {
     border-radius: 8px !important;
@@ -82,18 +100,6 @@
     letter-spacing: 0.2px;
     transition: all 0.18s ease !important;
   }
-  #todayBtn {
-    background: rgba(255,255,255,0.08) !important;
-    border: 1px solid rgba(255,255,255,0.15) !important;
-    color: #fff !important;
-  }
-  #todayBtn:hover { background: rgba(255,255,255,0.14) !important; }
-  #syncBtn {
-    background: linear-gradient(135deg, var(--accent) 0%, #e06520 100%) !important;
-    box-shadow: 0 2px 10px rgba(200,80,10,0.35) !important;
-  }
-  #syncBtn:hover { box-shadow: 0 4px 16px rgba(200,80,10,0.5) !important; transform: translateY(-1px); }
-
   /* Control panel — elevated card */
   .control-panel {
     background: var(--surface);
@@ -361,7 +367,7 @@
 
   /* HEADER */
   .header {
-    background: var(--text);
+    background: #111110;
     color: #fff;
     padding: 18px 32px;
     display: flex;
@@ -370,7 +376,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    border-bottom: 3px solid var(--accent);
+    border-bottom: 2px solid var(--accent);
   }
   .header-brand {
     display: flex;
@@ -379,24 +385,27 @@
   }
   .logo-mark {
     width: 36px; height: 36px;
-    background: var(--accent);
+    background: #1a1a1a;
+    border: 1px solid #333;
     display: flex; align-items: center; justify-content: center;
     font-family: 'Syne', sans-serif;
     font-weight: 800;
-    font-size: 16px;
-    color: #fff;
+    font-size: 15px;
+    letter-spacing: -1px;
   }
   .brand-name {
     font-family: 'Syne', sans-serif;
     font-weight: 700;
     font-size: 20px;
     letter-spacing: -0.5px;
+    color: #fff;
   }
   .brand-sub {
-    font-size: 11px;
+    font-size: 8px;
     color: #aaa;
     font-family: 'DM Mono', monospace;
-    letter-spacing: 0.5px;
+    letter-spacing: 0px;
+    white-space: nowrap;
   }
   .header-status {
     display: flex;
@@ -1489,25 +1498,6 @@
     }
     #mobDataDateLine.loaded { color: #4caf86; }
 
-    /* Persistent as-of banner — shown below header after syncToday, stays until new load */
-    #mobAsOfBanner {
-      display: none;
-      background: #1a1814;
-      border-bottom: 1px solid rgba(184,134,11,0.35);
-      padding: 4px 14px;
-      flex-shrink: 0;
-      display: none;
-      align-items: center;
-      gap: 6px;
-    }
-    #mobAsOfBanner.visible { display: flex; }
-    #mobAsOfBanner span {
-      font-family: 'DM Mono', monospace;
-      font-size: 10px;
-      color: #b8860b;
-    }
-    #mobAsOfBanner strong { color: #e0a020; font-weight: 700; }
-
     /* Icon-only action buttons */
     .mob-icon-btn {
       width: 32px;
@@ -1524,29 +1514,12 @@
     }
     #mobLoadBtn  { background: rgba(255,255,255,0.1); }
     #mobCloudBtn { background: rgba(255,255,255,0.1); }
-    #mobRefreshBtn { background: rgba(255,255,255,0.1); }
-    #mobTodayBtn { background: rgba(255,255,255,0.1); }
-    #mobSyncBtn  { background: var(--accent); }
     .mob-icon-btn:active { opacity: 0.7; transform: scale(0.93); }
     /* Spinner inside icon buttons */
     .mob-icon-btn .spinner {
       position: absolute;
       width: 14px; height: 14px;
       border-width: 2px;
-    }
-
-    /* As-of time strip — shown below scan bar after syncToday */
-    #mobAsOfStrip {
-      display: none;
-      padding: 4px 12px;
-      background: rgba(184,134,11,0.12);
-      border-top: 1px solid rgba(184,134,11,0.25);
-      font-family: 'DM Mono', monospace;
-      font-size: 10px;
-      color: #b8860b;
-      text-align: center;
-      letter-spacing: 0.3px;
-      flex-shrink: 0;
     }
 
     /* ── Scan bar — 3 rows ── */
@@ -2451,13 +2424,18 @@
 
 <div class="header">
   <div class="header-brand">
-    <div class="logo-mark">TE</div>
+    <div class="logo-mark"><span style="color:#fff;">T</span><span style="color:#e8600a;">E</span></div>
     <div>
-      <div class="brand-name">TradeEdge</div>
-      <div class="brand-sub">STRATEGY BACKTESTER · NSE/BSE</div>
+      <div class="brand-name">Trade<span>Edge</span></div>
+      <div class="brand-sub">TRADE WITH EDGE · NSE F&O</div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:12px;">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button class="desk-icon-btn" onclick="loadFromCSV()" title="Load CSV files">📂</button>
+    <button class="desk-icon-btn" id="cloudBarBtn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
+    <button class="desk-icon-btn" onclick="showCacheStatus()" title="Cache status">🗄</button>
+    <button class="desk-icon-btn" onclick="purgeAllCache()" title="Clear cache" style="color:var(--bear);">🗑</button>
+    <div style="width:1px;height:20px;background:rgba(255,255,255,0.15);margin:0 4px;"></div>
     <div class="header-status">
       <div class="status-dot" id="statusDot"></div>
       <span id="statusText">Ready</span>
@@ -2484,11 +2462,8 @@
         <span id="stDesc" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);white-space:nowrap;">
           Gap continuation · Enter D1 close · Exit D2 open/close</span>
       </div>
-      <!-- Centre: data status (clickable to expand) -->
-      <div onclick="toggleSection('dataStatusBody','dataStatusChevron')" style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:0;flex:1;"
-        onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
-        <span style="font-size:11px;color:var(--text3);flex-shrink:0;" id="dataStatusChevron">▶</span>
-        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;flex-shrink:0;">Data</span>
+      <!-- Centre: data status -->
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
         <span id="dataStatusText" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">No local data loaded.</span>
         <span id="lastDateBadge" style="display:none;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;background:var(--bull);color:#fff;padding:2px 9px;border-radius:20px;white-space:nowrap;flex-shrink:0;">
           <span id="lastDateVal"></span>
@@ -2505,17 +2480,7 @@
           onmouseout="this.style.background='none'">⚙ Configure</button>
       </div>
     </div>
-    <!-- Collapsible action buttons -->
-    <div id="dataStatusBody" class="section-body-hidden" style="padding:0 16px 12px;border-top:1px solid var(--border);">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:10px;">
-        <button class="sort-btn" onclick="loadFromCSV()">📂 Load Data Folder</button>
-        <button class="sort-btn" onclick="loadFromCloud()" id="cloudBarBtn"
-          style="background:var(--text);color:var(--surface);border-color:var(--text);"
-          title="Fetch all CSVs from your Render cloud server">☁️ Load Cloud</button>
-        <button class="sort-btn" onclick="showCacheStatus()" title="Shows IndexedDB cache status.">🗄 Cache</button>
-        <button class="sort-btn" onclick="purgeAllCache()" style="color:var(--bear);">✕ Clear Cache</button>
-      </div>
-    </div>
+
   </div>
 </div>
 
@@ -2669,20 +2634,6 @@
   </div><!-- end control-panel -->
   </div><!-- end configBody -->
   </div><!-- end collapsible-section -->
-
-  <!-- SYNC STATUS -->
-  <div id="syncStatusWrap" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">⚡ Incremental Sync</span>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span id="syncCountLabel" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);"></span>
-        <button class="btn-cancel" id="syncCancelBtn" onclick="cancelSync()">✕ Cancel</button>
-        <button class="sort-btn" id="syncDismissBtn" onclick="document.getElementById('syncStatusWrap').style.display='none'" style="display:none;">✕ Dismiss</button>
-      </div>
-    </div>
-    <div class="progress-bar-bg" style="margin-bottom:8px;"><div class="progress-bar-fill" id="syncFill"></div></div>
-    <div id="syncLog" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);max-height:120px;overflow-y:auto;line-height:1.8;"></div>
-  </div>
 
   <!-- CACHE STATUS PANEL -->
   <div id="cacheStatusWrap" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:var(--shadow);">
@@ -3325,14 +3276,7 @@ function updateDataStatusBar() {
     });
     const fmtDate = iso => new Date(iso+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 
-    // Build "as of" note if syncToday was used this session
-    let asOfNote = '';
-    if (_lastTodaySyncTime) {
-      const asOf = new Date(_lastTodaySyncTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-      asOfNote = `&nbsp;·&nbsp; <span style="color:var(--gold);font-weight:600;">⚠ As of ${asOf} (15-min delay)</span>`;
-    }
-
-    bar.innerHTML = `<strong>${syms.length}</strong> symbols &nbsp;·&nbsp; From <strong>${fmtDate(minDate)}</strong>${asOfNote}`;
+    bar.innerHTML = `<strong>${syms.length}</strong> symbols &nbsp;·&nbsp; From <strong>${fmtDate(minDate)}</strong>`;
     badge.textContent = syms.length + ' symbols ready';
     badge.style.display = 'none';  // hidden — count already shown in dataStatusText
     lastVal.textContent = fmtDate(maxDate);
@@ -5329,9 +5273,7 @@ function renderScannerIntraday(scanDate, longs, shorts, params) {
           background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--border);">
           SL ${params.idSlPct}% · TP ${params.idTpPct}% · Skip >${params.idSkipPct}%
         </span>
-        ${_getRankingMode() === 'expectancy' ? `<span style="font-family:'DM Mono',monospace;font-size:10px;
-          background:var(--gold-bg);color:var(--gold);padding:3px 8px;border-radius:5px;
-          border:1px solid var(--gold)30;">⚡ Expectancy rank</span>` : ''}
+
       </div>
     </div>
     ${noBacktestNote}
@@ -5519,9 +5461,7 @@ function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, 
           background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--border);">
           ${slDesc} &nbsp;·&nbsp; ${tpDesc}
         </span>
-        ${_getRankingMode() === 'expectancy' ? `<span style="font-family:'DM Mono',monospace;font-size:10px;
-          background:var(--gold-bg);color:var(--gold);padding:3px 8px;border-radius:5px;
-          border:1px solid var(--gold)30;">⚡ Expectancy rank</span>` : ''}
+
         ${wrThreshold > 0 ? `<span style="font-family:'DM Mono',monospace;font-size:10px;
           background:var(--bull-bg);color:var(--bull);padding:3px 8px;border-radius:5px;
           border:1px solid var(--bull)30;">WR ≥ ${wrThreshold}%</span>` : ''}
@@ -5565,69 +5505,6 @@ function saveSymCSV(sym) {
   a.download = sym + '.csv';
   a.click();
   URL.revokeObjectURL(a.href);
-}
-
-async function saveAllCSVs() {
-  const syms = getAllLoadedSymbols();
-  if (!syms.length) { alert('No data loaded. Use ☁️ Load Cloud or 📂 Load Data Folder.'); return; }
-
-  const btn    = document.getElementById('saveCSVsBtn');
-  const mobBtn = document.getElementById('mobSaveCSVsBtn');
-  const setLabel = txt => {
-    if (btn)    { btn.textContent    = txt; btn.disabled    = txt !== '💾 Save CSVs'; }
-    if (mobBtn) { mobBtn.textContent = txt; mobBtn.disabled = txt !== '💾 Save CSVs'; }
-  };
-
-  // Check JSZip is available
-  if (typeof JSZip === 'undefined') {
-    alert('JSZip library not loaded. Check your internet connection and reload the page.');
-    return;
-  }
-
-  setLabel('⏳ Building ZIP…');
-
-  // Determine latest date for the filename
-  let maxDate = '0000';
-  syms.forEach(s => {
-    const d = _loadedOHLC[s];
-    if (d && d.length && d[d.length-1].date > maxDate) maxDate = d[d.length-1].date;
-  });
-  const zipName = `tradeedge_data_${maxDate}.zip`;
-
-  // Build ZIP — all CSVs inside a tradeedge_data/ folder
-  const zip = new JSZip();
-  const folder = zip.folder('tradeedge_data');
-
-  for (let i = 0; i < syms.length; i++) {
-    const csv = _symToCSV(syms[i]);
-    if (csv) folder.file(syms[i] + '.csv', csv);
-    // Update label every 20 symbols so user sees progress
-    if (i % 20 === 19) {
-      setLabel(`⏳ ${i + 1}/${syms.length}…`);
-      await new Promise(r => setTimeout(r, 0));  // yield for repaint
-    }
-  }
-
-  setLabel('⏳ Compressing…');
-  await new Promise(r => setTimeout(r, 0));
-
-  // Generate ZIP blob and trigger single download
-  const blob = await zip.generateAsync({
-    type: 'blob',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 6 },
-  });
-
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = zipName;
-  a.click();
-  URL.revokeObjectURL(a.href);
-
-  setLabel('💾 Save CSVs');
-
-  const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
-  alert(`✅ Downloaded: ${zipName}\n\nContains ${syms.length} CSV files (${sizeMB} MB)\n\nTo use:\n1. Unzip the file\n2. Replace your tradeedge_data/ folder with the unzipped folder\n3. Next session: 📂 Load from the updated folder`);
 }
 
 // ── Load From Cloud — fetch all CSVs from Render /data/ endpoint ──────────────
@@ -5737,7 +5614,6 @@ async function loadFromCloud() {
     let idbSaved = 0;
     try { idbSaved = await _idbSaveAll(); } catch(e) { console.warn('[cloud] IDB save failed:', e); }
 
-    _lastTodaySyncTime = Date.now();
     allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null;
 
     bar.style.width = '100%';
@@ -5761,456 +5637,6 @@ async function loadFromCloud() {
   } finally {
     [cloudBtn, mobCloudBtn, cloudBarBtn].forEach(b => { if (b) b.disabled = false; });
   }
-}
-
-// ── Sync Today — fetch via SSE stream with live progress ─────────────────────
-async function syncToday() {
-  if (!TRADEEDGE_API_URL) {
-    alert('TradeEdge API not configured.\n\nPaste your Render URL into TRADEEDGE_API_URL in the script.');
-    return;
-  }
-
-  const btns     = ['todayBtn','mobTodayBtn'].map(id=>document.getElementById(id)).filter(Boolean);
-  const spins    = ['todaySpinner','mobTodaySpinner'].map(id=>document.getElementById(id)).filter(Boolean);
-  const labels   = [document.getElementById('todayLabel')].filter(Boolean);
-  const statusEl = document.getElementById('statusText');
-
-  btns.forEach(b=>b.disabled=true);
-  spins.forEach(s=>s.classList.add('show'));
-  labels.forEach(l=>l.textContent='Connecting…');
-  if (statusEl) statusEl.textContent='Connecting to server…';
-  _todayCancelled = false;
-
-  // Progress overlay
-  const overlayId = 'todaySyncOverlay';
-  let overlay = document.getElementById(overlayId);
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = overlayId;
-    overlay.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);'
-      + 'background:var(--text);color:#fff;border-radius:12px;padding:14px 20px;'
-      + 'font-family:\'DM Mono\',monospace;font-size:12px;z-index:999;min-width:290px;'
-      + 'box-shadow:0 4px 20px rgba(0,0,0,0.4);';
-    document.body.appendChild(overlay);
-  }
-
-  const setOverlay = (msg, pct, sub, failNote, done = false) => {
-    overlay.innerHTML = '<div style="margin-bottom:8px;color:#aaa;font-size:10px;letter-spacing:0.5px;">📥 FETCHING TODAY\'S DATA</div>'
-      + '<div style="font-size:13px;font-weight:700;color:#4caf86;margin-bottom:8px;">' + msg + '</div>'
-      + '<div style="background:#333;border-radius:4px;height:6px;width:100%;overflow:hidden;margin-bottom:6px;">'
-      + '<div style="background:#4caf86;height:100%;width:' + Math.min(100,pct) + '%;border-radius:4px;transition:width 0.4s ease;"></div></div>'
-      + '<div style="color:#888;font-size:10px;">' + sub + '</div>'
-      + (failNote ? '<div style="color:#e07070;font-size:10px;margin-top:4px;">✗ Failed: ' + failNote + '</div>' : '')
-      + (done
-          ? '<div style="margin-top:10px;display:flex;justify-content:flex-end;">'
-              + '<button id="mobSaveCSVsBtn" onclick="saveAllCSVs()" '
-              + 'style="padding:4px 14px;border-radius:6px;border:1px solid #4caf86;background:transparent;'
-              + 'color:#4caf86;font-family:\'DM Mono\',monospace;font-size:11px;cursor:pointer;">💾 Save CSVs</button>'
-              + '</div>'
-          : '<div style="margin-top:10px;text-align:right;">'
-              + '<button id="todayCancelBtn" onclick="cancelTodaySync()" '
-              + 'style="padding:4px 14px;border-radius:6px;border:1px solid #e07070;background:transparent;'
-              + 'color:#e07070;font-family:\'DM Mono\',monospace;font-size:11px;cursor:pointer;">✕ Cancel</button>'
-              + '</div>');
-  };
-
-  setOverlay('Connecting…', 0, 'Server may take ~30s to wake up on first use', '');
-
-  const TOTAL    = SYMBOLS.indices.length + SYMBOLS.stocks.length; // auto-matches symbol list
-  const LIMIT    = 10;   // symbols per batch — smaller batches = faster response, less timeout risk
-  let totalFetched = 0, totalFailed = 0, allFailed = [];
-  let t0 = Date.now();
-
-  // Safe fetch with timeout
-  const fetchWithTimeout = (url, ms = 30000) => Promise.race([
-    fetch(url),
-    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
-  ]);
-
-  // Warmup ping — hits the health endpoint to wake Render before batches start.
-  // Waits up to 45s so the first real batch never times out due to cold start.
-  try {
-    setOverlay('Waking server…', 0, 'Render free tier may take ~30s to start', '');
-    const warmup = await fetchWithTimeout(TRADEEDGE_API_URL + '/', 45000);
-    if (!warmup.ok) throw new Error('warmup failed');
-    setOverlay('Server ready — starting fetch…', 2, '', '');
-  } catch(e) {
-    console.warn('[syncToday] warmup ping failed:', e.message, '— proceeding anyway');
-  }
-
-  // Fetch one batch with up to maxAttempts tries before giving up
-  const fetchBatch = async (offset, maxAttempts = 2) => {
-    const url = TRADEEDGE_API_URL + '/sync-today?offset=' + offset + '&limit=' + LIMIT + '&days=3';
-    let lastErr;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        if (attempt > 0) {
-          // Brief backoff before retry — lets the server recover from transient issues
-          await new Promise(r => setTimeout(r, 2000 * attempt));
-        }
-        const res = await fetchWithTimeout(url, 150000); // 150s — covers 10 symbols × 1s + rate-limit retry headroom
-        if (!res.ok) throw new Error('API returned ' + res.status);
-        const json = await res.json();
-        if (json.status !== 'ok') throw new Error(json.error || 'API error');
-        return json;   // success
-      } catch (err) {
-        lastErr = err;
-        console.warn(`[syncToday] batch offset=${offset} attempt ${attempt + 1} failed:`, err.message);
-      }
-    }
-    throw lastErr;   // all attempts exhausted
-  };
-
-  try {
-    for (let offset = 0; offset < TOTAL; offset += LIMIT) {
-      if (_todayCancelled) {
-        setOverlay('⏹ Cancelled', Math.round(offset / TOTAL * 100),
-          `${totalFetched} symbols fetched before cancel`, '', true);
-        setTimeout(() => overlay.remove(), 3000);
-        break;
-      }
-
-      const batchNum = Math.floor(offset / LIMIT) + 1;
-      const totalBatches = Math.ceil(TOTAL / LIMIT);
-      const pct = Math.round(offset / TOTAL * 100);
-      setOverlay(
-        `Fetching batch ${batchNum} / ${totalBatches}`,
-        pct,
-        `${offset} / ${TOTAL} symbols done`, ''
-      );
-      labels.forEach(l => l.textContent = pct + '%');
-
-      let json;
-      try {
-        json = await fetchBatch(offset);
-      } catch (batchErr) {
-        // This batch failed after retries — record failure but continue with remaining batches
-        const batchSymCount = Math.min(LIMIT, TOTAL - offset);
-        totalFailed += batchSymCount;
-        console.error(`[syncToday] batch offset=${offset} failed permanently:`, batchErr.message);
-        setOverlay(
-          `Batch ${batchNum} failed — continuing…`,
-          pct,
-          `${offset} / ${TOTAL} · batch error: ${batchErr.message}`, ''
-        );
-        await new Promise(r => setTimeout(r, 500));
-        continue;
-      }
-
-      // Merge this batch into _loadedOHLC
-      for (const [sym, rows] of Object.entries(json.data||{})) {
-        if (!rows||!rows.length) continue;
-        if (!_loadedOHLC[sym]) {
-          _loadedOHLC[sym] = rows;
-        } else {
-          const existing = new Set(_loadedOHLC[sym].map(c=>c.date));
-          const newRows = rows.filter(r=>!existing.has(r.date));
-          if (newRows.length) {
-            _loadedOHLC[sym] = [..._loadedOHLC[sym], ...newRows]
-              .sort((a,b)=>a.date.localeCompare(b.date));
-          }
-        }
-      }
-
-      totalFetched += json.fetched;
-      totalFailed  += json.failed;
-      allFailed = allFailed.concat(json.failedSymbols||[]);
-
-      updateDataStatusBar();
-    }
-
-    // Done
-    refreshScannerGate();
-    const elapsed = ((Date.now()-t0)/1000).toFixed(1);
-    _lastTodaySyncTime = Date.now();
-    const asOf    = new Date(_lastTodaySyncTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-    if (statusEl) statusEl.textContent = 'Updated ' + asOf;
-
-    setOverlay('✅ Done — ' + totalFetched + ' symbols', 100,
-      `As of ${asOf} &nbsp;·&nbsp; ⚠ Yahoo data has ~15 min delay · ${elapsed}s`,
-      allFailed.length ? allFailed.join(', ') : '', true);
-    if (totalFailed > 0) console.warn('syncToday failed:', allFailed.join(', '));
-    // Persist synced data to IDB for next session
-    _idbSaveAll().catch(e => console.warn('[IDB] Post-syncToday save failed:', e));
-    // Write updated candles back to the linked data folder (if user loaded via showDirectoryPicker)
-    if (_dataFolderHandle) {
-      _mergeToDataFolder(Object.keys(_loadedOHLC))
-        .catch(e => console.warn('[syncToday] mergeToDataFolder failed:', e));
-    }
-    // Keep overlay visible — user can click 💾 Save CSVs or dismiss after reading
-    // Auto-dismiss after longer delay only if no failures
-    setTimeout(()=>{ if (overlay.parentNode) overlay.remove(); }, totalFailed > 0 ? 15000 : 10000);
-    updateDataStatusBar();
-  } catch (err) {
-    // Only reaches here for unexpected errors (e.g. complete network loss before first batch)
-    console.error('syncToday error:', err);
-    overlay.remove();
-    const msg = err.message.includes('timeout')
-      ? 'Timed out — server may be waking up.\nWait 30 seconds and try again.'
-      : 'Unexpected error: ' + err.message;
-    alert('📥 Today sync failed\n\n' + msg);
-    if (statusEl) statusEl.textContent = 'Ready';
-  } finally {
-    btns.forEach(b=>b.disabled=false);
-    spins.forEach(s=>s.classList.remove('show'));
-    labels.forEach(l=>l.textContent='📥 Today');
-  }
-}
-
-function cancelSync() {
-  _syncCancelled = true;
-  document.getElementById('syncCancelBtn').disabled = true;
-  document.getElementById('syncCancelBtn').textContent = 'Cancelling…';
-  // Dismiss will appear once sync loop detects the cancellation
-}
-
-let _todayCancelled = false;
-
-function cancelTodaySync() {
-  _todayCancelled = true;
-  const btn = document.getElementById('todayCancelBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
-}
-
-async function quickSync() {
-  // Support both desktop (syncBtn) and mobile (mobSyncBtn) — one or both may be null
-  const btn    = document.getElementById('syncBtn');
-  const mobBtn = document.getElementById('mobSyncBtn');
-
-  // Prevent double-tap — check whichever button triggered this
-  if (btn    && btn.disabled)    return;
-  if (mobBtn && mobBtn.disabled) return;
-
-  _syncCancelled = false;
-
-  // Disable both buttons, show both spinners
-  if (btn)    btn.disabled    = true;
-  if (mobBtn) mobBtn.disabled = true;
-
-  const syncSpinner    = document.getElementById('syncSpinner');
-  const mobSyncSpinner = document.getElementById('mobSyncSpinner');
-  const syncLabel      = document.getElementById('syncLabel');
-  const syncStatusWrap = document.getElementById('syncStatusWrap');
-  const syncCancelBtn  = document.getElementById('syncCancelBtn');
-  const syncDismissBtn = document.getElementById('syncDismissBtn');
-  const syncFill       = document.getElementById('syncFill');
-  const syncCountLabel = document.getElementById('syncCountLabel');
-  const log            = document.getElementById('syncLog');
-
-  // Detect mobile early — drives overlay vs panel choice throughout
-  // Use direct width check rather than isMobile() to avoid cross-script-block dependency
-  const isMob = window.innerWidth <= 768;
-
-  if (syncSpinner)              syncSpinner.classList.add('show');
-  if (mobSyncSpinner)           mobSyncSpinner.classList.add('show');
-  if (syncLabel)                syncLabel.textContent = 'Syncing…';
-  if (syncStatusWrap && !isMob) syncStatusWrap.style.display = '';
-  if (syncCancelBtn  && !isMob) { syncCancelBtn.disabled = false; syncCancelBtn.textContent = '✕ Cancel'; syncCancelBtn.style.display = ''; }
-  if (syncDismissBtn && !isMob) syncDismissBtn.style.display = 'none';
-  if (log)                      log.innerHTML = '';
-
-  // ── Mobile progress overlay (shown instead of desktop syncStatusWrap) ──────
-  let mobOverlay = null;
-  const setMobOverlay = (count, pct, done = false) => {
-    if (!isMob) return;
-    if (!mobOverlay) {
-      mobOverlay = document.createElement('div');
-      mobOverlay.id = 'mobSyncOverlay';
-      mobOverlay.style.cssText =
-        'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);'
-        + 'background:var(--text);color:#fff;border-radius:12px;padding:14px 20px;'
-        + 'font-family:\'DM Mono\',monospace;font-size:12px;z-index:9999;min-width:300px;'
-        + 'max-width:90vw;box-shadow:0 4px 20px rgba(0,0,0,0.4);';
-      document.body.appendChild(mobOverlay);
-    }
-    mobOverlay.innerHTML =
-      '<div style="margin-bottom:6px;color:#aaa;font-size:10px;letter-spacing:0.5px;">⚡ SYNC LAST 5 DAYS</div>'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
-      +   '<span style="font-size:13px;font-weight:700;color:#4caf86;">' + count + '</span>'
-      +   (!done ? '<button onclick="cancelSync()" id="mobSyncCancelBtn" style="padding:3px 12px;border-radius:6px;'
-              + 'border:1px solid #e07070;background:transparent;color:#e07070;'
-              + 'font-family:\'DM Mono\',monospace;font-size:11px;cursor:pointer;">✕ Cancel</button>' : '')
-      + '</div>'
-      + '<div style="background:#333;border-radius:4px;height:5px;width:100%;overflow:hidden;">'
-      +   '<div style="background:#4caf86;height:100%;width:' + Math.min(100, pct) + '%;'
-      +     'border-radius:4px;transition:width 0.3s ease;"></div></div>';
-  };
-
-  // Show overlay immediately on mobile so user sees feedback before first fetch
-  if (isMob) setMobOverlay('Starting…', 0);
-
-  // Incremental: start from the max date already in memory (so we only fetch what's missing).
-  // Falls back to 30 days if no data is loaded yet.
-  const to = new Date();
-  let maxLoadedDate = null;
-  for (const sym of Object.keys(_loadedOHLC)) {
-    const candles = _loadedOHLC[sym];
-    if (candles && candles.length) {
-      const last = candles[candles.length - 1].date;
-      if (!maxLoadedDate || last > maxLoadedDate) maxLoadedDate = last;
-    }
-  }
-  const from = maxLoadedDate ? new Date(maxLoadedDate) : new Date(Date.now() - 30 * 86400000);
-  const fromStr = from.toISOString().slice(0, 10);  // include maxDate itself (upsert handles dedup)
-  const toStr   = to.toISOString().slice(0, 10);
-  // Days to request from /sync-today — covers gap from last loaded date to today (+3 buffer)
-  const syncDays = Math.ceil((to - from) / 86400000) + 3;
-
-  const allSyms = [...SYMBOLS.indices.map(s => s.id), ...SYMBOLS.stocks];
-
-  // fetchOHLC tries 8 proxies at 4s each = up to ~34s internally.
-  // Outer wrapper at 25s allows ~6 proxies to be tried before giving up on a symbol.
-  const fetchWithTimeout = (ticker, ms = 25000) => Promise.race([
-    fetchOHLC(ticker, fromStr, toStr),
-    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
-  ]);
-
-  // Merge new candles into _loadedOHLC for a symbol
-  const mergeCandles = (sym, newCandles) => {
-    if (_loadedOHLC[sym]) {
-      const cutoff = newCandles[0].date;
-      _loadedOHLC[sym] = _loadedOHLC[sym]
-        .filter(c => c.date < cutoff && isValidTradingDay(c.date))
-        .concat(newCandles);
-    } else {
-      _loadedOHLC[sym] = newCandles;
-    }
-  };
-
-  // Flush accumulated log tokens to DOM in one shot — avoids per-symbol innerHTML thrashing
-  // syncLog is desktop-only — null-safe on mobile
-  let _logBuf = '';
-  const flushLog = () => {
-    if (!_logBuf || !log) return;
-    log.innerHTML += _logBuf;
-    _logBuf = '';
-    log.scrollTop = log.scrollHeight;
-  };
-
-  let ok = 0, failed = 0;
-  const failedSyms = [];   // first-pass failures — eligible for retry
-
-  // ── Pass 1: per-symbol fetch via CORS proxies ──────────────────────────────
-  for (let i = 0; i < allSyms.length; i++) {
-    if (_syncCancelled) {
-      flushLog();
-      if (syncCountLabel) syncCountLabel.textContent = `Cancelled after ${i} symbols · ✓${ok} ✗${failed}`;
-      _logBuf += `<span style="color:var(--gold)">⏹ Cancelled</span>`;
-      flushLog();
-      setMobOverlay(`⏹ Cancelled · ✓${ok} fetched`, Math.round(i / allSyms.length * 100), true);
-      setTimeout(() => { if (mobOverlay) mobOverlay.remove(); }, 3000);
-      break;
-    }
-
-    const sym    = allSyms[i];
-    const ticker = getYFTicker(sym);
-    const pct    = Math.round(i / allSyms.length * 100);
-    if (syncFill)       syncFill.style.width = pct + '%';
-    if (syncCountLabel) syncCountLabel.textContent = `${i + 1}/${allSyms.length} · ✓${ok} ✗${failed}`;
-    setMobOverlay(`${i + 1}/${allSyms.length} · ✓${ok} ✗${failed} · ${sym}`, pct);
-    await new Promise(r => setTimeout(r, 0));
-
-    try {
-      const newCandles = await fetchWithTimeout(ticker);
-      if (newCandles && newCandles.length > 0) {
-        mergeCandles(sym, newCandles);
-        ok++;
-        _logBuf += `<span style="color:var(--bull)">✓</span>${sym}(+${newCandles.length}) `;
-      } else {
-        throw new Error('empty');
-      }
-    } catch {
-      failed++;
-      failedSyms.push(sym);
-      _logBuf += `<span style="color:var(--bear)">✗</span>${sym} `;
-    }
-
-    if (i % 10 === 9) flushLog();
-  }
-  flushLog();
-
-  // ── Retry rounds: up to 5 rounds with increasing backoff ───────────────────
-  const MAX_RETRY_ROUNDS  = 5;
-  const RETRY_BACKOFFS_MS = [4000, 8000, 13000, 18000, 24000];
-  const RETRY_SYM_DELAY   = 400;
-  let pendingRetry = [...failedSyms];
-
-  for (let round = 1; round <= MAX_RETRY_ROUNDS && pendingRetry.length > 0 && !_syncCancelled; round++) {
-    const roundFailed = [];
-    const backoff = RETRY_BACKOFFS_MS[round - 1] + Math.round(Math.random() * 2000);
-
-    _logBuf += `<br><span style="color:var(--gold)">↻ Retry round ${round}/${MAX_RETRY_ROUNDS} — ${pendingRetry.length} symbol${pendingRetry.length > 1 ? 's' : ''} · waiting ${(backoff/1000).toFixed(1)}s…</span> `;
-    flushLog();
-    setMobOverlay(`↻ R${round} — waiting ${(backoff/1000).toFixed(0)}s…`, 98);
-    await new Promise(r => setTimeout(r, backoff));
-
-    for (let i = 0; i < pendingRetry.length; i++) {
-      if (_syncCancelled) break;
-      const sym    = pendingRetry[i];
-      const ticker = getYFTicker(sym);
-      const retryPct = Math.round(95 + (i / pendingRetry.length) * 4);
-
-      if (syncCountLabel) syncCountLabel.textContent = `R${round} · ${i + 1}/${pendingRetry.length} · ✓${ok} ✗${failed}`;
-      setMobOverlay(`↻ R${round} ${i + 1}/${pendingRetry.length} · ✓${ok} ✗${failed} · ${sym}`, retryPct);
-      await new Promise(r => setTimeout(r, 0));
-
-      try {
-        const newCandles = await fetchWithTimeout(ticker, 25000);
-        if (newCandles && newCandles.length > 0) {
-          mergeCandles(sym, newCandles);
-          ok++;
-          failed--;
-          _logBuf += `<span style="color:var(--bull)">↻✓</span>${sym} `;
-        } else {
-          throw new Error('empty');
-        }
-      } catch {
-        roundFailed.push(sym);
-        _logBuf += `<span style="color:var(--bear)">✗</span>${sym} `;
-      }
-      if (i % 10 === 9) flushLog();
-      if (i < pendingRetry.length - 1) await new Promise(r => setTimeout(r, RETRY_SYM_DELAY));
-    }
-    flushLog();
-
-    pendingRetry = roundFailed;
-    if (roundFailed.length === 0) {
-      _logBuf += `<span style="color:var(--bull)">✅ All recovered after round ${round}</span> `;
-      flushLog();
-      break;
-    }
-  }
-
-  if (pendingRetry.length > 0 && !_syncCancelled) {
-    _logBuf += `<br><span style="color:var(--bear)">⚠ ${pendingRetry.length} symbol${pendingRetry.length > 1 ? 's' : ''} could not be fetched after ${MAX_RETRY_ROUNDS} rounds: ${pendingRetry.join(', ')}</span>`;
-    flushLog();
-  }
-
-  // ── Final state ────────────────────────────────────────────────────────────
-  if (!_syncCancelled) {
-    if (syncFill)       syncFill.style.width = '100%';
-    if (syncCountLabel) syncCountLabel.textContent = `Complete · ✓${ok} synced · ✗${failed} failed`;
-    setMobOverlay(`✅ Done · ✓${ok} synced · ✗${failed} failed`, 100, true);
-    setTimeout(() => { if (mobOverlay) mobOverlay.remove(); }, 3000);
-    // Persist synced data to IDB for next session
-    _idbSaveAll().catch(e => console.warn('[IDB] Post-sync save failed:', e));
-    // Write updated candles back to the linked data folder (if user loaded via showDirectoryPicker)
-    if (_dataFolderHandle) {
-      _mergeToDataFolder(Object.keys(_loadedOHLC))
-        .catch(e => console.warn('[quickSync] mergeToDataFolder failed:', e));
-    }
-    // Invalidate Stats trade cache
-    _mobTradeCache = { overnight: null, intraday: null };
-    allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null;
-  }
-  if (syncSpinner)              syncSpinner.classList.remove('show');
-  if (mobSyncSpinner)           mobSyncSpinner.classList.remove('show');
-  if (syncLabel)                syncLabel.textContent = '⚡ Incr. Sync';
-  if (syncCancelBtn  && !isMob) syncCancelBtn.style.display = 'none';
-  if (syncDismissBtn && !isMob) syncDismissBtn.style.display = '';
-  if (btn)    btn.disabled    = false;
-  if (mobBtn) mobBtn.disabled = false;
-  updateDataStatusBar();
 }
 
 function setProgress(pct, label) {
@@ -7314,66 +6740,6 @@ let _csvFolderInput = null;
 // Enables automatic write-back to the tradeedge_data/ folder after every sync.
 let _dataFolderHandle = null;
 
-// Write updated in-memory candles back to the linked data folder.
-// Uses READ → MERGE → WRITE (upsert by date) so historical data in the CSV
-// is always preserved — only dates that exist in the new fetch are updated.
-// Only runs if the user previously loaded via showDirectoryPicker().
-async function _mergeToDataFolder(symbols) {
-  if (!_dataFolderHandle) return;
-  let written = 0, errors = 0;
-  for (const sym of symbols) {
-    const newCandles = _loadedOHLC[sym];
-    if (!newCandles || !newCandles.length) continue;
-    try {
-      // Step 1: read existing CSV rows (if file exists)
-      let existingRows = [];
-      try {
-        const rfh = await _dataFolderHandle.getFileHandle(sym + '.csv');
-        const file = await rfh.getFile();
-        const text = await file.text();
-        const lines = text.trim().split('\n');
-        if (lines.length > 1) {
-          const hdr = lines[0].toLowerCase().replace(/\r/g,'').split(',');
-          const di = hdr.indexOf('date'), oi = hdr.indexOf('open'),
-                hi = hdr.indexOf('high'), li = hdr.indexOf('low'), ci = hdr.indexOf('close'),
-                ai = hdr.indexOf('adj_close');
-          if ([di,oi,hi,li,ci].every(x => x !== -1)) {
-            existingRows = lines.slice(1).map(l => {
-              const c = l.replace(/\r/g,'').split(',');
-              const row = { date: c[di].slice(0,10), open: +c[oi], high: +c[hi], low: +c[li], close: +c[ci] };
-              if (ai !== -1 && c[ai]) row.adjClose = +c[ai];
-              return row;
-            }).filter(r => r.date && r.open && r.close);
-          }
-        }
-      } catch { /* file doesn't exist yet — start fresh */ }
-
-      // Step 2: upsert — new candles override existing rows on same date, old dates kept
-      const newDates = new Set(newCandles.map(c => c.date));
-      const merged = [...existingRows.filter(r => !newDates.has(r.date)), ...newCandles]
-        .sort((a, b) => a.date.localeCompare(b.date));
-
-      // Step 3: serialise and write back
-      const csvLines = merged.map(c => {
-        const adj = (+(c.adjClose || c.close) || 0).toFixed(2);
-        return `${c.date},${(+c.open||0).toFixed(2)},${(+c.high||0).toFixed(2)},${(+c.low||0).toFixed(2)},${(+c.close||0).toFixed(2)},${adj},${c.volume||''}`;
-      });
-      const csv = 'date,open,high,low,close,adj_close,volume\n' + csvLines.join('\n');
-      const wfh = await _dataFolderHandle.getFileHandle(sym + '.csv', { create: true });
-      const writable = await wfh.createWritable();
-      await writable.write(csv);
-      await writable.close();
-      written++;
-    } catch (e) {
-      console.warn(`[mergeToDataFolder] ${sym}.csv — ${e.message}`);
-      errors++;
-    }
-  }
-  if (written > 0) {
-    console.log(`[mergeToDataFolder] Merged ${written} CSV(s)` + (errors ? ` (${errors} errors)` : ''));
-  }
-  return written;
-}
 
 // Load all CSV files from a File System Access API directory handle.
 // Stores the handle in _dataFolderHandle so subsequent syncs can write back.
@@ -8131,7 +7497,6 @@ let _drillGapChart    = null;
 // buildVerdict, buildEquityCurve, buildSymbolTable.
 // ─────────────────────────────────────────────────────────────────────────────
 let _tradeStats = null;
-let _lastTodaySyncTime = null;  // timestamp (ms) of last successful syncToday — for "as of" display
 
 function computeTradeStats(trades) {
   const total   = trades.length;
@@ -8581,7 +7946,10 @@ updateDataStatusBar();
 
   <!-- Header -->
   <div id="mobileHeader">
-    <div class="mob-logo">Trade<span>Edge</span></div>
+    <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0;">
+      <div class="mob-logo">Trade<span>Edge</span></div>
+      <div style="font-family:'DM Mono',monospace;font-size:8px;color:#888;letter-spacing:0.4px;white-space:nowrap;">TRADE WITH EDGE · NSE F&O</div>
+    </div>
 
     <!-- Data info: sym count + latest date, clearly readable -->
     <div id="mobDataInfo">
@@ -8593,11 +7961,6 @@ updateDataStatusBar();
     <button id="mobLoadBtn"  class="mob-icon-btn" onclick="loadFromCSV()" title="Load CSV files">📂</button>
     <button id="mobCloudBtn" class="mob-icon-btn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
     <button class="mob-icon-btn" onclick="mobClearCache()" title="Clear IDB cache" style="background:rgba(220,60,60,0.18);color:var(--bear);">🗑</button>
-  </div>
-
-  <!-- Persistent as-of banner — stays visible after syncToday until next load -->
-  <div id="mobAsOfBanner">
-    <span>⚠ Prices as of <strong id="mobAsOfBannerTime">—</strong> &nbsp;·&nbsp; Yahoo ~15 min delay</span>
   </div>
 
   <!-- Scan bar -->
@@ -8638,11 +8001,6 @@ updateDataStatusBar();
       </button>
       <button id="mobSettingsBtn" onclick="openMobSettings()" title="Scanner settings">⚙</button>
     </div>
-  </div>
-
-  <!-- As-of time strip — visible after syncToday, warns about 15-min Yahoo delay -->
-  <div id="mobAsOfStrip">
-    ⚠ Prices as of <span id="mobAsOfTime">—</span> &nbsp;·&nbsp; Yahoo Finance has ~15 min delay
   </div>
 
   <!-- Scanner Tab content — hidden when Stats tab active -->
@@ -8970,26 +8328,6 @@ function updateMobDataBadge() {
       dateLine.className   = 'loaded';
     }
 
-    // Show persistent as-of banner if syncToday was used this session
-    const banner     = document.getElementById('mobAsOfBanner');
-    const bannerTime = document.getElementById('mobAsOfBannerTime');
-    const strip      = document.getElementById('mobAsOfStrip');
-    const asOfEl     = document.getElementById('mobAsOfTime');
-    if (_lastTodaySyncTime) {
-      const asOf = new Date(_lastTodaySyncTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-      // Persistent banner below header
-      if (banner)     banner.classList.add('visible');
-      if (bannerTime) bannerTime.textContent = asOf;
-      // Legacy strip (below scan bar)
-      if (strip)  { strip.style.display = ''; }
-      if (asOfEl) { asOfEl.textContent = asOf; }
-      // Date line: show latest date only (as-of is in the banner)
-      if (dateLine) { dateLine.textContent = fmtDate(maxDate); dateLine.className = 'loaded'; }
-    } else {
-      if (banner) banner.classList.remove('visible');
-      if (strip)  strip.style.display = 'none';
-      if (dateLine) { dateLine.textContent = fmtDate(maxDate); dateLine.className = 'loaded'; }
-    }
     // Always sync scan date to latest available data date
     const scanDate = document.getElementById('mobScanDate');
     if (scanDate) scanDate.value = maxDate;
@@ -9439,8 +8777,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
       </div>`;
   };
 
-  const rankNote = _getRankingMode() === 'expectancy' ? ' &nbsp;·&nbsp; Expectancy rank' : '';
-  const capNote = maxTotal > 0 ? ` &nbsp;·&nbsp; top ${maxTotal} total${rankNote}` : '';
+  const capNote = maxTotal > 0 ? ` &nbsp;·&nbsp; top ${maxTotal} total` : '';
   let html = `<div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-bottom:8px;text-align:center;">
     ${fmtDate} &nbsp;·&nbsp; Trade ${nextFmt} &nbsp;·&nbsp; ${total} signals${capNote}
   </div>`;
@@ -9494,7 +8831,7 @@ let _mobActiveTab = 'scanner';
 
 
 let _mobTradesSubTab   = 'summary';   // 'summary' | 'daywise' | 'stockwise' | 'monthly' | 'insights'
-let _mobTradesStratTab = 'intraday'; // default to Momentum since that's what user is analyzing
+let _mobTradesStratTab = 'overnight'; // default to Gap tab
 let _mobTradeCache     = { overnight: null, intraday: null }; // null = not yet run
 let _mobTradesBuilding = false;
 let _lastScanDate      = null; // scan date of the last scanner run — Stats uses same date cap
