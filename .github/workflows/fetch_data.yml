@@ -4,9 +4,9 @@ name: TradeEdge Daily Fetch
 on:
   # 3:00 PM IST = 09:30 UTC
   # 5:30 PM IST = 12:00 UTC
-  schedule:
-    - cron: '30 9 * * 1-5'
-    - cron: '0 12 * * 1-5'
+  # schedule:
+  #  - cron: '30 9 * * 1-5'
+  #  - cron: '0 12 * * 1-5'
 
   # Manual trigger from GitHub Actions UI (for testing)
   workflow_dispatch:
