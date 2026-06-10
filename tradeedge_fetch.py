@@ -510,9 +510,6 @@ NIFTY50_SYMBOLS = [
 ]
 
 # ── Full F&O universe — 186 symbols, exact match with app.py ALL_SYMBOLS ──────
-# Symbols to skip during fetch (known Yahoo Finance failures)
-EXCLUDE_SYMBOLS = {"LTIM"}
-
 # 12 indices (NIFTY50 + BANKNIFTY + FINNIFTY + MIDCPNIFTY + 8 sector) + 174 F&O stocks
 # Symbol names here = CSV filenames = symbol IDs used in TradeEdge.html
 # Yahoo tickers resolved via YAHOO_TICKER_MAP above (e.g. ZOMATO → ETERNAL.NS)
@@ -589,9 +586,19 @@ def _normalise_yf_df(df: "pd.DataFrame", ticker_str: str) -> "pd.DataFrame":
     if "adj_close" not in df.columns:
         df["adj_close"] = df["close"].copy()
 
-    # ── Standardise index → plain date strings ────────────────────────────────
+    # ── Standardise index → plain date strings (IST timezone) ────────────────
+    # Yahoo returns timestamps in UTC. Convert to IST (UTC+5:30) before
+    # extracting date — otherwise a 10-Jun IST candle stored at midnight UTC
+    # would be labelled 2026-06-11 instead of 2026-06-10.
     df.index.name = "date"
-    df.index = pd.to_datetime(df.index).tz_localize(None).strftime("%Y-%m-%d")
+    idx = pd.to_datetime(df.index)
+    if idx.tz is not None:
+        # Already timezone-aware — convert to IST
+        idx = idx.tz_convert("Asia/Kolkata")
+    else:
+        # Timezone-naive UTC timestamps from yfinance — localize then convert
+        idx = idx.tz_localize("UTC").tz_convert("Asia/Kolkata")
+    df.index = idx.strftime("%Y-%m-%d")
 
     # ── Select & clean ────────────────────────────────────────────────────────
     df = df[["open", "high", "low", "close", "adj_close", "volume"]].copy()
@@ -922,17 +929,14 @@ def main():
 
     # Resolve symbol list — flags can be combined
     if args.symbols:
-        symbols = [s for s in args.symbols if s.upper() not in EXCLUDE_SYMBOLS]
-        skipped_ex = [s for s in args.symbols if s.upper() in EXCLUDE_SYMBOLS]
-        if skipped_ex:
-            print(f"  ⚠  Skipping excluded symbols: {', '.join(skipped_ex)}")
+        symbols = args.symbols
         label   = f"custom ({len(symbols)} symbols)"
     else:
         symbols = []
         parts   = []
         if args.fo:
-            symbols += [s for s in FO_SYMBOLS if s.upper() not in EXCLUDE_SYMBOLS]
-            parts.append(f"F&O + indices ({len(symbols)} symbols — matches TradeEdge.html)")
+            symbols += FO_SYMBOLS
+            parts.append(f"F&O + indices ({len(FO_SYMBOLS)} symbols — matches TradeEdge.html)")
         if args.sectors:
             print("Note: --sectors is no longer needed; sector indices (CNXIT, CNXAUTO, etc.) are included in --fo")
         if not symbols:
