@@ -979,12 +979,18 @@ def main():
             else:
                 last = last_csv_date(csv_path)
                 if last:
+                    today_str = datetime.today().strftime("%Y-%m-%d")
                     nxt = (datetime.strptime(last, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
                     if nxt > end_date:
-                        print(f"{prefix} up to date  ({last})")
-                        skipped += 1
-                        continue
-                    fetch_start = nxt
+                        # If last row is today, re-fetch today to overwrite intraday price with EOD close
+                        if last == today_str:
+                            fetch_start = today_str
+                        else:
+                            print(f"{prefix} up to date  ({last})")
+                            skipped += 1
+                            continue
+                    else:
+                        fetch_start = nxt
                 else:
                     fetch_start = start_2yr
 
