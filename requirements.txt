@@ -1,7 +1,0 @@
-flask
-flask-cors
-yfinance==0.2.54
-pandas
-requests
-gunicorn
-gevent
