@@ -8673,6 +8673,10 @@ async function runMobileScanner() {
     }
   }
 
+  // Sync WR/PnL thresholds BEFORE silent backtest so cap logic uses correct thresholds
+  document.getElementById('scanWrThreshold').value  = +document.getElementById('mobWrInput').value  || 0;
+  document.getElementById('scanPnlThreshold').value = +document.getElementById('mobPnlInput').value || 0;
+
   // Auto-run backtest silently if WR data doesn't match current strategy
   if (!wrDataMatchesStrategy()) {
     // Show progress hint in results area
@@ -8722,8 +8726,6 @@ async function runMobileScanner() {
 
   // Now scan
   document.getElementById('scanDate').value = scanDate;
-  document.getElementById('scanWrThreshold').value  = +document.getElementById('mobWrInput').value  || 0;
-  document.getElementById('scanPnlThreshold').value = +document.getElementById('mobPnlInput').value || 0;
   // Invalidate cache for current strategy — fresh results incoming
   _mobScanCache[_mobStrategy] = null;
   renderMobResults(scanDate, +document.getElementById('mobWrInput').value || 0, +document.getElementById('mobPnlInput').value || 0);
