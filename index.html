@@ -2553,7 +2553,7 @@
         <div class="control-group" id="idMinMoveGrp"><label>Min Move %</label><input type="number" id="idMinMove" value="1" step="0.1" min="0.1" max="10" title="D1 close vs prev close — minimum move to qualify"></div>
         <div class="control-group"><label>Max Move %</label><input type="number" id="idMaxMove" value="3" step="0.1" min="0.5" max="15" title="Maximum move — filter crashes/circuits"></div>
         <div class="control-group" id="idSkipPctGrp"><label>Skip Open &gt;%</label><input type="number" id="idSkipPct" value="1.0" step="0.1" min="0" max="10" title="Skip if D2 already gapped more than this % in signal direction (move already happened)"></div>
-        <div class="control-group"><label>SL %</label><input type="number" id="idSlPct" value="4" step="0.1" min="0.1" max="20" title="Stop loss % from entry"></div>
+        <div class="control-group"><label>SL %</label><input type="number" id="idSlPct" value="3.5" step="0.1" min="0.1" max="20" title="Stop loss % from entry"></div>
         <div class="control-group"><label>TP %</label><input type="number" id="idTpPct" value="2" step="0.1" min="0.1" max="20" title="Take profit % from entry"></div>
         <div class="control-group" id="idHoldDaysGrpID"><label title="Hold up to N days for TP/SL to trigger. Exit at EOD of last day if neither hit.">Hold Days</label><input type="number" id="idHoldDays" value="1" step="1" min="1" max="20" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
         <div class="control-group" style="display:none;"><label>Max ON Gap %</label><input type="number" id="idMaxOnGap" value="8" step="0.5" min="0" max="20" title="Max allowed overnight gap D1close→D2open (0=no limit)"></div>
@@ -2882,7 +2882,7 @@
       <div class="tab-content" id="tab-sweep">
         <div id="sweepContent">
           <div style="text-align:center;padding:40px;color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;">
-            Run a backtest with Intraday Momentum strategy first, then click 🔬 Param Sweep to view the matrix.
+            Run a backtest first, then click 🔬 Param Sweep to view the matrix.
           </div>
         </div>
       </div>
@@ -4278,6 +4278,7 @@ function launchSRScanner() {
   if (current.startsWith('https://') || current.startsWith('http://')) {
     const lastSlash = current.lastIndexOf('/');
     const base = current.substring(0, lastSlash + 1);
+    localStorage.setItem('tradeEdge_url', current.split('?')[0].split('#')[0]);
     window.location.href = base + 'TradeEdgeAI.html';
     return;
   }
@@ -4440,13 +4441,13 @@ const OVERNIGHT_DEFAULTS = {
 // Separate defaults per entry type — backtested values
 const INTRADAY_DEFAULTS_D2_OPEN = {
   idMinMove: 1, idMaxMove: 3, idSkipPct: 1.0,
-  idSlPct: 4.0, idTpPct: 2.0, idHoldDays: 1, idMaxOnGap: 8, maxSignalsDay: 1,
+  idSlPct: 3.5, idTpPct: 2.0, idHoldDays: 1, idMaxOnGap: 8, maxSignalsDay: 1,
   idEntryType: 'd2_open',
   wrThreshold: 40, pnlThreshold: 0.5,
 };
 const INTRADAY_DEFAULTS_D1_CLOSE = {
   idMinMove: 1, idMaxMove: 3, idSkipPct: 1.0,
-  idSlPct: 4.0, idTpPct: 2.0, idHoldDays: 2, idMaxOnGap: 8, maxSignalsDay: 1,
+  idSlPct: 3.5, idTpPct: 2.0, idHoldDays: 2, idMaxOnGap: 8, maxSignalsDay: 1,
   idEntryType: 'd1_close',
   wrThreshold: 40, pnlThreshold: 0.5,
 };
@@ -5675,8 +5676,9 @@ function buildResults(errors) {
   buildCalendar();
   // Show/hide Param Sweep tab based on strategy
   const sweepTab = document.getElementById('sweepTab');
-  if (sweepTab) sweepTab.style.display = _strategy === 'intraday' ? '' : 'none';
-  if (_strategy === 'intraday') buildParamSweep();
+  if (sweepTab) sweepTab.style.display = (_strategy === 'intraday' || _strategy === 'overnight') ? '' : 'none';
+  if (_strategy === 'intraday') buildIntradaySweep();
+  if (_strategy === 'overnight') buildOvernightSweep();
   // Initialise day-wise date range pickers to match backtest params
   const from = _strategy === 'intraday'
     ? document.getElementById('idFromDate').value
@@ -6413,7 +6415,7 @@ function sortSymTable(key) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PARAMETER SWEEP  — SL% × TP% matrix for Intraday Momentum
 // ─────────────────────────────────────────────────────────────────────────────
-function buildParamSweep() {
+function buildIntradaySweep() {
   const syms = getAllLoadedSymbols();
   if (!syms.length) return;
 
@@ -6562,6 +6564,139 @@ function buildParamSweep() {
           Cell = Expectancy/trade · WR · Trades · Net PnL% &nbsp;·&nbsp;
           MinMove ${baseParams.idMinMove}% · MaxMove ${baseParams.idMaxMove}% · Skip ${baseParams.idSkipPct}% · 
           Dir: ${_direction} · Max/day: ${maxPerDay || '∞'}
+        </span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="width:12px;height:12px;background:var(--bull-bg);border:1px solid var(--bull);border-radius:2px;display:inline-block;"></span>
+        <span style="font-size:11px;color:var(--text2);">Best</span>
+        <span style="width:12px;height:12px;background:var(--gold-bg);border:1px solid var(--gold);border-radius:2px;display:inline-block;margin-left:8px;"></span>
+        <span style="font-size:11px;color:var(--text2);">Mid</span>
+        <span style="width:12px;height:12px;background:var(--bear-bg);border:1px solid var(--bear);border-radius:2px;display:inline-block;margin-left:8px;"></span>
+        <span style="font-size:11px;color:var(--text2);">Weak</span>
+        <span style="font-size:11px;color:var(--accent);font-weight:700;margin-left:12px;">◀ = current settings</span>
+      </div>
+    </div>
+    <div style="overflow:auto;border-radius:12px;border:1px solid var(--border);box-shadow:var(--shadow);">
+      <table style="border-collapse:collapse;width:100%;">
+        <thead>${headerRow}</thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OVERNIGHT GAP PARAMETER SWEEP  — SL% × MinGap% matrix
+// ─────────────────────────────────────────────────────────────────────────────
+function buildOvernightSweep() {
+  const syms = getAllLoadedSymbols();
+  if (!syms.length) return;
+
+  // SL values to sweep (no fixed TP — exit is D2 open or D2 close)
+  const slValues   = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+  const gapValues  = [0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0];
+
+  // Base params from current overnight config
+  const from      = document.getElementById('fromDate')?.value || '';
+  const to        = document.getElementById('toDate')?.value   || '';
+  const curParams = readOvernightParams ? readOvernightParams() : {};
+  const activeSL  = curParams.slPct  || 1.5;
+  const activeGap = curParams.minGap || 0.4;
+
+  // Pre-filter OHLC slices once
+  const ohlcSlices = [];
+  syms.forEach(sym => {
+    const ohlcFull = _loadedOHLC[sym];
+    if (!ohlcFull) return;
+    const firstIdx = ohlcFull.findIndex(c => c.date >= from);
+    const startIdx = Math.max(0, firstIdx - 1);
+    const ohlc = ohlcFull.slice(startIdx).filter(c => c.date <= to);
+    if (ohlc.length >= 3) ohlcSlices.push({ sym, ohlc });
+  });
+
+  // Build result matrix — SL% rows × MinGap% cols
+  const results = {};
+  slValues.forEach(sl => {
+    results[sl] = {};
+    gapValues.forEach(gap => {
+      const params = { ...curParams, slPct: sl, minGap: gap };
+      let allT = [];
+      ohlcSlices.forEach(({ sym, ohlc }) => {
+        const trades = backtestOvernight ? backtestOvernight(ohlc, sym, params) : [];
+        allT.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
+      });
+      const total  = allT.length;
+      const wins   = allT.filter(t => t.outcome === 'WIN').length;
+      const slHits = allT.filter(t => t.slHit).length;
+      const pnl    = allT.reduce((s, t) => s + t.pnlPct, 0);
+      const wr     = total ? wins / total * 100 : 0;
+      const avgW   = wins ? allT.filter(t => t.outcome === 'WIN').reduce((s, t) => s + t.pnlPct, 0) / wins : 0;
+      const lossCt = total - wins;
+      const avgL   = lossCt ? allT.filter(t => t.outcome !== 'WIN').reduce((s, t) => s + t.pnlPct, 0) / lossCt : 0;
+      const exp    = (wr / 100) * avgW + ((1 - wr / 100) * avgL);
+      results[sl][gap] = { wr, exp, trades: total, netPnl: pnl, slHits };
+    });
+  });
+
+  // Colour scaling
+  let maxExp = -Infinity, minExp = Infinity;
+  slValues.forEach(sl => gapValues.forEach(gap => {
+    const e = results[sl][gap].exp;
+    if (e > maxExp) maxExp = e;
+    if (e < minExp) minExp = e;
+  }));
+  const expColor = (exp) => {
+    const t = (exp - minExp) / (maxExp - minExp || 1);
+    if (t >= 0.7) return 'var(--bull-bg)';
+    if (t >= 0.4) return 'var(--gold-bg)';
+    return 'var(--bear-bg)';
+  };
+  const expTextColor = (exp) => {
+    const t = (exp - minExp) / (maxExp - minExp || 1);
+    if (t >= 0.7) return 'var(--bull)';
+    if (t >= 0.4) return 'var(--gold)';
+    return 'var(--bear)';
+  };
+
+  const thStyle     = `style="background:var(--text);color:#fff;padding:10px 14px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;text-align:center;position:sticky;top:0;z-index:2;"`;
+  const cornerStyle = `style="background:var(--text);color:#aaa;padding:10px 14px;font-family:'DM Mono',monospace;font-size:10px;position:sticky;top:0;left:0;z-index:3;"`;
+
+  const headerRow = `<tr>
+    <th ${cornerStyle}>SL% \\ MinGap%</th>
+    ${gapValues.map(g => `<th ${thStyle}>${g}%</th>`).join('')}
+  </tr>`;
+
+  const bodyRows = slValues.map(sl => {
+    const cells = gapValues.map(gap => {
+      const r = results[sl][gap];
+      const isActive = sl === activeSL && gap === activeGap;
+      const bg = expColor(r.exp);
+      const tc = expTextColor(r.exp);
+      const border = isActive ? '3px solid var(--accent)' : '1px solid var(--border)';
+      return `<td style="padding:10px 12px;text-align:center;background:${bg};border:${border};min-width:110px;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:${tc};">
+          ${r.exp >= 0 ? '+' : ''}${r.exp.toFixed(3)}%
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px;">
+          WR ${r.wr.toFixed(1)}% · ${r.trades}T
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">
+          Net ${r.netPnl >= 0 ? '+' : ''}${r.netPnl.toFixed(1)}%
+        </div>
+        ${isActive ? '<div style="font-size:9px;font-weight:700;color:var(--accent);margin-top:2px;">◀ CURRENT</div>' : ''}
+      </td>`;
+    }).join('');
+    const slLabel = sl === activeSL
+      ? `<td style="background:var(--accent);color:#fff;padding:10px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;text-align:center;position:sticky;left:0;z-index:1;white-space:nowrap;">SL ${sl}% ◀</td>`
+      : `<td style="background:var(--surface2);padding:10px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;text-align:center;border:1px solid var(--border);position:sticky;left:0;z-index:1;">SL ${sl}%</td>`;
+    return `<tr>${slLabel}${cells}</tr>`;
+  }).join('');
+
+  document.getElementById('sweepContent').innerHTML = `
+    <div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <div>
+        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">SL% × MinGap% Parameter Sweep</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-left:10px;">
+          Cell = Expectancy/trade · WR · Trades · Net PnL% &nbsp;·&nbsp; Exit: D2 Open or D2 Close
         </span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
@@ -8173,7 +8308,7 @@ updateDataStatusBar();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">SL %</div><div class="mob-settings-sub">From entry</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdSlPct" type="number" value="4" step="0.1" min="0.1"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdSlPct" type="number" value="3.5" step="0.1" min="0.1"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">TP %</div><div class="mob-settings-sub">From entry</div></div>
