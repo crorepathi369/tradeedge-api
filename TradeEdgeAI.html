@@ -517,7 +517,16 @@
 <div class="app">
 
   <header>
-    <div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button onclick="goBackToTradeEdge()" title="Back to TradeEdge"
+        style="font-family:'DM Mono',monospace;font-size:11px;background:rgba(255,255,255,0.12);
+               color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:7px;
+               padding:5px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;
+               transition:background 0.15s;"
+        onmouseover="this.style.background='rgba(255,255,255,0.22)'"
+        onmouseout="this.style.background='rgba(255,255,255,0.12)'">
+        ← TradeEdge
+      </button>
       <div class="logo">TradeEdge<span>AI</span> <span class="badge">BETA</span></div>
     </div>
     <div class="tagline">BEARISH BREAKDOWN · F&amp;O · SCANNER</div>
@@ -3283,6 +3292,25 @@ function updateCompactGrid() {
   const anyVisible = paramIds.some(id => document.getElementById(id)?.style.display !== 'none');
   const grid = document.getElementById('fp-compact-grid');
   if (grid) grid.style.display = anyVisible ? 'flex' : 'none';
+}
+
+// ── Navigate back to TradeEdge main app ───────────────────────────────────────
+function goBackToTradeEdge() {
+  // Try saved URL first (set when TradeEdge was opened)
+  const saved = localStorage.getItem('tradeEdge_url');
+  if (saved) { window.location.href = saved; return; }
+
+  // Construct sibling URL from current location
+  const current = window.location.href;
+  const lastSlash = current.lastIndexOf('/');
+  const base = current.substring(0, lastSlash + 1);
+
+  // Try index.html first (cloud/GitHub Pages), then TradeEdge.html (local)
+  if (current.startsWith('https://') || current.startsWith('http://')) {
+    window.location.href = base + 'index.html';
+  } else {
+    window.location.href = base + 'TradeEdge.html';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
