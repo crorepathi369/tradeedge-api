@@ -83,6 +83,7 @@
   /* ── Header ── */
   header {
     display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
     margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1.5px solid var(--border);
   }
   .logo { font-family: var(--sans); font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
@@ -93,6 +94,13 @@
     padding: 2px 8px; border-radius: 3px; margin-left: 10px; vertical-align: middle;
   }
   .tagline { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 1.5px; }
+  .back-btn {
+    font-family: var(--mono); font-size: 11px; background: rgba(0,0,0,0.06);
+    color: var(--text); border: 1px solid var(--border); border-radius: 7px;
+    padding: 5px 12px; cursor: pointer; display: flex; align-items: center; gap: 5px;
+    transition: background 0.15s; white-space: nowrap; flex-shrink: 0;
+  }
+  .back-btn:hover { background: rgba(0,0,0,0.12); }
 
   /* ── Tabs ── */
   .tabs {
@@ -518,13 +526,7 @@
 
   <header>
     <div style="display:flex;align-items:center;gap:14px;">
-      <button onclick="goBackToTradeEdge()" title="Back to TradeEdge"
-        style="font-family:'DM Mono',monospace;font-size:11px;background:rgba(255,255,255,0.12);
-               color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:7px;
-               padding:5px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;
-               transition:background 0.15s;"
-        onmouseover="this.style.background='rgba(255,255,255,0.22)'"
-        onmouseout="this.style.background='rgba(255,255,255,0.12)'">
+      <button class="back-btn" onclick="goBackToTradeEdge()" title="Back to TradeEdge">
         ← TradeEdge
       </button>
       <div class="logo">TradeEdge<span>AI</span> <span class="badge">BETA</span></div>
