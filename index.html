@@ -2551,9 +2551,9 @@
           </select>
         </div>
         <div class="control-group" id="idMinMoveGrp"><label>Min Move %</label><input type="number" id="idMinMove" value="1" step="0.1" min="0.1" max="10" title="D1 close vs prev close — minimum move to qualify"></div>
-        <div class="control-group"><label>Max Move %</label><input type="number" id="idMaxMove" value="3" step="0.1" min="0.5" max="15" title="Maximum move — filter crashes/circuits"></div>
+        <div class="control-group"><label>Max Move %</label><input type="number" id="idMaxMove" value="2" step="0.1" min="0.5" max="15" title="Maximum move — filter crashes/circuits"></div>
         <div class="control-group" id="idSkipPctGrp"><label>Skip Open &gt;%</label><input type="number" id="idSkipPct" value="1.0" step="0.1" min="0" max="10" title="Skip if D2 already gapped more than this % in signal direction (move already happened)"></div>
-        <div class="control-group"><label>SL %</label><input type="number" id="idSlPct" value="3.5" step="0.1" min="0.1" max="20" title="Stop loss % from entry"></div>
+        <div class="control-group"><label>SL %</label><input type="number" id="idSlPct" value="3" step="0.1" min="0.1" max="20" title="Stop loss % from entry"></div>
         <div class="control-group"><label>TP %</label><input type="number" id="idTpPct" value="2" step="0.1" min="0.1" max="20" title="Take profit % from entry"></div>
         <div class="control-group" id="idHoldDaysGrpID"><label title="Hold up to N days for TP/SL to trigger. Exit at EOD of last day if neither hit.">Hold Days</label><input type="number" id="idHoldDays" value="1" step="1" min="1" max="20" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
         <div class="control-group" style="display:none;"><label>Max ON Gap %</label><input type="number" id="idMaxOnGap" value="8" step="0.5" min="0" max="20" title="Max allowed overnight gap D1close→D2open (0=no limit)"></div>
@@ -2593,7 +2593,7 @@
       <div style="display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
         <span style="font-size:10px;font-weight:600;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.4px;">Capital</span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;">₹/trade</span>
-        <input type="number" id="capitalPerTrade" value="100000" min="1000" step="10000"
+        <input type="number" id="capitalPerTrade" value="1000000" min="1000" step="10000"
           style="width:96px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:right;"
           title="Capital deployed per trade in ₹.">
       </div>
@@ -2608,7 +2608,7 @@
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
         <span style="width:1px;height:16px;background:var(--border);"></span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;" title="Avg net PnL% per trade from backtest history">Net PnL ≥</span>
-        <input type="number" id="scanPnlThreshold" value="0.5" min="-10" max="10" step="0.1"
+        <input type="number" id="scanPnlThreshold" value="0.3" min="-10" max="10" step="0.1"
           style="width:52px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
           title="Only include signals where avg net PnL% per trade ≥ this value. Applied to both backtest cap and live scanner.">
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
@@ -4028,7 +4028,6 @@ async function runBacktestSilent() {
         (wrThresh  <= 0 || wilsonOf(t.sym, t.side) >= wrThresh) &&
         (pnlThresh === 0 || avgPnlOf(t.sym, t.side) >= pnlThresh)
       );
-      if (candidates.length === 0) candidates = day; // fallback if filter removes all
       return candidates.sort((a,b) => {
         const sd = scoreOf(b.sym,b.side) - scoreOf(a.sym,a.side);
         return Math.abs(sd) > 0.0001 ? sd : Math.abs(b.gapPct)-Math.abs(a.gapPct);
@@ -4152,8 +4151,6 @@ async function runBacktest() {
         (wrThresh  <= 0 || wilsonOf(t.sym, t.side) >= wrThresh) &&
         (pnlThresh === 0 || avgPnlOf(t.sym, t.side) >= pnlThresh)
       );
-      // Fall back to all candidates if filter removes everything
-      if (candidates.length === 0) candidates = dayTrades;
       const sorted = candidates.sort((a, b) => {
         const sDiff = scoreOf(b.sym, b.side) - scoreOf(a.sym, a.side);
         if (Math.abs(sDiff) > 0.0001) return sDiff;
@@ -4436,20 +4433,20 @@ function _signalSortFn(a, b) {
 const OVERNIGHT_DEFAULTS = {
   minGap: 0.4, maxGap: 5, slType: 'pct', slPct: 4,
   tpType: 'd2_close', tpPct: 1.0, holdDays: 1, maxSignalsDay: 1,
-  wrThreshold: 40, pnlThreshold: 0.5,
+  wrThreshold: 40, pnlThreshold: 0.3,
 };
 // Separate defaults per entry type — backtested values
 const INTRADAY_DEFAULTS_D2_OPEN = {
-  idMinMove: 1, idMaxMove: 3, idSkipPct: 1.0,
-  idSlPct: 3.5, idTpPct: 2.0, idHoldDays: 1, idMaxOnGap: 8, maxSignalsDay: 1,
+  idMinMove: 1, idMaxMove: 2, idSkipPct: 1.0,
+  idSlPct: 3.0, idTpPct: 2.0, idHoldDays: 1, idMaxOnGap: 8, maxSignalsDay: 1,
   idEntryType: 'd2_open',
-  wrThreshold: 40, pnlThreshold: 0.5,
+  wrThreshold: 40, pnlThreshold: 0.3,
 };
 const INTRADAY_DEFAULTS_D1_CLOSE = {
-  idMinMove: 1, idMaxMove: 3, idSkipPct: 1.0,
-  idSlPct: 3.5, idTpPct: 2.0, idHoldDays: 2, idMaxOnGap: 8, maxSignalsDay: 1,
+  idMinMove: 1, idMaxMove: 2, idSkipPct: 1.0,
+  idSlPct: 3.0, idTpPct: 2.0, idHoldDays: 2, idMaxOnGap: 8, maxSignalsDay: 1,
   idEntryType: 'd1_close',
-  wrThreshold: 40, pnlThreshold: 0.5,
+  wrThreshold: 40, pnlThreshold: 0.3,
 };
 // Convenience alias — always points to D2 Open defaults (used by legacy callers)
 const INTRADAY_DEFAULTS = INTRADAY_DEFAULTS_D2_OPEN;
@@ -4531,7 +4528,7 @@ function readCurrentParams() {
 function resetStrategyDefaults() {
   // Reset signal filters to defaults
   document.getElementById('scanWrThreshold').value  = 40;
-  document.getElementById('scanPnlThreshold').value = 0.5;
+  document.getElementById('scanPnlThreshold').value = 0.3;
   if (_strategy === 'overnight') {
     const d = OVERNIGHT_DEFAULTS;
     document.getElementById('minGap').value  = d.minGap;
@@ -4583,7 +4580,7 @@ function mobSetRanking(mode) {
 
 function resetMobDefaults() {
   const mobCapEl = document.getElementById('mobCapital');
-  if (mobCapEl) mobCapEl.value = document.getElementById('capitalPerTrade').value || 100000;
+  if (mobCapEl) mobCapEl.value = document.getElementById('capitalPerTrade').value || 1000000;
   // Reset signal filters to defaults
   const wrEl  = document.getElementById('mobWrInput');
   const pnlEl = document.getElementById('mobPnlInput');
@@ -4838,14 +4835,13 @@ async function runScanner() {
     allSigs.sort(_signalSortFn);
     // Apply filter with fallback — same logic as backtest cap
     const filtered = allSigs.filter(s => s._passesFilter);
-    const selected = (filtered.length > 0 ? filtered : allSigs).slice(0, maxTotal);
+    const selected = filtered.slice(0, maxTotal);
 
     longsOut  = selected.filter(s => s._side === 'LONG');
     shortsOut = selected.filter(s => s._side === 'SHORT');
   } else {
     longsOut  = longs.filter(s => s._passesFilter);
     shortsOut = shorts.filter(s => s._passesFilter);
-    if (longsOut.length === 0 && shortsOut.length === 0) { longsOut = longs; shortsOut = shorts; }
   }
 
   renderScannerResults(scanDate, longsOut, shortsOut, params, wrThreshold, pnlThreshold);
@@ -4972,13 +4968,12 @@ function runScannerIntraday(scanDate, syms) {
     const allSigsID = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
     allSigsID.sort(_signalSortFn);
     const filteredID = allSigsID.filter(s => s._passesFilter);
-    const selectedID = (filteredID.length > 0 ? filteredID : allSigsID).slice(0, maxTotalID);
+    const selectedID = filteredID.slice(0, maxTotalID);
     longsOut  = selectedID.filter(s => s._side === 'LONG');
     shortsOut = selectedID.filter(s => s._side === 'SHORT');
   } else {
-    longsOut = longs.filter(s => s._passesFilter || !hasBacktest);
-    shortsOut = shorts.filter(s => s._passesFilter || !hasBacktest);
-    if (longsOut.length === 0 && shortsOut.length === 0) { longsOut = longs; shortsOut = shorts; }
+    longsOut = longs.filter(s => s._passesFilter);
+    shortsOut = shorts.filter(s => s._passesFilter);
   }
 
   renderScannerIntraday(scanDate, longsOut, shortsOut, idParams);
@@ -5161,7 +5156,7 @@ function renderScannerIntraday(scanDate, longs, shorts, params) {
 
     return `
       <div class="signal-card clickable ${isBull ? 'bull-card' : 'bear-card'}"
-        onclick="openSymDrill('${s.sym}')"
+        onclick="openSymDrill('${s.sym}', allTrades, '${isBull ? 'LONG' : 'SHORT'}')"
         title="Click to view ${s.sym} trade history">
         <div class="sc-main-row">
           <div>
@@ -5355,7 +5350,7 @@ function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, 
 
     return `
       <div class="signal-card clickable ${isBull ? 'bull-card' : 'bear-card'}"
-        onclick="openSymDrill('${s.sym}')"
+        onclick="openSymDrill('${s.sym}', allTrades, '${isBull ? 'LONG' : 'SHORT'}')"
         title="Click to view ${s.sym} trade history">
         <div class="sc-main-row">
           <div>
@@ -6368,7 +6363,7 @@ function buildSymbolTable() {
   });
 
 function drillToSymbol(sym) {
-  openSymDrill(sym);
+  openSymDrill(sym, allTrades);
 }
 
   renderSymTable(symRows);
@@ -6663,7 +6658,6 @@ function buildOvernightSweep() {
             (wrThresh  <= 0 || wilsonOf(t.sym, t.side) >= wrThresh) &&
             (pnlThresh === 0 || avgPnlOf(t.sym, t.side) >= pnlThresh)
           );
-          if (candidates.length === 0) candidates = dayTrades; // fallback if filter removes all
           return candidates.sort((a, b) => {
             const sd = scoreOf(b.sym, b.side) - scoreOf(a.sym, a.side);
             return Math.abs(sd) > 0.0001 ? sd : Math.abs(b.gapPct) - Math.abs(a.gapPct);
@@ -7222,7 +7216,7 @@ function setCalView(view) {
 
 function renderMonthlyView() {
   const byDay = _tradeStats && _tradeStats.byTradeDay ? _tradeStats.byTradeDay : {};
-  const capital = getCapital ? getCapital() : 100000;
+  const capital = getCapital ? getCapital() : 1000000;
 
   // Aggregate all trades by month
   const byMonth = {};
@@ -7355,7 +7349,7 @@ function mobRenderMonthlyView() {
     return;
   }
 
-  const capital = getCapital ? getCapital() : 100000;
+  const capital = getCapital ? getCapital() : 1000000;
   let cumPnl = 0;
   let prevYear = '';
   let html = '';
@@ -7795,10 +7789,11 @@ function switchDrillTab(tab) {
   }
 }
 
-function openSymDrill(sym, tradesSource) {
+function openSymDrill(sym, tradesSource, sideFilter) {
   const source = tradesSource || allTrades;
-  const trades = source.filter(t => t.sym === sym)
-    .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+  const trades = source.filter(t => t.sym === sym && (!sideFilter || t.side === sideFilter))
+    .sort((a, b) => b.tradeDate.localeCompare(a.tradeDate));
+  const tradesChron = [...trades].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
 
   // No backtest data for this symbol — show modal with a helpful prompt
   // instead of silently ignoring the click
@@ -7842,7 +7837,7 @@ function openSymDrill(sym, tradesSource) {
   // Header
   document.getElementById('drillSymBadge').textContent = sym;
   document.getElementById('drillSymMeta').innerHTML =
-    `${trades.length} trades · ${longs.length}L / ${shorts.length}S &nbsp;·&nbsp; ${trades[0].tradeDate} → ${trades[trades.length-1].tradeDate}`;
+    `${trades.length} trades · ${longs.length}L / ${shorts.length}S &nbsp;·&nbsp; ${tradesChron[0].tradeDate} → ${tradesChron[tradesChron.length-1].tradeDate}`;
 
   // Stat strip — 3 cols × 2 rows for mobile readability
   const stats = [
@@ -7862,7 +7857,7 @@ function openSymDrill(sym, tradesSource) {
   // ── Equity curve ──
   let cum = 0;
   const eqLabels = [], eqData = [], eqPointColors = [], eqPointSizes = [];
-  trades.forEach(t => {
+  tradesChron.forEach(t => {
     cum += t.pnlPct;
     eqLabels.push(t.tradeDate.slice(5)); // MM-DD
     eqData.push(+cum.toFixed(3));
@@ -8347,7 +8342,7 @@ updateDataStatusBar();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Max Move %</div><div class="mob-settings-sub">Filter circuits</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdMaxMove" type="number" value="3" step="0.1" min="0.5"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdMaxMove" type="number" value="2" step="0.1" min="0.5"></div>
       </div>
       <div class="mob-settings-row" id="mobIdSkipPctRow">
         <div><div class="mob-settings-label">Skip Open &gt;%</div><div class="mob-settings-sub">Already moved — skip</div></div>
@@ -8355,7 +8350,7 @@ updateDataStatusBar();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">SL %</div><div class="mob-settings-sub">From entry</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdSlPct" type="number" value="3.5" step="0.1" min="0.1"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdSlPct" type="number" value="3" step="0.1" min="0.1"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">TP %</div><div class="mob-settings-sub">From entry</div></div>
@@ -8385,7 +8380,7 @@ updateDataStatusBar();
           <div class="mob-settings-sub">Capital deployed per signal</div></div>
         <div class="mob-settings-control">
           <input class="mob-settings-input" id="mobCapital" type="number"
-            value="100000" step="10000" min="1000" style="width:110px;">
+            value="1000000" step="10000" min="1000" style="width:110px;">
         </div>
       </div>
     </div>
@@ -8437,7 +8432,7 @@ updateDataStatusBar();
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex:1;">
           <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);white-space:nowrap;">Net PnL ≥</span>
-          <input type="number" id="mobPnlInput" value="0.5" min="-10" max="10" step="0.1"
+          <input type="number" id="mobPnlInput" value="0.3" min="-10" max="10" step="0.1"
             style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;
               font-family:'DM Mono',monospace;font-size:13px;background:var(--surface);text-align:center;">
           <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);">%</span>
@@ -8590,7 +8585,7 @@ function openMobSettings()  {
   document.getElementById('mobSettingsBackdrop').classList.add('open');
   // Pre-fill capital from desktop + refresh IDB status
   const mobCapEl = document.getElementById('mobCapital');
-  if (mobCapEl) mobCapEl.value = document.getElementById('capitalPerTrade').value || 100000;
+  if (mobCapEl) mobCapEl.value = document.getElementById('capitalPerTrade').value || 1000000;
 }
 function closeMobSettings() {
   document.getElementById('mobSettingsPanel').classList.remove('open');
@@ -8868,7 +8863,6 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
   } else {
     longsOut  = longs.filter(s => s._passesFilter);
     shortsOut = shorts.filter(s => s._passesFilter);
-    if (longsOut.length === 0 && shortsOut.length === 0) { longsOut = longs; shortsOut = shorts; }
   }
 
   const total = longsOut.length + shortsOut.length;
@@ -9549,7 +9543,7 @@ let _mobDrillTrades = null;
 let _mobStockwiseAllRows = [];  // cached rows for search/sort without re-aggregating
 
 function openSymDrillFromMob(sym) {
-  openSymDrill(sym, _mobDrillTrades);
+  openSymDrill(sym, _mobDrillTrades || allTrades);
 }
 
 // Called on sort button click — re-renders cards only, keyboard stays open
