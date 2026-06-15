@@ -2512,7 +2512,7 @@
         <div class="control-group"><label>To Date</label><input type="date" id="toDate"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
         <div class="control-group"><label>Min Gap %</label><input type="number" id="minGap" value="0.4" step="0.05" min="0.05" max="5"></div>
-        <div class="control-group"><label>Max Gap %</label><input type="number" id="maxGap" value="10" step="0.5" min="1" max="20"></div>
+        <div class="control-group"><label>Max Gap %</label><input type="number" id="maxGap" value="5" step="0.5" min="1" max="20"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
         <div class="control-group">
           <label>Stop Loss Type</label>
@@ -2521,7 +2521,7 @@
             <option value="pct" selected>Fixed % from entry</option>
           </select>
         </div>
-        <div class="control-group" id="slPctGrp"><label>SL %</label><input type="number" id="slPct" value="1.5" step="0.1" min="0.1" max="10"></div>
+        <div class="control-group" id="slPctGrp"><label>SL %</label><input type="number" id="slPct" value="4" step="0.1" min="0.1" max="10"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
         <div class="control-group">
           <label>Take Profit</label>
@@ -3605,7 +3605,8 @@ function backtest(ohlc, symId, params, debug = false) {
 
     if (!yesterday) { if(debug) console.log(symId, today.date, 'SKIP: no yesterday'); continue; }
 
-    const gapPct = ((today.open - yesterday.close) / yesterday.close) * 100;
+    const prevRef = yesterday.adjClose || yesterday.close;
+    const gapPct = ((today.open - prevRef) / prevRef) * 100;
     const absGap = Math.abs(gapPct);
     if (absGap < params.minGap) { if(debug) console.log(symId, today.date, `SKIP: gap ${gapPct.toFixed(2)}% < minGap ${params.minGap}`); continue; }
     if (absGap > params.maxGap) { if(debug) console.log(symId, today.date, `SKIP: gap ${gapPct.toFixed(2)}% > maxGap ${params.maxGap}`); continue; }
@@ -3637,8 +3638,7 @@ function backtest(ohlc, symId, params, debug = false) {
     } else {
       const slpct = params.slPct / 100;
       sl = side === 'LONG' ? entry * (1 - slpct) : entry * (1 + slpct);
-      if (side === 'LONG'  && nextOpen <= sl) slHit = true;
-      if (side === 'SHORT' && nextOpen >= sl) slHit = true;
+      // SL for fixed % is checked intraday via D2 Low (Long) / D2 High (Short) — not D2 Open
     }
 
     let exitPrice, outcome, exitNote;
@@ -4434,7 +4434,7 @@ function _signalSortFn(a, b) {
 
 // ── Default values for each strategy ──────────────────────────────────────────
 const OVERNIGHT_DEFAULTS = {
-  minGap: 0.4, maxGap: 10, slType: 'pct', slPct: 1.5,
+  minGap: 0.4, maxGap: 5, slType: 'pct', slPct: 4,
   tpType: 'd2_close', tpPct: 1.0, holdDays: 1, maxSignalsDay: 1,
   wrThreshold: 40, pnlThreshold: 0.5,
 };
@@ -6591,16 +6591,16 @@ function buildOvernightSweep() {
   const syms = getAllLoadedSymbols();
   if (!syms.length) return;
 
-  // SL values to sweep (no fixed TP — exit is D2 open or D2 close)
+  // SL values to sweep (no fixed TP — exit determined by tpType: D2 Close or D2 Open)
   const slValues   = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
   const gapValues  = [0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0];
 
-  // Base params from current overnight config
+  // Base params from current overnight config — includes maxGap, closeFilter, tpType etc.
   const from      = document.getElementById('fromDate')?.value || '';
   const to        = document.getElementById('toDate')?.value   || '';
-  const curParams = readOvernightParams ? readOvernightParams() : {};
-  const activeSL  = curParams.slPct  || 1.5;
-  const activeGap = curParams.minGap || 0.4;
+  const curParams = readOvernightParams();
+  const activeSL  = curParams.slPct;
+  const activeGap = curParams.minGap;
 
   // Pre-filter OHLC slices once
   const ohlcSlices = [];
@@ -6613,17 +6613,64 @@ function buildOvernightSweep() {
     if (ohlc.length >= 3) ohlcSlices.push({ sym, ohlc });
   });
 
-  // Build result matrix — SL% rows × MinGap% cols
+  // Cap / rank / filter settings — must match main backtest exactly
+  const maxPerDay   = +document.getElementById('maxSignalsDay').value || 0;
+  const rankMode    = _getRankingMode(); // 'expectancy' | 'wilson'
+  const wrThresh    = +document.getElementById('scanWrThreshold').value  || 0;
+  const pnlThresh   = +document.getElementById('scanPnlThreshold').value || 0;
+
+  // Build result matrix — SL% rows x MinGap% cols
+  // Keep all other params (maxGap, closeFilter, tpType, holdDays) from current config
   const results = {};
   slValues.forEach(sl => {
     results[sl] = {};
     gapValues.forEach(gap => {
+      // Override only slPct and minGap — everything else stays as configured
       const params = { ...curParams, slPct: sl, minGap: gap };
+
+      // Step 1: run full uncapped backtest across all symbols (for WR scoring)
       let allT = [];
       ohlcSlices.forEach(({ sym, ohlc }) => {
-        const trades = backtestOvernight ? backtestOvernight(ohlc, sym, params) : [];
+        const trades = backtest(ohlc, sym, params);
         allT.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
       });
+
+      // Step 2: apply same Max/day cap + Adj WR / Net PnL filters + rank as main backtest
+      if (maxPerDay > 0) {
+        const statMap = {};
+        allT.forEach(t => {
+          const key = t.sym + '_' + t.side;
+          if (!statMap[key]) statMap[key] = [];
+          statMap[key].push(t);
+        });
+        const scoreOf = (sym, side) => {
+          const { wilson, expectancy } = _scoreFromTrades(statMap[sym + '_' + side] || []);
+          return rankMode === 'expectancy' ? expectancy : wilson;
+        };
+        const wilsonOf = (sym, side) => {
+          const trades = statMap[sym + '_' + side] || [];
+          const total = trades.length, wins = trades.filter(t => t.outcome === 'WIN').length;
+          return total > 0 ? Math.round((wins + 1) / (total + 2) * 100) : 50;
+        };
+        const avgPnlOf = (sym, side) => {
+          const trades = statMap[sym + '_' + side] || [];
+          return trades.length > 0 ? trades.reduce((s, t) => s + t.pnlPct, 0) / trades.length : 0;
+        };
+        const byDay = {};
+        allT.forEach(t => { (byDay[t.signalDate] = byDay[t.signalDate] || []).push(t); });
+        allT = Object.values(byDay).flatMap(dayTrades => {
+          let candidates = dayTrades.filter(t =>
+            (wrThresh  <= 0 || wilsonOf(t.sym, t.side) >= wrThresh) &&
+            (pnlThresh === 0 || avgPnlOf(t.sym, t.side) >= pnlThresh)
+          );
+          if (candidates.length === 0) candidates = dayTrades; // fallback if filter removes all
+          return candidates.sort((a, b) => {
+            const sd = scoreOf(b.sym, b.side) - scoreOf(a.sym, a.side);
+            return Math.abs(sd) > 0.0001 ? sd : Math.abs(b.gapPct) - Math.abs(a.gapPct);
+          }).slice(0, maxPerDay);
+        });
+      }
+
       const total  = allT.length;
       const wins   = allT.filter(t => t.outcome === 'WIN').length;
       const slHits = allT.filter(t => t.slHit).length;
@@ -6696,7 +6743,7 @@ function buildOvernightSweep() {
       <div>
         <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">SL% × MinGap% Parameter Sweep</span>
         <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-left:10px;">
-          Cell = Expectancy/trade · WR · Trades · Net PnL% &nbsp;·&nbsp; Exit: D2 Open or D2 Close
+          Cell = Expectancy/trade · WR · Trades · Net PnL% &nbsp;·&nbsp; Exit: ${curParams.tpType === 'd2_open' ? 'D2 Open' : curParams.tpType === 'pct' ? 'Fixed TP %' : 'D2 Close'} · Cap ${maxPerDay > 0 ? maxPerDay+'/day' : 'off'}
         </span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
@@ -8233,7 +8280,7 @@ updateDataStatusBar();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Max Gap %</div><div class="mob-settings-sub">Filter noise/circuits</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobMaxGap" type="number" value="10" step="0.5" min="1"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobMaxGap" type="number" value="5" step="0.5" min="1"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">SL Type</div><div class="mob-settings-sub">How stop loss is set</div></div>
@@ -8246,7 +8293,7 @@ updateDataStatusBar();
       </div>
       <div class="mob-settings-row" id="mobSlPctRow">
         <div><div class="mob-settings-label">SL %</div><div class="mob-settings-sub">From entry</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobSlPct" type="number" value="1.5" step="0.1" min="0.1"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobSlPct" type="number" value="4" step="0.1" min="0.1"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">TP</div><div class="mob-settings-sub">Exit at</div></div>
