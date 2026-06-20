@@ -2511,7 +2511,7 @@
         <div class="control-group"><label>From Date</label><input type="date" id="fromDate"></div>
         <div class="control-group"><label>To Date</label><input type="date" id="toDate"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
-        <div class="control-group"><label>Min Gap %</label><input type="number" id="minGap" value="0.4" step="0.05" min="0.05" max="5"></div>
+        <div class="control-group"><label>Min Gap %</label><input type="number" id="minGap" value="2" step="0.05" min="0.05" max="5"></div>
         <div class="control-group"><label>Max Gap %</label><input type="number" id="maxGap" value="5" step="0.5" min="1" max="20"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
         <div class="control-group">
@@ -2521,7 +2521,7 @@
             <option value="pct" selected>Fixed % from entry</option>
           </select>
         </div>
-        <div class="control-group" id="slPctGrp"><label>SL %</label><input type="number" id="slPct" value="4" step="0.1" min="0.1" max="10"></div>
+        <div class="control-group" id="slPctGrp"><label>SL %</label><input type="number" id="slPct" value="3" step="0.1" min="0.1" max="10"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
         <div class="control-group">
           <label>Take Profit</label>
@@ -2553,7 +2553,7 @@
         <div class="control-group" id="idMinMoveGrp"><label>Min Move %</label><input type="number" id="idMinMove" value="1" step="0.1" min="0.1" max="10" title="D1 close vs prev close — minimum move to qualify"></div>
         <div class="control-group"><label>Max Move %</label><input type="number" id="idMaxMove" value="2" step="0.1" min="0.5" max="15" title="Maximum move — filter crashes/circuits"></div>
         <div class="control-group" id="idSkipPctGrp"><label>Skip Open &gt;%</label><input type="number" id="idSkipPct" value="1.0" step="0.1" min="0" max="10" title="Skip if D2 already gapped more than this % in signal direction (move already happened)"></div>
-        <div class="control-group"><label>SL %</label><input type="number" id="idSlPct" value="3" step="0.1" min="0.1" max="20" title="Stop loss % from entry"></div>
+        <div class="control-group"><label>SL %</label><input type="number" id="idSlPct" value="3.5" step="0.1" min="0.1" max="20" title="Stop loss % from entry"></div>
         <div class="control-group"><label>TP %</label><input type="number" id="idTpPct" value="2" step="0.1" min="0.1" max="20" title="Take profit % from entry"></div>
         <div class="control-group" id="idHoldDaysGrpID"><label title="Hold up to N days for TP/SL to trigger. Exit at EOD of last day if neither hit.">Hold Days</label><input type="number" id="idHoldDays" value="1" step="1" min="1" max="20" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
         <div class="control-group" style="display:none;"><label>Max ON Gap %</label><input type="number" id="idMaxOnGap" value="8" step="0.5" min="0" max="20" title="Max allowed overnight gap D1close→D2open (0=no limit)"></div>
@@ -4443,22 +4443,25 @@ function _signalSortFn(a, b) {
 
 // ── Default values for each strategy ──────────────────────────────────────────
 const OVERNIGHT_DEFAULTS = {
-  minGap: 0.4, maxGap: 5, slType: 'pct', slPct: 4,
+  minGap: 2, maxGap: 5, slType: 'pct', slPct: 3,
   tpType: 'd2_close', tpPct: 1.0, holdDays: 1, maxSignalsDay: 1,
-  wrThreshold: 40, pnlThreshold: 0.3,
+  wrThreshold: 40, pnlThreshold: 0.3, capitalPerTrade: 1000000,
+  rankingMode: 'expectancy', direction: 'both',
 };
 // Separate defaults per entry type — backtested values
 const INTRADAY_DEFAULTS_D2_OPEN = {
   idMinMove: 1, idMaxMove: 2, idSkipPct: 1.0,
-  idSlPct: 3.0, idTpPct: 2.0, idHoldDays: 1, idMaxOnGap: 8, maxSignalsDay: 1,
+  idSlPct: 3.5, idTpPct: 2.0, idHoldDays: 1, idMaxOnGap: 8, maxSignalsDay: 1,
   idEntryType: 'd2_open',
-  wrThreshold: 40, pnlThreshold: 0.3,
+  wrThreshold: 40, pnlThreshold: 0.3, capitalPerTrade: 1000000,
+  rankingMode: 'wilson',
 };
 const INTRADAY_DEFAULTS_D1_CLOSE = {
   idMinMove: 1, idMaxMove: 2, idSkipPct: 1.0,
-  idSlPct: 3.0, idTpPct: 2.0, idHoldDays: 2, idMaxOnGap: 8, maxSignalsDay: 1,
+  idSlPct: 3.5, idTpPct: 2.0, idHoldDays: 2, idMaxOnGap: 8, maxSignalsDay: 1,
   idEntryType: 'd1_close',
-  wrThreshold: 40, pnlThreshold: 0.3,
+  wrThreshold: 40, pnlThreshold: 0.3, capitalPerTrade: 1000000,
+  rankingMode: 'wilson',
 };
 // Convenience alias — always points to D2 Open defaults (used by legacy callers)
 const INTRADAY_DEFAULTS = INTRADAY_DEFAULTS_D2_OPEN;
@@ -4539,21 +4542,27 @@ function readCurrentParams() {
 
 // ── Load saved defaults on startup ────────────────────────────────────────────
 function loadSavedDefaults() {
+  // Always restore capital first — shared key, independent of strategy
+  const savedCapital = localStorage.getItem('TE_CAPITAL');
+  if (savedCapital) document.getElementById('capitalPerTrade').value = +savedCapital;
   // Overnight Gap — apply saved if exists
   const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
   if (onRaw) {
     try {
       const d = { ...OVERNIGHT_DEFAULTS, ...JSON.parse(onRaw) };
-      document.getElementById('minGap').value  = d.minGap;
-      document.getElementById('maxGap').value  = d.maxGap;
-      document.getElementById('slType').value  = d.slType;
-      document.getElementById('slPct').value   = d.slPct;
-      document.getElementById('tpType').value  = d.tpType;
-      document.getElementById('tpPct').value   = d.tpPct;
+      document.getElementById('minGap').value         = d.minGap;
+      document.getElementById('maxGap').value         = d.maxGap;
+      document.getElementById('slType').value         = d.slType;
+      document.getElementById('slPct').value          = d.slPct;
+      document.getElementById('tpType').value         = d.tpType;
+      document.getElementById('tpPct').value          = d.tpPct;
       document.getElementById('holdDays').value       = d.holdDays;
       document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
-      if (d.wrThreshold)  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-      if (d.pnlThreshold) document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+      if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+      if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+      if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
+      if (d.rankingMode)    document.getElementById('rankingMode').value      = d.rankingMode;
+      if (d.direction)      setDirection(d.direction);
     } catch(e) { console.warn('[loadSavedDefaults] overnight parse error', e); }
   }
 
@@ -4573,32 +4582,20 @@ function loadSavedDefaults() {
       document.getElementById('idHoldDays').value     = d.idHoldDays;
       document.getElementById('idMaxOnGap').value     = d.idMaxOnGap;
       document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
-      if (d.wrThreshold)  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-      if (d.pnlThreshold) document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+      if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+      if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+      if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
+      if (d.rankingMode)    document.getElementById('rankingMode').value      = d.rankingMode;
     } catch(e) { console.warn('[loadSavedDefaults] intraday parse error', e); }
   }
-
-  // Mobile — sync from desktop values just loaded
-  const mobMinGap = document.getElementById('mobMinGap');
-  if (mobMinGap) {
-    mobMinGap.value = document.getElementById('minGap').value;
-    const mobMaxGap = document.getElementById('mobMaxGap');
-    if (mobMaxGap) mobMaxGap.value = document.getElementById('maxGap').value;
-    const mobSlPct  = document.getElementById('mobSlPct');
-    if (mobSlPct)  mobSlPct.value  = document.getElementById('slPct').value;
-    const mobSlType = document.getElementById('mobSlType');
-    if (mobSlType) mobSlType.value = document.getElementById('slType').value;
-    const mobTpType = document.getElementById('mobTpType');
-    if (mobTpType) mobTpType.value = document.getElementById('tpType').value;
-  }
-  const mobIdSlPct = document.getElementById('mobIdSlPct');
-  if (mobIdSlPct) mobIdSlPct.value = document.getElementById('idSlPct').value;
-  const mobIdTpPct = document.getElementById('mobIdTpPct');
-  if (mobIdTpPct) mobIdTpPct.value = document.getElementById('idTpPct').value;
 }
 
 // ── Save current params as user defaults ──────────────────────────────────────
 function saveStrategyDefaults() {
+  // Always save capital separately — shared across both strategies
+  const capital = +document.getElementById('capitalPerTrade').value || 1000000;
+  localStorage.setItem('TE_CAPITAL', capital);
+
   if (_strategy === 'overnight') {
     const saved = {
       minGap:         +document.getElementById('minGap').value,
@@ -4611,6 +4608,9 @@ function saveStrategyDefaults() {
       maxSignalsDay:  +document.getElementById('maxSignalsDay').value,
       wrThreshold:    +document.getElementById('scanWrThreshold').value,
       pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
+      capitalPerTrade:+document.getElementById('capitalPerTrade').value,
+      rankingMode:     document.getElementById('rankingMode').value,
+      direction:       _direction,
     };
     localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
     _showSaveToast('Overnight Gap defaults saved ✓');
@@ -4628,6 +4628,8 @@ function saveStrategyDefaults() {
       idEntryType:    entryType,
       wrThreshold:    +document.getElementById('scanWrThreshold').value,
       pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
+      capitalPerTrade:+document.getElementById('capitalPerTrade').value,
+      rankingMode:     document.getElementById('rankingMode').value,
     };
     const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
     localStorage.setItem(key, JSON.stringify(saved));
@@ -4668,13 +4670,16 @@ function resetStrategyDefaults() {
     document.getElementById('tpPct').value   = d.tpPct;
     document.getElementById('holdDays').value = d.holdDays;
     document.getElementById('maxSignalsDay').value = d.maxSignalsDay;
-    if (d.wrThreshold)  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-    if (d.pnlThreshold) document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
-    document.getElementById('slPctGrp').style.display = '';
-    document.getElementById('tpPctGrp').style.display = 'none';
+    if (d.wrThreshold)   document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+    if (d.pnlThreshold)  document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+    if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
+    if (d.rankingMode)   document.getElementById('rankingMode').value       = d.rankingMode;
+    document.getElementById('slPctGrp').style.display   = '';
+    document.getElementById('tpPctGrp').style.display   = 'none';
     document.getElementById('holdDaysGrp').style.display = 'none';
-    document.getElementById('rankingMode').value = 'expectancy';
+    if (!d.rankingMode) document.getElementById('rankingMode').value = 'expectancy';
     _lockDirection(false);
+    if (d.direction) setDirection(d.direction);
   } else {
     const entryType = document.getElementById('idEntryType')?.value || 'd2_open';
     const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
@@ -4690,9 +4695,10 @@ function resetStrategyDefaults() {
     document.getElementById('idHoldDays').value      = d.idHoldDays;
     document.getElementById('idMaxOnGap').value      = d.idMaxOnGap;
     document.getElementById('maxSignalsDay').value   = d.maxSignalsDay;
-    if (d.wrThreshold)  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-    if (d.pnlThreshold) document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
-    document.getElementById('rankingMode').value = 'wilson';
+    if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+    if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+    if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value  = d.capitalPerTrade;
+    document.getElementById('rankingMode').value = d.rankingMode || 'wilson';
     setDirection('short');
     _lockDirection(true);
     _lastAppliedEntryType = null;
@@ -4723,6 +4729,10 @@ function mobSetRanking(mode) {
 }
 
 function saveMobDefaults() {
+  // Always save capital separately — shared across both strategies
+  const capital = +document.getElementById('mobCapital')?.value || 1000000;
+  localStorage.setItem('TE_CAPITAL', capital);
+
   if (_mobStrategy === 'overnight') {
     const saved = {
       minGap:        +document.getElementById('mobMinGap').value,
@@ -4735,6 +4745,9 @@ function saveMobDefaults() {
       maxSignalsDay: +document.getElementById('mobMaxDay').value,
       wrThreshold:   +document.getElementById('mobWrInput')?.value  || 40,
       pnlThreshold:  +document.getElementById('mobPnlInput')?.value || 0.5,
+      capitalPerTrade: capital,
+      rankingMode:   document.getElementById('rankingMode')?.value || 'expectancy',
+      direction:     _mobDir || 'both',
     };
     localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
     _showSaveToast('Overnight Gap defaults saved ✓');
@@ -4749,6 +4762,7 @@ function saveMobDefaults() {
       idTpPct:       +document.getElementById('mobIdTpPct')?.value || 2.0,
       wrThreshold:   +document.getElementById('mobWrInput')?.value  || 40,
       pnlThreshold:  +document.getElementById('mobPnlInput')?.value || 0.5,
+      capitalPerTrade: capital,
     };
     const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
     localStorage.setItem(key, JSON.stringify(saved));
@@ -4757,8 +4771,10 @@ function saveMobDefaults() {
 }
 
 function resetMobDefaults() {
+  // Restore capital from dedicated saved key
+  const savedCapital = localStorage.getItem('TE_CAPITAL');
   const mobCapEl = document.getElementById('mobCapital');
-  if (mobCapEl) mobCapEl.value = document.getElementById('capitalPerTrade').value || 1000000;
+  if (mobCapEl) mobCapEl.value = savedCapital ? +savedCapital : (+document.getElementById('capitalPerTrade').value || 1000000);
   const wrEl  = document.getElementById('mobWrInput');
   const pnlEl = document.getElementById('mobPnlInput');
   if (_mobStrategy === 'overnight') {
@@ -8496,7 +8512,7 @@ loadSavedDefaults();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Min Gap %</div><div class="mob-settings-sub">D1 open vs prev close</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobMinGap" type="number" value="0.4" step="0.05" min="0.05"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobMinGap" type="number" value="2" step="0.05" min="0.05"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Max Gap %</div><div class="mob-settings-sub">Filter noise/circuits</div></div>
@@ -8513,7 +8529,7 @@ loadSavedDefaults();
       </div>
       <div class="mob-settings-row" id="mobSlPctRow">
         <div><div class="mob-settings-label">SL %</div><div class="mob-settings-sub">From entry</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobSlPct" type="number" value="4" step="0.1" min="0.1"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobSlPct" type="number" value="3" step="0.1" min="0.1"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">TP</div><div class="mob-settings-sub">Exit at</div></div>
@@ -8575,7 +8591,7 @@ loadSavedDefaults();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">SL %</div><div class="mob-settings-sub">From entry</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdSlPct" type="number" value="3" step="0.1" min="0.1"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdSlPct" type="number" value="3.5" step="0.1" min="0.1"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">TP %</div><div class="mob-settings-sub">From entry</div></div>
@@ -8811,13 +8827,42 @@ function mobSetDir(d) {
 }
 
 function openMobSettings()  {
+  syncMobileDefaults();   // re-apply saved values every time panel opens
   document.getElementById('mobSettingsPanel').classList.add('open');
   document.getElementById('mobSettingsBackdrop').classList.add('open');
-  // Pre-fill capital from desktop + refresh IDB status
-  const mobCapEl = document.getElementById('mobCapital');
-  if (mobCapEl) mobCapEl.value = document.getElementById('capitalPerTrade').value || 1000000;
 }
 function closeMobSettings() {
+  // Sync all mobile settings → desktop inputs so backtest/scanner uses updated values
+  if (_mobStrategy === 'overnight') {
+    const g = (id) => document.getElementById(id)?.value;
+    const s = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    s('minGap',         g('mobMinGap'));
+    s('maxGap',         g('mobMaxGap'));
+    s('slType',         g('mobSlType'));
+    s('slPct',          g('mobSlPct'));
+    s('tpType',         g('mobTpType'));
+    s('tpPct',          g('mobTpPctVal'));
+    s('holdDays',       g('mobHoldDays'));
+    s('maxSignalsDay',  g('mobMaxDay'));
+    s('capitalPerTrade',g('mobCapital'));
+    s('scanWrThreshold', g('mobWrInput'));
+    s('scanPnlThreshold',g('mobPnlInput'));
+  } else {
+    const g = (id) => document.getElementById(id)?.value;
+    const s = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    s('idMinMove',      g('mobIdMinMove'));
+    s('idMaxMove',      g('mobIdMaxMove'));
+    s('idSkipPct',      g('mobIdSkipPct'));
+    s('idSlPct',        g('mobIdSlPct'));
+    s('idTpPct',        g('mobIdTpPct'));
+    s('idHoldDays',     g('mobIdHoldDays'));
+    s('idMaxOnGap',     g('mobIdMaxOnGap'));
+    s('idEntryType',    g('mobIdEntryType'));
+    s('maxSignalsDay',  g('mobIdMaxDay'));
+    s('capitalPerTrade',g('mobCapital'));
+    s('scanWrThreshold', g('mobWrInput'));
+    s('scanPnlThreshold',g('mobPnlInput'));
+  }
   document.getElementById('mobSettingsPanel').classList.remove('open');
   document.getElementById('mobSettingsBackdrop').classList.remove('open');
 }
@@ -10363,7 +10408,53 @@ function _mobRefreshTradesTab() {
 })();
 
 // Init on load
-window.addEventListener('DOMContentLoaded', () => { if (isMobile()) initMobileShell(); });
+// ── Sync saved defaults to mobile UI (called after initMobileShell) ───────────
+function syncMobileDefaults() {
+  const el = (id) => document.getElementById(id);
+
+  // Always restore capital from dedicated key
+  const savedCapital = localStorage.getItem('TE_CAPITAL');
+  const capital = savedCapital ? +savedCapital : 1000000;
+  if (el('mobCapital')) el('mobCapital').value = capital;
+
+  // Overnight Gap
+  const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
+  if (onRaw) {
+    try {
+      const d = { ...OVERNIGHT_DEFAULTS, ...JSON.parse(onRaw) };
+      if (el('mobMinGap'))    el('mobMinGap').value    = d.minGap;
+      if (el('mobMaxGap'))    el('mobMaxGap').value    = d.maxGap;
+      if (el('mobSlType'))    el('mobSlType').value    = d.slType;
+      if (el('mobSlPct'))     el('mobSlPct').value     = d.slPct;
+      if (el('mobTpType'))    el('mobTpType').value    = d.tpType;
+      if (el('mobTpPctVal'))  el('mobTpPctVal').value  = d.tpPct;
+      if (el('mobHoldDays'))  el('mobHoldDays').value  = d.holdDays;
+      if (el('mobMaxDay'))    el('mobMaxDay').value     = d.maxSignalsDay;
+      if (el('mobWrInput'))   el('mobWrInput').value    = d.wrThreshold  || 40;
+      if (el('mobPnlInput'))  el('mobPnlInput').value   = d.pnlThreshold || 0.5;
+    } catch(e) { console.warn('[syncMobileDefaults] overnight error', e); }
+  }
+
+  // Intraday
+  const entryType = el('mobIdEntryType')?.value || 'd2_open';
+  const idKey     = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
+  const idRaw     = localStorage.getItem(idKey);
+  if (idRaw) {
+    try {
+      const base = entryType === 'd1_close' ? INTRADAY_DEFAULTS_D1_CLOSE : INTRADAY_DEFAULTS_D2_OPEN;
+      const d    = { ...base, ...JSON.parse(idRaw) };
+      if (el('mobIdSlPct'))   el('mobIdSlPct').value   = d.idSlPct;
+      if (el('mobIdTpPct'))   el('mobIdTpPct').value   = d.idTpPct;
+      if (el('mobIdMaxMove')) el('mobIdMaxMove').value  = d.idMaxMove;
+      if (el('mobIdMaxOnGap'))el('mobIdMaxOnGap').value = d.idMaxOnGap;
+      if (el('mobIdMaxDay'))  el('mobIdMaxDay').value   = d.maxSignalsDay;
+      if (el('mobWrInput'))   el('mobWrInput').value    = d.wrThreshold  || 40;
+      if (el('mobPnlInput'))  el('mobPnlInput').value   = d.pnlThreshold || 0.5;
+    } catch(e) { console.warn('[syncMobileDefaults] intraday error', e); }
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => { if (isMobile()) { initMobileShell(); syncMobileDefaults(); } });
 </script>
 
 
