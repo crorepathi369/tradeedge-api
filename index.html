@@ -2624,6 +2624,7 @@
         <span id="btnLabel">▶ Run Backtest</span>
       </button>
       <button class="btn btn-secondary" onclick="clearResults()">✕ Clear</button>
+      <button class="btn btn-secondary" onclick="saveStrategyDefaults()" title="Save current parameters as your defaults">💾 Save</button>
       <button class="btn btn-secondary" onclick="resetStrategyDefaults()" title="Reset current strategy parameters to defaults">↺ Defaults</button>
     </div>
 
@@ -4536,12 +4537,129 @@ function readCurrentParams() {
   return _strategy === 'intraday' ? readIntradayParams() : readOvernightParams();
 }
 
+// ── Load saved defaults on startup ────────────────────────────────────────────
+function loadSavedDefaults() {
+  // Overnight Gap — apply saved if exists
+  const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
+  if (onRaw) {
+    try {
+      const d = { ...OVERNIGHT_DEFAULTS, ...JSON.parse(onRaw) };
+      document.getElementById('minGap').value  = d.minGap;
+      document.getElementById('maxGap').value  = d.maxGap;
+      document.getElementById('slType').value  = d.slType;
+      document.getElementById('slPct').value   = d.slPct;
+      document.getElementById('tpType').value  = d.tpType;
+      document.getElementById('tpPct').value   = d.tpPct;
+      document.getElementById('holdDays').value       = d.holdDays;
+      document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
+      if (d.wrThreshold)  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+      if (d.pnlThreshold) document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+    } catch(e) { console.warn('[loadSavedDefaults] overnight parse error', e); }
+  }
+
+  // Intraday — apply saved based on current entry type
+  const entryType = document.getElementById('idEntryType')?.value || 'd2_open';
+  const idKey     = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
+  const idRaw     = localStorage.getItem(idKey);
+  if (idRaw) {
+    try {
+      const base = entryType === 'd1_close' ? INTRADAY_DEFAULTS_D1_CLOSE : INTRADAY_DEFAULTS_D2_OPEN;
+      const d    = { ...base, ...JSON.parse(idRaw) };
+      document.getElementById('idMinMove').value      = d.idMinMove;
+      document.getElementById('idMaxMove').value      = d.idMaxMove;
+      document.getElementById('idSkipPct').value      = d.idSkipPct;
+      document.getElementById('idSlPct').value        = d.idSlPct;
+      document.getElementById('idTpPct').value        = d.idTpPct;
+      document.getElementById('idHoldDays').value     = d.idHoldDays;
+      document.getElementById('idMaxOnGap').value     = d.idMaxOnGap;
+      document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
+      if (d.wrThreshold)  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+      if (d.pnlThreshold) document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+    } catch(e) { console.warn('[loadSavedDefaults] intraday parse error', e); }
+  }
+
+  // Mobile — sync from desktop values just loaded
+  const mobMinGap = document.getElementById('mobMinGap');
+  if (mobMinGap) {
+    mobMinGap.value = document.getElementById('minGap').value;
+    const mobMaxGap = document.getElementById('mobMaxGap');
+    if (mobMaxGap) mobMaxGap.value = document.getElementById('maxGap').value;
+    const mobSlPct  = document.getElementById('mobSlPct');
+    if (mobSlPct)  mobSlPct.value  = document.getElementById('slPct').value;
+    const mobSlType = document.getElementById('mobSlType');
+    if (mobSlType) mobSlType.value = document.getElementById('slType').value;
+    const mobTpType = document.getElementById('mobTpType');
+    if (mobTpType) mobTpType.value = document.getElementById('tpType').value;
+  }
+  const mobIdSlPct = document.getElementById('mobIdSlPct');
+  if (mobIdSlPct) mobIdSlPct.value = document.getElementById('idSlPct').value;
+  const mobIdTpPct = document.getElementById('mobIdTpPct');
+  if (mobIdTpPct) mobIdTpPct.value = document.getElementById('idTpPct').value;
+}
+
+// ── Save current params as user defaults ──────────────────────────────────────
+function saveStrategyDefaults() {
+  if (_strategy === 'overnight') {
+    const saved = {
+      minGap:         +document.getElementById('minGap').value,
+      maxGap:         +document.getElementById('maxGap').value,
+      slType:          document.getElementById('slType').value,
+      slPct:          +document.getElementById('slPct').value,
+      tpType:          document.getElementById('tpType').value,
+      tpPct:          +document.getElementById('tpPct').value,
+      holdDays:       +document.getElementById('holdDays').value,
+      maxSignalsDay:  +document.getElementById('maxSignalsDay').value,
+      wrThreshold:    +document.getElementById('scanWrThreshold').value,
+      pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
+    };
+    localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
+    _showSaveToast('Overnight Gap defaults saved ✓');
+  } else if (_strategy === 'intraday') {
+    const entryType = document.getElementById('idEntryType').value;
+    const saved = {
+      idMinMove:      +document.getElementById('idMinMove').value,
+      idMaxMove:      +document.getElementById('idMaxMove').value,
+      idSkipPct:      +document.getElementById('idSkipPct').value,
+      idSlPct:        +document.getElementById('idSlPct').value,
+      idTpPct:        +document.getElementById('idTpPct').value,
+      idHoldDays:     +document.getElementById('idHoldDays').value,
+      idMaxOnGap:     +document.getElementById('idMaxOnGap').value,
+      maxSignalsDay:  +document.getElementById('maxSignalsDay').value,
+      idEntryType:    entryType,
+      wrThreshold:    +document.getElementById('scanWrThreshold').value,
+      pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
+    };
+    const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
+    localStorage.setItem(key, JSON.stringify(saved));
+    _showSaveToast('Intraday Momentum defaults saved ✓');
+  }
+}
+
+function _showSaveToast(msg) {
+  let toast = document.getElementById('teSaveToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'teSaveToast';
+    toast.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+      background:var(--text);color:var(--surface);font-family:'DM Mono',monospace;font-size:12px;
+      padding:10px 20px;border-radius:8px;z-index:9999;opacity:0;transition:opacity 0.2s;
+      white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.25);`;
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+}
+
 function resetStrategyDefaults() {
-  // Reset signal filters to defaults
+  // Reset signal filters — use saved value if available, else hardcoded default
   document.getElementById('scanWrThreshold').value  = 40;
   document.getElementById('scanPnlThreshold').value = 0.3;
   if (_strategy === 'overnight') {
-    const d = OVERNIGHT_DEFAULTS;
+    // Load saved defaults if available, otherwise fall back to hardcoded
+    const savedRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
+    const d = savedRaw ? { ...OVERNIGHT_DEFAULTS, ...JSON.parse(savedRaw) } : OVERNIGHT_DEFAULTS;
     document.getElementById('minGap').value  = d.minGap;
     document.getElementById('maxGap').value  = d.maxGap;
     document.getElementById('slType').value  = d.slType;
@@ -4550,19 +4668,34 @@ function resetStrategyDefaults() {
     document.getElementById('tpPct').value   = d.tpPct;
     document.getElementById('holdDays').value = d.holdDays;
     document.getElementById('maxSignalsDay').value = d.maxSignalsDay;
+    if (d.wrThreshold)  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+    if (d.pnlThreshold) document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
     document.getElementById('slPctGrp').style.display = '';
     document.getElementById('tpPctGrp').style.display = 'none';
     document.getElementById('holdDaysGrp').style.display = 'none';
     document.getElementById('rankingMode').value = 'expectancy';
     _lockDirection(false);
   } else {
-    const d = INTRADAY_DEFAULTS_D2_OPEN; // Defaults button always resets to D2 Open
-    document.getElementById('idEntryType').value = d.idEntryType;
-    document.getElementById('maxSignalsDay').value = d.maxSignalsDay;
+    const entryType = document.getElementById('idEntryType')?.value || 'd2_open';
+    const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
+    const savedRaw = localStorage.getItem(key);
+    const base = entryType === 'd1_close' ? INTRADAY_DEFAULTS_D1_CLOSE : INTRADAY_DEFAULTS_D2_OPEN;
+    const d = savedRaw ? { ...base, ...JSON.parse(savedRaw) } : base;
+    document.getElementById('idEntryType').value     = d.idEntryType;
+    document.getElementById('idMinMove').value       = d.idMinMove;
+    document.getElementById('idMaxMove').value       = d.idMaxMove;
+    document.getElementById('idSkipPct').value       = d.idSkipPct;
+    document.getElementById('idSlPct').value         = d.idSlPct;
+    document.getElementById('idTpPct').value         = d.idTpPct;
+    document.getElementById('idHoldDays').value      = d.idHoldDays;
+    document.getElementById('idMaxOnGap').value      = d.idMaxOnGap;
+    document.getElementById('maxSignalsDay').value   = d.maxSignalsDay;
+    if (d.wrThreshold)  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+    if (d.pnlThreshold) document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
     document.getElementById('rankingMode').value = 'wilson';
     setDirection('short');
     _lockDirection(true);
-    _lastAppliedEntryType = null;  // force re-apply in updateIntradayStratDesc
+    _lastAppliedEntryType = null;
     updateIntradayStratDesc();
   }
 }
@@ -4589,16 +4722,48 @@ function mobSetRanking(mode) {
   }
 }
 
+function saveMobDefaults() {
+  if (_mobStrategy === 'overnight') {
+    const saved = {
+      minGap:        +document.getElementById('mobMinGap').value,
+      maxGap:        +document.getElementById('mobMaxGap').value,
+      slType:         document.getElementById('mobSlType').value,
+      slPct:         +document.getElementById('mobSlPct').value,
+      tpType:         document.getElementById('mobTpType').value,
+      tpPct:         +document.getElementById('mobTpPctVal').value,
+      holdDays:      +document.getElementById('mobHoldDays').value,
+      maxSignalsDay: +document.getElementById('mobMaxDay').value,
+      wrThreshold:   +document.getElementById('mobWrInput')?.value  || 40,
+      pnlThreshold:  +document.getElementById('mobPnlInput')?.value || 0.5,
+    };
+    localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
+    _showSaveToast('Overnight Gap defaults saved ✓');
+  } else {
+    const entryType = document.getElementById('mobIdEntryType')?.value || 'd2_open';
+    const saved = {
+      idMaxMove:     +document.getElementById('mobIdMaxMove').value,
+      idMaxOnGap:    +document.getElementById('mobIdMaxOnGap').value,
+      maxSignalsDay: +document.getElementById('mobIdMaxDay').value,
+      idEntryType:    entryType,
+      idSlPct:       +document.getElementById('mobIdSlPct')?.value || 3.5,
+      idTpPct:       +document.getElementById('mobIdTpPct')?.value || 2.0,
+      wrThreshold:   +document.getElementById('mobWrInput')?.value  || 40,
+      pnlThreshold:  +document.getElementById('mobPnlInput')?.value || 0.5,
+    };
+    const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
+    localStorage.setItem(key, JSON.stringify(saved));
+    _showSaveToast('Intraday Momentum defaults saved ✓');
+  }
+}
+
 function resetMobDefaults() {
   const mobCapEl = document.getElementById('mobCapital');
   if (mobCapEl) mobCapEl.value = document.getElementById('capitalPerTrade').value || 1000000;
-  // Reset signal filters to defaults
   const wrEl  = document.getElementById('mobWrInput');
   const pnlEl = document.getElementById('mobPnlInput');
-  if (wrEl)  wrEl.value  = 40;
-  if (pnlEl) pnlEl.value = 0.5;
   if (_mobStrategy === 'overnight') {
-    const d = OVERNIGHT_DEFAULTS;
+    const savedRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
+    const d = savedRaw ? { ...OVERNIGHT_DEFAULTS, ...JSON.parse(savedRaw) } : OVERNIGHT_DEFAULTS;
     document.getElementById('mobMinGap').value    = d.minGap;
     document.getElementById('mobMaxGap').value    = d.maxGap;
     document.getElementById('mobSlType').value    = d.slType;
@@ -4607,16 +4772,26 @@ function resetMobDefaults() {
     document.getElementById('mobTpPctVal').value  = d.tpPct;
     document.getElementById('mobHoldDays').value  = d.holdDays;
     document.getElementById('mobMaxDay').value    = d.maxSignalsDay;
+    if (wrEl)  wrEl.value  = d.wrThreshold  || 40;
+    if (pnlEl) pnlEl.value = d.pnlThreshold || 0.5;
     document.getElementById('mobSlPctRow').style.display    = '';
     document.getElementById('mobTpPctRow').style.display    = 'none';
     document.getElementById('mobHoldDaysRow').style.display = 'none';
   } else {
-    const d = INTRADAY_DEFAULTS_D2_OPEN; // Defaults button always resets to D2 Open
-    document.getElementById('mobIdMaxMove').value   = d.idMaxMove;
-    document.getElementById('mobIdMaxOnGap').value  = d.idMaxOnGap;
-    document.getElementById('mobIdMaxDay').value    = d.maxSignalsDay;
+    const entryType = document.getElementById('mobIdEntryType')?.value || 'd2_open';
+    const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
+    const savedRaw = localStorage.getItem(key);
+    const base = entryType === 'd1_close' ? INTRADAY_DEFAULTS_D1_CLOSE : INTRADAY_DEFAULTS_D2_OPEN;
+    const d = savedRaw ? { ...base, ...JSON.parse(savedRaw) } : base;
+    document.getElementById('mobIdMaxMove').value   = d.idMaxMove   || base.idMaxMove;
+    document.getElementById('mobIdMaxOnGap').value  = d.idMaxOnGap  || base.idMaxOnGap;
+    document.getElementById('mobIdMaxDay').value    = d.maxSignalsDay || base.maxSignalsDay;
     document.getElementById('mobIdEntryType').value = d.idEntryType;
-    _lastAppliedEntryType = null;  // force re-apply
+    if (document.getElementById('mobIdSlPct')) document.getElementById('mobIdSlPct').value = d.idSlPct || base.idSlPct;
+    if (document.getElementById('mobIdTpPct')) document.getElementById('mobIdTpPct').value = d.idTpPct || base.idTpPct;
+    if (wrEl)  wrEl.value  = d.wrThreshold  || 40;
+    if (pnlEl) pnlEl.value = d.pnlThreshold || 0.5;
+    _lastAppliedEntryType = null;
     updateIntradayStratDesc();
   }
 }
@@ -8072,8 +8247,8 @@ window.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSymDrill(); });
 
 updateDataStatusBar();
+loadSavedDefaults();
 </script>
-<!-- SYMBOL DRILL-DOWN MODAL -->
 <div id="symDrillModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);overflow-y:auto;padding:16px 12px;">
   <div style="max-width:900px;margin:0 auto;background:var(--surface);border-radius:16px;box-shadow:0 8px 48px rgba(0,0,0,0.2);overflow:hidden;">
 
@@ -8496,6 +8671,11 @@ updateDataStatusBar();
 
 
     <div style="display:flex;gap:10px;margin-top:20px;">
+      <button onclick="saveMobDefaults()" style="flex:1;padding:14px;background:var(--text);
+        color:var(--surface);border:1px solid var(--text);border-radius:10px;
+        font-family:'Syne',sans-serif;font-weight:600;font-size:13px;cursor:pointer;">
+        💾 Save
+      </button>
       <button onclick="resetMobDefaults()" style="flex:1;padding:14px;background:var(--surface2);
         color:var(--text2);border:1px solid var(--border);border-radius:10px;
         font-family:'Syne',sans-serif;font-weight:600;font-size:13px;cursor:pointer;">
