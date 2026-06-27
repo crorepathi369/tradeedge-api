@@ -888,6 +888,195 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 
+# ── /breeze/ohlc endpoint ─────────────────────────────────────────────────────
+#
+# GET /breeze/ohlc?stock_code=RELIANCE&exchange_code=NSE&from=2026-01-01&to=2026-06-27&token=XXXXXXXX
+#
+# Fetches real-time/historical daily OHLC from ICICI Breeze API.
+# API key + secret are stored as Render env vars (never in code).
+# Session token is supplied per-request by the browser (expires daily).
+# adjClose is back-adjusted for corporate actions (splits/bonuses) using
+# the same >30% threshold logic as breeze_fetch.py — prevents phantom gap signals.
+
+try:
+    from breeze_connect import BreezeConnect
+    _BREEZE_AVAILABLE = True
+except ImportError:
+    _BREEZE_AVAILABLE = False
+
+BREEZE_API_KEY    = os.environ.get("BREEZE_API_KEY", "")
+BREEZE_API_SECRET = os.environ.get("BREEZE_API_SECRET", "")
+
+_CORP_ACTION_THRESHOLD = 0.30   # >30% day-over-day move = corporate action, not market
+
+
+def _compute_adj_close(closes: list) -> list:
+    """
+    Back-adjust a raw close series for corporate actions (splits / bonus issues).
+
+    Walks newest → oldest. When a day-over-day ratio exceeds ±30%
+    (above NSE's ±20% circuit limit, so only corporate actions trigger it),
+    applies a cumulative multiplier to all earlier candles — matching the
+    Yahoo Finance adjClose convention so gap signals are identical from both
+    data sources.
+    """
+    if not closes:
+        return []
+    adj        = closes[:]
+    cumulative = 1.0
+    for i in range(len(closes) - 1, 0, -1):
+        if closes[i] == 0:
+            continue
+        ratio = closes[i - 1] / closes[i]          # older / newer
+        if abs(ratio - 1.0) > _CORP_ACTION_THRESHOLD:
+            cumulative *= ratio
+        adj[i - 1] = closes[i - 1] / cumulative if cumulative else closes[i - 1]
+    return adj
+
+
+@app.route("/breeze/ohlc", methods=["GET", "OPTIONS"])
+def breeze_ohlc():
+    """
+    Fetch historical daily OHLC from Breeze API and return JSON.
+
+    Query params:
+        stock_code    — Breeze stock code  (e.g. RELIANCE, NIFTY, CNXBAN)
+        exchange_code — NSE or NFO          (default: NSE)
+        from          — YYYY-MM-DD
+        to            — YYYY-MM-DD
+        token         — Breeze session token (apisession value from login URL)
+
+    Response (success):
+        {"data": [{date, open, high, low, close, adjClose}, ...],
+         "source": "breeze", "symbol": "...", "exchange": "...", "candles": N}
+
+    Error responses:
+        {"error": "token_expired"}                    — 401
+        {"error": "missing_params",   "msg": "..."}   — 400
+        {"error": "server_config",    "msg": "..."}   — 500
+        {"error": "breeze_error",     "msg": "..."}   — 502
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    if not _BREEZE_AVAILABLE:
+        return cors_response({"error": "server_config",
+                              "msg": "breeze-connect not installed"}, 500)
+
+    stock_code    = request.args.get("stock_code",    "").strip()
+    exchange_code = request.args.get("exchange_code", "NSE").strip().upper()
+    from_date     = request.args.get("from",          "").strip()
+    to_date       = request.args.get("to",            "").strip()
+    session_token = request.args.get("token",         "").strip()
+
+    # ── Validate ──────────────────────────────────────────────────────────────
+    if not all([stock_code, from_date, to_date, session_token]):
+        return cors_response({"error": "missing_params",
+                              "msg": "stock_code, from, to, token are all required"}, 400)
+
+    if not BREEZE_API_KEY or not BREEZE_API_SECRET:
+        return cors_response({"error": "server_config",
+                              "msg": "BREEZE_API_KEY / BREEZE_API_SECRET not set on server"}, 500)
+
+    # ── Connect + generate session ────────────────────────────────────────────
+    try:
+        breeze = BreezeConnect(api_key=BREEZE_API_KEY)
+        breeze.generate_session(
+            api_secret=BREEZE_API_SECRET,
+            session_token=session_token,
+        )
+    except Exception as e:
+        err = str(e).lower()
+        if any(k in err for k in ("invalid", "unauthori", "session", "expired", "token")):
+            return cors_response({"error": "token_expired"}, 401)
+        return cors_response({"error": "breeze_connect_failed", "msg": str(e)}, 502)
+
+    # ── Fetch historical data ─────────────────────────────────────────────────
+    from_dt      = from_date + "T07:00:00.000Z"
+    to_dt        = to_date   + "T07:00:00.000Z"
+    product_type = "futures" if exchange_code == "NFO" else "cash"
+
+    try:
+        resp = breeze.get_historical_data_v2(
+            interval="1day",
+            from_date=from_dt,
+            to_date=to_dt,
+            stock_code=stock_code,
+            exchange_code=exchange_code,
+            product_type=product_type,
+        )
+    except Exception as e:
+        err = str(e).lower()
+        if any(k in err for k in ("invalid", "unauthori", "session", "expired", "token")):
+            return cors_response({"error": "token_expired"}, 401)
+        return cors_response({"error": "breeze_error", "msg": str(e)}, 502)
+
+    # ── Parse response ────────────────────────────────────────────────────────
+    # Breeze returns: {"Success": [...], "Status": 200, "Error": None}
+    if not resp or resp.get("Status") != 200:
+        err_msg = (resp or {}).get("Error", "Empty response")
+        if err_msg and any(k in str(err_msg).lower() for k in ("invalid", "session", "token")):
+            return cors_response({"error": "token_expired"}, 401)
+        return cors_response({"error": "breeze_error", "msg": str(err_msg)}, 502)
+
+    rows = resp.get("Success") or []
+    if not rows:
+        return cors_response({"data": [], "source": "breeze",
+                              "symbol": stock_code, "exchange": exchange_code, "candles": 0})
+
+    # ── Normalise to TradeEdge OHLC format ────────────────────────────────────
+    data = []
+    for row in rows:
+        try:
+            raw_dt   = row.get("datetime") or row.get("date") or ""
+            date_str = str(raw_dt)[:10]        # YYYY-MM-DD only
+            if not date_str or date_str == "None":
+                continue
+            open_  = float(row.get("open")  or 0)
+            high   = float(row.get("high")  or 0)
+            low    = float(row.get("low")   or 0)
+            close  = float(row.get("close") or 0)
+            if not (open_ and high and low and close):
+                continue
+            data.append({
+                "date":     date_str,
+                "open":     round(open_, 4),
+                "high":     round(high,  4),
+                "low":      round(low,   4),
+                "close":    round(close, 4),
+                "adjClose": round(close, 4),   # overwritten below after back-adjustment
+            })
+        except (ValueError, TypeError):
+            continue
+
+    if not data:
+        return cors_response({"data": [], "source": "breeze",
+                              "symbol": stock_code, "exchange": exchange_code, "candles": 0})
+
+    # Sort ascending (Breeze may return newest-first)
+    data.sort(key=lambda r: r["date"])
+
+    # ── Back-adjust for corporate actions ─────────────────────────────────────
+    # Breeze delivers raw unadjusted closes. A 1:1 bonus issue creates a −50%
+    # phantom gap on ex-date which triggers a false Short signal. We detect
+    # moves > ±30% and apply a multiplicative back-adjustment identical to
+    # Yahoo Finance adjClose — so both data sources produce the same signals.
+    raw_closes = [r["close"] for r in data]
+    adj_closes = _compute_adj_close(raw_closes)
+    for i, row in enumerate(data):
+        row["adjClose"] = round(adj_closes[i], 4)
+
+    print(f"[breeze/ohlc] {stock_code}/{exchange_code} → {len(data)} candles "
+          f"({data[0]['date']} → {data[-1]['date']})")
+
+    return cors_response({
+        "data":     data,
+        "source":   "breeze",
+        "symbol":   stock_code,
+        "exchange": exchange_code,
+        "candles":  len(data),
+    })
+
 # ── /futures endpoint ─────────────────────────────────────────────────────────
 #
 # GET /futures?symbols=LTIM,INFY,TCS
