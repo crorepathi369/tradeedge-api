@@ -3472,6 +3472,22 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('breezeModal').addEventListener('click', function(e) {
     if (e.target === this) closeBreezeModal();
   });
+
+  // On every page load: if token is missing or older than 20h, force Yahoo.
+  // This prevents Breeze mode persisting across days with a stale token.
+  const ts    = localStorage.getItem(BREEZE_TOKEN_TS);
+  const token = _getBreezeToken();
+  const ageMs = ts ? Date.now() - parseInt(ts, 10) : Infinity;
+  if (!token || ageMs > 20 * 60 * 60 * 1000) {
+    if (token) {
+      // Token exists but is stale — clear it silently
+      localStorage.removeItem(BREEZE_TOKEN_KEY);
+      localStorage.removeItem(BREEZE_TOKEN_TS);
+    }
+    // Ensure UI is locked to Yahoo on load
+    _dataSource = 'yahoo';
+  }
+
   _updateBreezeButtonState();
 });
 
@@ -3525,17 +3541,20 @@ const BREEZE_SYMBOL_MAP = {
   'CNXFMCG':    { stock_code: 'CNXFMCG', exchange_code: 'NSE' },
   'CNXINFRA':   { stock_code: 'CNXINFR', exchange_code: 'NSE' },
   'CNXCONSUM':  { stock_code: 'CNXCONS', exchange_code: 'NSE' },
-  // ── Equities with non-standard Breeze short names ─────────────────────────
-  'RELIANCE':    { stock_code: 'RELIND',   exchange_code: 'NSE' },
-  'BAJAJ-AUTO':  { stock_code: 'BAJAUT',   exchange_code: 'NSE' },
-  'BIRLASOFT':   { stock_code: 'BSOFT',    exchange_code: 'NSE' },
-  'DEEPAKNITR':  { stock_code: 'DEEPAKNTR',exchange_code: 'NSE' },
+  // ── Equities: non-standard Breeze ShortName (verified via scriptmaster.csv) ─
+  'RELIANCE':   { stock_code: 'RELIND',    exchange_code: 'NSE' },
+  'BAJAJ-AUTO': { stock_code: 'BAJAUT',    exchange_code: 'NSE' },
   'ICICIPRULIFE':{ stock_code: 'ICICIPRULI',exchange_code: 'NSE' },
-  'MCDOWELL-N':  { stock_code: 'UNITDSPR', exchange_code: 'NSE' },
-  'TATAMOTORS':  { stock_code: 'TATAMO',   exchange_code: 'NSE' },
-  'ZOMATO':      { stock_code: 'ETERNAL',  exchange_code: 'NSE' },
-  'M&M':         { stock_code: 'MAHIND',   exchange_code: 'NSE' },
-  'M&MFIN':      { stock_code: 'MAHFIN',   exchange_code: 'NSE' },
+  'ZOMATO':     { stock_code: 'ETERNAL',   exchange_code: 'NSE' },
+  'M&M':        { stock_code: 'MAHIND',    exchange_code: 'NSE' },
+  // ── Equities: different exchange_code ─────────────────────────────────────
+  'BSE':        { stock_code: 'BSE',       exchange_code: 'BSE' }, // BSE Ltd listed on BSE
+  // ── Equities: NSE symbol has dash — Breeze ShortName has no dash ──────────
+  'NAM-INDIA':  { stock_code: 'NAMINDIA',  exchange_code: 'NSE' },
+  // ── All others below use stock_code = NSE symbol, exchange_code = NSE ─────
+  // Verified via scriptmaster.csv — ShortName matches ExchangeCode exactly:
+  // TMPV, JIOFIN, SWIGGY, HYUNDAI, ADANIENSOL, PREMIERENE, SAMMAANCAP,
+  // VMM, PGEL, INOXWIND, NUVAMA, KAYNES, KFINTECH → default mapping works ✅
 };
 
 function _breezeSymbol(symId) {
@@ -3554,8 +3573,15 @@ async function _fetchOHLCBreeze(symId, from, to, token) {
     + `&token=${encodeURIComponent(token)}`;
   const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000));
   const res = await Promise.race([fetch(url), timeout]);
+
+  // 401 = bad/expired token — tag it so callers can fast-fail
+  if (res.status === 401) {
+    throw Object.assign(new Error('token_expired'), { tokenExpired: true });
+  }
   if (!res.ok) throw new Error('HTTP ' + res.status);
+
   const json = await res.json();
+  // Also handle token_expired in JSON body (belt-and-suspenders)
   if (json.error === 'token_expired') {
     throw Object.assign(new Error('token_expired'), { tokenExpired: true });
   }
@@ -3866,63 +3892,156 @@ function getCompareSummary() {
 
 // ── _prefetchBreezeData ───────────────────────────────────────────────────────
 // Before a backtest/scanner run in breeze or compare mode:
-//  - breeze mode:  replaces _loadedOHLC[sym] with Breeze data for the date range
-//  - compare mode: keeps _loadedOHLC[sym] as Yahoo (primary), but fetches Breeze
-//                  in parallel and stores comparison in _compareResults
-// Shows a progress banner while fetching.
+//  - breeze mode:  overlays _loadedOHLC with fresh Breeze candles
+//  - compare mode: keeps _loadedOHLC as Yahoo (primary), stores Breeze diff
+//
+// DATE RANGE STRATEGY:
+//  - backtest / silent-backtest:
+//      History already loaded from CSV (Yahoo-sourced, in _loadedOHLC).
+//      Only fetch the last BREEZE_TAIL_DAYS from Breeze to refresh the tail.
+//      This is what matters — the most recent candles for live signal accuracy.
+//  - scanner / mobile-scanner:
+//      Use the window passed in by the caller (already a short 30-day window).
+//      The scan date candle is the critical one — Breeze gives real-time open.
+//
+// FAST-FAIL: probes a single symbol first — aborts immediately on bad token.
+const BREEZE_TAIL_DAYS = 5; // days to fetch from Breeze for backtest overlay
+
 async function _prefetchBreezeData(syms, from, to, context) {
   const token = _getBreezeToken();
-  if (!token) return; // no token — skip silently
+
+  // No token — silently reset to Yahoo and bail (no API calls)
+  if (!token) {
+    if (_dataSource !== 'yahoo') setDataSource('yahoo');
+    return;
+  }
+
+  // Token older than 20h — treat as expired immediately, no API calls at all
+  const ts    = localStorage.getItem(BREEZE_TOKEN_TS);
+  const ageMs = ts ? Date.now() - parseInt(ts, 10) : Infinity;
+  if (ageMs > 20 * 60 * 60 * 1000) {
+    localStorage.removeItem(BREEZE_TOKEN_KEY);
+    localStorage.removeItem(BREEZE_TOKEN_TS);
+    _updateBreezeButtonState();
+    setDataSource('yahoo');
+    showToast('🔴 Breeze token expired — tap 🔑 to refresh', 4000);
+    return;
+  }
 
   const isBreezeMode  = _dataSource === 'breeze';
   const isCompareMode = _dataSource === 'compare';
   if (!isBreezeMode && !isCompareMode) return;
 
-  // Show a status banner
-  const banner = _showBreezeBanner(`⚡ Fetching Breeze data for ${syms.length} symbols…`);
+  // ── Determine actual fetch window ─────────────────────────────────────────
+  const isBacktestContext = context === 'backtest' || context === 'silent-backtest';
 
-  // Save originals for compare mode
+  let fetchFrom, fetchTo;
+  if (isBacktestContext) {
+    // Only refresh the tail — CSV history covers everything older
+    fetchTo   = to;
+    const d   = new Date(to + 'T00:00:00');
+    // Go back BREEZE_TAIL_DAYS calendar days (covers weekends too)
+    d.setDate(d.getDate() - Math.ceil(BREEZE_TAIL_DAYS * 1.5));
+    fetchFrom = d.toISOString().slice(0, 10);
+  } else {
+    // Scanner: use the window the caller already computed (short, ~30 days)
+    fetchFrom = from;
+    fetchTo   = to;
+  }
+
+  const modeLabel  = isBreezeMode ? 'Breeze' : 'Compare';
+  const rangeLabel = isBacktestContext
+    ? `last ${BREEZE_TAIL_DAYS}d tail`
+    : `${fetchFrom} → ${fetchTo}`;
+
+  const banner = _showBreezeBanner(`⚡ Breeze: validating token…`);
+
+  // ── Token probe — test with one reliable symbol before full fetch ──────────
+  const probeSyms = ['RELIANCE', 'INFY', 'TCS', 'HDFCBANK'];
+  const probeSym  = probeSyms.find(s => syms.includes(s)) || syms[0];
+  const probeFrom = (() => {
+    const d = new Date(fetchTo + 'T00:00:00'); d.setDate(d.getDate() - 5);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  try {
+    banner.textContent = `⚡ Breeze: validating token via ${probeSym}…`;
+    await _fetchOHLCBreeze(probeSym, probeFrom, fetchTo, token);
+    // ✅ Token valid — proceed
+  } catch (e) {
+    if (e.tokenExpired) {
+      banner.style.background = 'var(--bear)';
+      banner.textContent = '🔴 Breeze token invalid — reverting to Yahoo Finance';
+      _breezeTokenExpiredWarned = true;
+      localStorage.removeItem(BREEZE_TOKEN_KEY);
+      _updateBreezeButtonState();
+      setDataSource('yahoo');
+      setTimeout(() => banner.remove(), 4000);
+      return;
+    }
+    // Non-auth error (timeout, network) — warn but continue
+    console.warn('[Breeze] Probe failed with non-auth error:', e.message, '— continuing');
+  }
+
+  // ── Full fetch loop ───────────────────────────────────────────────────────
   const yfOriginals = {};
   if (isCompareMode) {
     syms.forEach(s => { if (_loadedOHLC[s]) yfOriginals[s] = _loadedOHLC[s]; });
   }
 
-  const BATCH = 8; // parallel Breeze calls per batch
-  let fetched = 0, failed = 0;
+  const BATCH = 8;
+  let fetched = 0, failed = 0, tokenFailed = false;
+
   for (let i = 0; i < syms.length; i += BATCH) {
+    if (tokenFailed) break;
+
     const batch = syms.slice(i, i + BATCH);
-    banner.textContent = `⚡ Breeze: ${i}/${syms.length} symbols…`;
+    banner.textContent = `⚡ Breeze (${rangeLabel}): ${i}/${syms.length} symbols…`;
+
     await Promise.all(batch.map(async sym => {
+      if (tokenFailed) return;
       try {
-        const bzData = await _fetchOHLCBreeze(sym, from, to, token);
+        const bzData = await _fetchOHLCBreeze(sym, fetchFrom, fetchTo, token);
         if (bzData && bzData.length) {
           if (isBreezeMode) {
-            // Replace: merge Breeze candles over existing CSV data
-            _loadedOHLC[sym] = _mergeBreezeIntoOHLC(_loadedOHLC[sym] || [], bzData, from, to);
+            // Overlay: Breeze candles replace CSV data for the fetch window only.
+            // Older history from CSV is preserved untouched.
+            _loadedOHLC[sym] = _mergeBreezeIntoOHLC(
+              _loadedOHLC[sym] || [], bzData, fetchFrom, fetchTo
+            );
           } else {
-            // Compare: store diff, keep Yahoo as primary
+            // Compare: diff Breeze tail against same window from CSV
             if (yfOriginals[sym]) {
-              _compareResults[sym] = _buildComparison(sym, yfOriginals[sym], bzData);
+              // Slice Yahoo data to the same tail window for apples-to-apples comparison
+              const yfTail = yfOriginals[sym].filter(c => c.date >= fetchFrom && c.date <= fetchTo);
+              if (yfTail.length) {
+                _compareResults[sym] = _buildComparison(sym, yfTail, bzData);
+              }
             }
           }
           fetched++;
         }
       } catch (e) {
-        if (e.tokenExpired && !_breezeTokenExpiredWarned) {
-          _breezeTokenExpiredWarned = true;
-          showToast('🔴 Breeze token expired — tap 🔑 to refresh', 5000);
+        if (e.tokenExpired && !tokenFailed) {
+          tokenFailed = true;
+          banner.style.background = 'var(--bear)';
+          banner.textContent = `🔴 Breeze token expired mid-run (${fetched} fetched) — reverting to Yahoo`;
           localStorage.removeItem(BREEZE_TOKEN_KEY);
           _updateBreezeButtonState();
           setDataSource('yahoo');
+          setTimeout(() => banner.remove(), 4000);
         }
         failed++;
       }
     }));
+
     await new Promise(r => setTimeout(r, 0)); // yield to UI
   }
 
-  const mode = isBreezeMode ? 'Breeze' : 'Compare';
-  banner.textContent = `✅ ${mode}: ${fetched} symbols fetched${failed ? ` · ${failed} failed (using CSV fallback)` : ''}`;
+  if (tokenFailed) return;
+
+  const tailNote = isBacktestContext ? ` (tail overlay — history from CSV)` : '';
+  banner.textContent = `✅ ${modeLabel}: ${fetched} symbols fetched${tailNote}${failed ? ` · ${failed} failed` : ''}`;
   setTimeout(() => banner.remove(), 3000);
 }
 
@@ -5444,9 +5563,10 @@ async function runScanner() {
 
   // ── Breeze / Compare pre-fetch ──────────────────────────────────────────
   if (_dataSource !== 'yahoo') {
-    // For scanner: fetch a window around the scan date (30 days is enough)
+    // Scanner needs only a few days — gap = D1 close vs D2 open,
+    // so 5 calendar days back covers the scan date candle + previous day.
     const scanDt = new Date(scanDate + 'T00:00:00');
-    scanDt.setDate(scanDt.getDate() - 30);
+    scanDt.setDate(scanDt.getDate() - 5);
     const fetchFrom = scanDt.toISOString().slice(0, 10);
     await _prefetchBreezeData(syms, fetchFrom, scanDate, 'scanner');
   }
@@ -9589,7 +9709,7 @@ async function runMobileScanner() {
   if (_dataSource !== 'yahoo') {
     const symsForBreeze = getAllLoadedSymbols();
     const scanDt = new Date(scanDate + 'T00:00:00');
-    scanDt.setDate(scanDt.getDate() - 30);
+    scanDt.setDate(scanDt.getDate() - 5);
     const fetchFrom = scanDt.toISOString().slice(0, 10);
     await _prefetchBreezeData(symsForBreeze, fetchFrom, scanDate, 'mobile-scanner');
   }
