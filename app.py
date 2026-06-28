@@ -752,7 +752,13 @@ def _do_breeze_fetch_job():
         from_iso  = _breeze_iso(from_str, end_of_day=False)
         to_iso    = _breeze_iso(today_str, end_of_day=True)
 
-        symbols    = list(ALL_SYMBOLS)
+        symbols    = [s for s in ALL_SYMBOLS if s not in BREEZE_OVERRIDES or
+                      BREEZE_OVERRIDES[s][1] != 'NFO']
+        # Skip sector indices — Breeze daily cash data not available for CNX* symbols
+        INDEX_PREFIXES = ('NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY',
+                          'CNXIT', 'CNXAUTO', 'CNXPHARMA', 'CNXENERGY',
+                          'CNXMETAL', 'CNXFMCG', 'CNXINFRA', 'CNXCONSUM')
+        symbols    = [s for s in ALL_SYMBOLS if not any(s == idx for idx in INDEX_PREFIXES)]
         total      = len(symbols)
         fetched    = 0
         failed     = []
@@ -767,19 +773,96 @@ def _do_breeze_fetch_job():
 
             # Resolve Breeze stock_code / exchange_code from symbol map
             # ALL_SYMBOLS uses NSE codes; BREEZE_OVERRIDES maps exceptions
+            # Full Breeze ShortName mapping — verified against Breeze_Symbols.xlsx (icici sheet)
+            # Format: 'NSE_SYMBOL': ('BREEZE_SHORTNAME', 'EXCHANGE_CODE')
+            # Only symbols where Breeze ShortName differs from NSE symbol are listed
             BREEZE_OVERRIDES = {
-                'RELIANCE':    ('RELIND',   'NSE'),
-                'BAJAJ-AUTO':  ('BAJAUT',   'NSE'),
-                'ICICIPRULIFE':('ICICIPRULI','NSE'),
-                'ZOMATO':      ('ETERNAL',  'NSE'),
-                'M&M':         ('MAHIND',   'NSE'),
-                'NAM-INDIA':   ('NAMINDIA', 'NSE'),
-                'BSE':         ('BSE',      'BSE'),
-                # Indices use NSE cash (not NFO — NFO requires expiry date)
-                'NIFTY50':    ('NIFTY',   'NSE'),
-                'BANKNIFTY':  ('CNXBAN',  'NSE'),
-                'FINNIFTY':   ('NIFFIN',  'NSE'),
-                'MIDCPNIFTY': ('NIFMID',  'NSE'),
+                'ADANIENSOL': ('ADATRA', 'NSE'),
+                'ADANIENT':   ('ADAENT', 'NSE'),
+                'ADANIGREEN': ('ADAGRE', 'NSE'),
+                'ADANIPORTS': ('ADAPOR', 'NSE'),
+                'ADANIPOWER': ('ADAPOW', 'NSE'),
+                'AMBUJACEM':  ('AMBCE',  'NSE'),
+                'APOLLOHOSP': ('APOHOS', 'NSE'),
+                'ASIANPAINT': ('ASIPAI', 'NSE'),
+                'AXISBANK':   ('AXIBAN', 'NSE'),
+                'BAJAJ-AUTO': ('BAAUTO', 'NSE'),
+                'BAJAJFINSV': ('BAFINS', 'NSE'),
+                'BAJFINANCE': ('BAJFI',  'NSE'),
+                'BANKBARODA': ('BANBAR', 'NSE'),
+                'BEL':        ('BHAELE', 'NSE'),
+                'BHARTIARTL': ('BHAAIR', 'NSE'),
+                'BOSCHLTD':   ('BOSLIM', 'NSE'),
+                'BPCL':       ('BHAPET', 'NSE'),
+                'BRITANNIA':  ('BRIIND', 'NSE'),
+                'CANBK':      ('CANBAN', 'NSE'),
+                'CGPOWER':    ('CROGRE', 'NSE'),
+                'CHOLAFIN':   ('CHOINV', 'NSE'),
+                'COALINDIA':  ('COALIN', 'NSE'),
+                'DIVISLAB':   ('DIVLAB', 'NSE'),
+                'DLF':        ('DLFLIM', 'NSE'),
+                'DMART':      ('AVESUP', 'NSE'),
+                'DRREDDY':    ('DRREDD', 'NSE'),
+                'GODREJCP':   ('GODCON', 'NSE'),
+                'HAL':        ('HINAER', 'NSE'),
+                'HAVELLS':    ('HAVIND', 'NSE'),
+                'HCLTECH':    ('HCLTEC', 'NSE'),
+                'HDFCBANK':   ('HDFBAN', 'NSE'),
+                'HDFCLIFE':   ('HDFSTA', 'NSE'),
+                'HINDALCO':   ('HINDAL', 'NSE'),
+                'HINDUNILVR': ('HINLEV', 'NSE'),
+                'HINDZINC':   ('HINZIN', 'NSE'),
+                'HYUNDAI':    ('HYUMOT', 'NSE'),
+                'ICICIBANK':  ('ICIBAN', 'NSE'),
+                'ICICIGI':    ('ICILOM', 'NSE'),
+                'INDHOTEL':   ('INDHOT', 'NSE'),
+                'INDIGO':     ('INTAVI', 'NSE'),
+                'INFY':       ('INFTEC', 'NSE'),
+                'IOC':        ('INDOIL', 'NSE'),
+                'IRFC':       ('INDR',   'NSE'),
+                'JINDALSTEL': ('JINSP',  'NSE'),
+                'JSWENERGY':  ('JSWENE', 'NSE'),
+                'JSWSTEEL':   ('JSWSTE', 'NSE'),
+                'KOTAKBANK':  ('KOTMAH', 'NSE'),
+                'LICI':       ('LIC',    'NSE'),
+                'LODHA':      ('MACDEV', 'NSE'),
+                'LT':         ('LARTOU', 'NSE'),
+                'M&M':        ('MAHMAH', 'NSE'),
+                'MAXHEALTH':  ('MAXHEA', 'NSE'),
+                'MAZDOCK':    ('MAZDOC', 'NSE'),
+                'MOTHERSON':  ('MOTSUM', 'NSE'),
+                'NAUKRI':     ('INFEDG', 'NSE'),
+                'NESTLEIND':  ('NESIND', 'NSE'),
+                'PFC':        ('POWFIN', 'NSE'),
+                'PIDILITIND': ('PIDIND', 'NSE'),
+                'PNB':        ('PUNBAN', 'NSE'),
+                'POWERGRID':  ('POWGRI', 'NSE'),
+                'RECLTD':     ('RURELE', 'NSE'),
+                'RELIANCE':   ('RELIND', 'NSE'),
+                'SBILIFE':    ('SBILIF', 'NSE'),
+                'SBIN':       ('STABAN', 'NSE'),
+                'SHREECEM':   ('SHRCEM', 'NSE'),
+                'SHRIRAMFIN': ('SHRTRA', 'NSE'),
+                'SIEMENS':    ('SIEMEN', 'NSE'),
+                'SOLARINDS':  ('SOLIN',  'NSE'),
+                'SUNPHARMA':  ('SUNPHA', 'NSE'),
+                'SWIGGY':     ('SWILIM', 'NSE'),
+                'TATACONSUM': ('TATGLO', 'NSE'),
+                'TATAPOWER':  ('TATPOW', 'NSE'),
+                'TATASTEEL':  ('TATSTE', 'NSE'),
+                'TECHM':      ('TECMAH', 'NSE'),
+                'TITAN':      ('TITIND', 'NSE'),
+                'TMPV':       ('TATMOT', 'NSE'),
+                'TORNTPHARM': ('TORPHA', 'NSE'),
+                'TVSMOTOR':   ('TVSMOT', 'NSE'),
+                'ULTRACEMCO': ('ULTCEM', 'NSE'),
+                'UNITDSPR':   ('UNISPI', 'NSE'),
+                'VBL':        ('VARBEV', 'NSE'),
+                'VEDL':       ('VEDLIM', 'NSE'),
+                'ZOMATO':     ('ZOMLIM', 'NSE'),
+                'ZYDUSLIFE':  ('CADHEA', 'NSE'),
+                # 104 symbols not in Breeze file — will use NSE symbol as-is
+                # These will be attempted and may fail; that is acceptable
             }
             stock_code, exchange_code = BREEZE_OVERRIDES.get(sym, (sym, 'NSE'))
             product_type = 'cash'  # always cash for historical daily data
