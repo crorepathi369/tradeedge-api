@@ -4198,6 +4198,12 @@ async function _prefetchBreezeData(syms, from, to, context) {
       const chunk = chunks[ci];
       banner.textContent = `⚡ ${modeLabel}: chunk ${ci+1}/${chunks.length} (${fetched}/${syms.length} done)…`;
 
+      // Log what we're sending so we can verify dates and symbols
+      console.log(`[Breeze] Chunk ${ci+1}/${chunks.length} REQUEST:`,
+        `from=${fetchFrom}`, `to=${fetchTo}`,
+        `symbols(${chunk.length}):`, chunk.slice(0,3).map(s=>s.sym_id).join(',') + (chunk.length>3?'...':'')
+      );
+
       const coldStartTimer = setTimeout(() => {
         if (banner.isConnected)
           banner.textContent = `⏳ ${modeLabel}: chunk ${ci+1}/${chunks.length} — Render processing…`;
@@ -4233,6 +4239,30 @@ async function _prefetchBreezeData(syms, from, to, context) {
 
       // Single JSON response — Render processes all symbols then returns at once
       const json = await res.json();
+
+      // ── Browser debug logs ────────────────────────────────────────────────
+      console.log(`[Breeze] Chunk ${ci+1}/${chunks.length} response:`,
+        `status=${res.status}`,
+        `count=${json.count ?? '?'}`,
+        `failed=${(json.failed||[]).length}`,
+        `elapsed=${json.elapsed ?? '?'}s`,
+        `error=${json.error ?? 'none'}`
+      );
+      if (json.failed && json.failed.length > 0) {
+        console.warn('[Breeze] Failed symbols in this chunk:', json.failed);
+      }
+      if (json.data) {
+        const symKeys = Object.keys(json.data);
+        const sample  = symKeys[0];
+        if (sample) {
+          console.log(`[Breeze] Sample — ${sample}:`,
+            `${json.data[sample].length} candles`,
+            `first=${json.data[sample][0]?.date ?? '?'}`,
+            `last=${json.data[sample].at(-1)?.date ?? '?'}`
+          );
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       if (json.error === 'token_expired') {
         localStorage.removeItem(BREEZE_TOKEN_KEY);
