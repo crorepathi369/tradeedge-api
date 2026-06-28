@@ -1034,16 +1034,12 @@ BREEZE_API_SECRET = os.environ.get("BREEZE_API_SECRET", "")
 #     "candles": {"RELIANCE": 5, ...} # candle count per symbol
 #   }
 #
-# Fetches all symbols sequentially with API_PAUSE_SECONDS between calls —
-# matching the cadence used by breeze_fetch.py to respect Breeze rate limits.
-# Uses get_quotes() for today's live candle (faster than historical API),
-# exactly as breeze_fetch.py does in delta mode.
-#
-# Single Breeze session is created once and reused for all symbols.
+# Fetches all symbols sequentially with no artificial pause —
+# 5-day tail fetch is lightweight enough that Breeze doesn't rate-limit.
+# Uses get_quotes() for today's live candle (faster than historical API).
+# Single Breeze session created once and reused for all symbols.
 
 import time as _time
-
-API_PAUSE_SECONDS = 0.35   # same as breeze_fetch.py — respect Breeze rate limit
 
 # Index ShortNames — get_quotes() does NOT work for indices; use historical API
 _INDEX_SHORT_NAMES = {
@@ -1288,9 +1284,9 @@ def breeze_ohlc_bulk():
     import json as _json
 
     def generate():
-        t0      = _time.time()
-        count   = 0
-        failed  = []
+        t0     = _time.time()
+        count  = 0
+        failed = []
 
         for i, sym_entry in enumerate(symbols):
             sym_id        = sym_entry.get("sym_id", "")
@@ -1315,7 +1311,6 @@ def breeze_ohlc_bulk():
                         yield _json.dumps({"error": "token_expired", "fetched": i}) + "\n"
                         return
                     failed.append(sym_id)
-                    _time.sleep(API_PAUSE_SECONDS)
                     continue
 
                 rows = resp.get("Success") or []
@@ -1339,7 +1334,6 @@ def breeze_ohlc_bulk():
 
                 if not ohlc:
                     failed.append(sym_id)
-                    _time.sleep(API_PAUSE_SECONDS)
                     continue
 
                 # Back-adjust for corporate actions
@@ -1348,7 +1342,7 @@ def breeze_ohlc_bulk():
                 for j, row in enumerate(ohlc):
                     row["adjClose"] = round(adj_closes[j], 4)
 
-                # Stream this symbol immediately — don't accumulate in memory
+                # Stream immediately — no accumulation in memory
                 yield _json.dumps({"sym_id": sym_id, "data": ohlc, "ok": True}) + "\n"
                 count += 1
 
@@ -1358,10 +1352,7 @@ def breeze_ohlc_bulk():
                     yield _json.dumps({"error": "token_expired", "fetched": i}) + "\n"
                     return
                 failed.append(sym_id)
-
-            # Rate-limit pause
-            if i < len(symbols) - 1:
-                _time.sleep(API_PAUSE_SECONDS)
+            # No pause — 5-day fetch is tiny, Breeze handles it without rate limiting
 
         elapsed = round(_time.time() - t0, 1)
         print(f"[breeze/bulk] {count}/{len(symbols)} symbols · {elapsed}s · {len(failed)} failed")
