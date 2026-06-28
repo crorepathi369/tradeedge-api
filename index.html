@@ -3590,8 +3590,9 @@ async function runBreezeFetch() {
             banner.style.background = 'var(--accent)';  // orange warning
           }
 
-          // Log failed symbols to console for debugging
-          if (failedSyms.length > 0) {
+          // Log failed symbols to console only when new failures appear
+          if (failedSyms.length > 0 && failedSyms.length !== (window._lastLoggedFailCount || 0)) {
+            window._lastLoggedFailCount = failedSyms.length;
             console.warn('[Breeze fetch] Failed symbols so far:', failedSyms);
           }
 
