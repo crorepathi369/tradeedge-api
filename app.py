@@ -1267,11 +1267,30 @@ def breeze_ohlc_bulk():
 
     from datetime import datetime, timedelta
     IST_OFFSET  = timedelta(hours=5, minutes=30)
-    today_ist   = (datetime.utcnow() + IST_OFFSET).strftime("%Y-%m-%d")
+    now_ist     = datetime.utcnow() + IST_OFFSET
+    today_ist   = now_ist.strftime("%Y-%m-%d")
     fetch_today = (to_date >= today_ist)
 
-    from_dt_iso = _breeze_iso(from_date, end_of_day=False)
-    to_dt_iso   = _breeze_iso(to_date,   end_of_day=True)
+    # Adjust date range to last trading day boundaries:
+    # - Roll to_date back to last Friday if weekend
+    # - Ensure from_date is at least 7 calendar days before effective_to
+    #   so we always capture 3-4 trading days of history regardless of weekends
+    to_dt = datetime.strptime(to_date, "%Y-%m-%d")
+    if to_dt.weekday() == 5:   # Saturday → Friday
+        to_dt -= timedelta(days=1)
+    elif to_dt.weekday() == 6: # Sunday → Friday
+        to_dt -= timedelta(days=2)
+    effective_to = to_dt.strftime("%Y-%m-%d")
+
+    # from_date: at least 7 calendar days before effective_to (covers ~5 trading days)
+    from_dt = datetime.strptime(from_date, "%Y-%m-%d")
+    min_from = to_dt - timedelta(days=7)
+    if from_dt > min_from:
+        from_dt = min_from
+    effective_from = from_dt.strftime("%Y-%m-%d")
+
+    from_dt_iso = _breeze_iso(effective_from, end_of_day=False)
+    to_dt_iso   = _breeze_iso(effective_to,   end_of_day=True)
 
     # ── Sequential fetch — no pause ───────────────────────────────────────────
     t0     = _time.time()
