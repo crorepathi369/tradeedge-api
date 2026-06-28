@@ -1043,6 +1043,30 @@ _INDEX_SHORT_NAMES = {
 }
 
 
+_CORP_ACTION_THRESHOLD = 0.30   # >30% day-over-day move = corporate action, not market
+
+
+def _compute_adj_close(closes: list) -> list:
+    """
+    Back-adjust a raw close series for corporate actions (splits / bonus issues).
+    Walks newest → oldest. Detects moves > 30% (above NSE ±20% circuit limit)
+    and applies a cumulative multiplier — matching Yahoo Finance adjClose convention.
+    Identical logic to compute_adj_close() in breeze_fetch.py.
+    """
+    if not closes:
+        return []
+    adj        = closes[:]
+    cumulative = 1.0
+    for i in range(len(closes) - 1, 0, -1):
+        if closes[i] == 0:
+            continue
+        ratio = closes[i - 1] / closes[i]
+        if abs(ratio - 1.0) > _CORP_ACTION_THRESHOLD:
+            cumulative *= ratio
+        adj[i - 1] = closes[i - 1] / cumulative if cumulative else closes[i - 1]
+    return adj
+
+
 def _breeze_iso(dt_str: str, end_of_day: bool = False) -> str:
     """Convert YYYY-MM-DD to Breeze ISO format in UTC."""
     from datetime import datetime, timezone, timedelta
