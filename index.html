@@ -1866,8 +1866,16 @@
       flex: 1;
       overflow: hidden;
       display: none;
+      height: 0;
     }
-    #mobTradesTab.mob-tab-active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    #mobTradesTab.mob-tab-active {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      height: calc(100vh - 180px); /* fallback explicit height */
+      overflow: hidden;
+    }
     #mobTradesTabHdr { flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border); padding: 10px 12px 0; }
 
     /* Summary strip */
@@ -4622,8 +4630,8 @@ async function runBacktest() {
 
   // Show Hist WR filter in scanner now that backtest data is available
   resetRunBtn();
-  // On mobile: auto-navigate to Summary after backtest
-  if (typeof isMobile === 'function' && isMobile()) mobileNav('summary');
+  // On mobile: auto-navigate to Stats tab after backtest
+  if (typeof isMobile === 'function' && isMobile()) mobSwitchTab('trades');
   refreshScannerGate(); // unlock scanner now that matching backtest data exists
 }
 
@@ -8967,6 +8975,8 @@ loadSavedDefaults();
       </button>
       <button id="mobSettingsBtn" onclick="openMobSettings()" title="Scanner settings">⚙</button>
     </div>
+  </div>
+
   <!-- Scanner Tab content — hidden when Stats tab active -->
   <div id="mobScannerContent" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0;">
   <!-- Results -->
@@ -8998,10 +9008,10 @@ loadSavedDefaults();
 
   </div><!-- end mobScannerContent -->
 
-  <!-- Stats Tab content -->
-<div id="mobTradesTab">
+  <!-- Stats Tab content — sibling of mobScannerContent inside mobileShell flex -->
+  <div id="mobTradesTab">
     <div id="mobTradesTabHdr"></div>
-    <div id="mobTradesInner" style="flex:1;overflow-y:auto;min-height:0;padding:10px 12px 12px;">
+    <div id="mobTradesInner" style="flex:1;overflow-y:auto;min-height:0;padding:10px 12px 80px;-webkit-overflow-scrolling:touch;">
       <div id="mobTradesEmpty" style="display:flex;flex-direction:column;align-items:center;
         justify-content:center;padding:40px 24px;color:var(--text3);font-family:'DM Mono',monospace;
         font-size:12px;text-align:center;gap:10px;">
