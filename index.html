@@ -3454,11 +3454,21 @@ function _renderBreezeStatus() {
     <div style="color:var(--text3);">Set ${ageMin} min ago${fresh ? ' · expires in ~' + Math.round((20*60 - ageMin)) + 'm' : ' · refresh recommended'}</div>`;
 }
 
+function setBreezeTailDays(n) {
+  BREEZE_TAIL_DAYS = n;
+  localStorage.setItem('te_breeze_tail_days', n);
+  const el = document.getElementById('breezeTailDaysLabel');
+  if (el) el.textContent = n;
+}
+
 function showBreezeModal() {
   const modal = document.getElementById('breezeModal');
   modal.style.display = 'flex';
   document.getElementById('breezeTokenInput').value = '';
   document.getElementById('breezeInputError').textContent = '';
+  // Sync tail days label to current value
+  const el = document.getElementById('breezeTailDaysLabel');
+  if (el) el.textContent = BREEZE_TAIL_DAYS;
   _renderBreezeStatus();
   setTimeout(() => document.getElementById('breezeTokenInput').focus(), 80);
 }
@@ -4100,7 +4110,23 @@ function renderCompareSummaryPanel(context) {
 // The server fetches sequentially with 0.35s pause (matching breeze_fetch.py),
 // then returns all data in one response — far faster than 210 individual calls.
 // Also fetches today's live candle via get_quotes() for each symbol (server-side).
-const BREEZE_TAIL_DAYS = 5;
+// ── Breeze tail fetch days ────────────────────────────────────────────────────
+// How many calendar days of data to fetch from Breeze on ☁️ Load Cloud.
+//
+// Real-world usage:
+//   During market hours (~3 PM IST):
+//     Yahoo CSVs have yesterday as the latest candle.
+//     Breeze fetches TODAY's partial candle (via get_quotes live LTP).
+//     → Only 1 day needed for live scanning.
+//
+//   For Compare mode validation (Yahoo vs Breeze data quality check):
+//     Fetch last 5 days so we can diff multiple candles across symbols.
+//     Once Breeze data quality is confirmed, reduce back to 1.
+//
+// Persisted in localStorage so it survives page reloads.
+// Configurable from the 🔑 Breeze modal without touching code.
+const BREEZE_TAIL_DAYS_DEFAULT = 5;
+let BREEZE_TAIL_DAYS = parseInt(localStorage.getItem('te_breeze_tail_days') || BREEZE_TAIL_DAYS_DEFAULT, 10);
 
 async function _prefetchBreezeData(syms, from, to, context) {
   const token = _getBreezeToken();
@@ -4183,49 +4209,79 @@ async function _prefetchBreezeData(syms, from, to, context) {
       setTimeout(() => banner.remove(), 4000);
       return;
     }
-
     if (!res.ok) throw new Error('HTTP ' + res.status);
 
-    const json = await res.json();
-    if (json.error === 'token_expired') {
-      localStorage.removeItem(BREEZE_TOKEN_KEY);
-      localStorage.removeItem(BREEZE_TOKEN_TS);
-      _updateBreezeButtonState();
-      setDataSource('yahoo');
-      banner.style.background = 'var(--bear)';
-      banner.textContent = '🔴 Breeze token expired — reverting to Yahoo Finance';
-      setTimeout(() => banner.remove(), 4000);
-      return;
-    }
-
-    // ── Merge results into _loadedOHLC ────────────────────────────────────
-    const bzData  = json.data   || {};
-    const failed  = json.failed || [];
-    let fetched = 0;
-
+    // ── Read NDJSON stream — merge each symbol as it arrives ─────────────
+    // Server streams one JSON line per symbol → flat memory on both sides.
     const yfOriginals = {};
     if (isCompareMode) {
       syms.forEach(s => { if (_loadedOHLC[s]) yfOriginals[s] = _loadedOHLC[s]; });
     }
 
-    syms.forEach(sym => {
-      const rows = bzData[sym];
-      if (!rows || !rows.length) return;
-      if (isBreezeMode) {
-        _loadedOHLC[sym] = _mergeBreezeIntoOHLC(_loadedOHLC[sym] || [], rows, fetchFrom, fetchTo);
-      } else {
-        if (yfOriginals[sym]) {
-          const yfTail = yfOriginals[sym].filter(c => c.date >= fetchFrom && c.date <= fetchTo);
-          if (yfTail.length) _compareResults[sym] = _buildComparison(sym, yfTail, rows);
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buf     = '';
+    let   fetched = 0;
+    let   failed  = [];
+    let   elapsed = 0;
+
+    outer: while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      // Process all complete lines in buffer
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep incomplete last line
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        let obj;
+        try { obj = JSON.parse(trimmed); } catch { continue; }
+
+        // Token expired mid-stream
+        if (obj.error === 'token_expired') {
+          localStorage.removeItem(BREEZE_TOKEN_KEY);
+          localStorage.removeItem(BREEZE_TOKEN_TS);
+          _updateBreezeButtonState();
+          setDataSource('yahoo');
+          banner.style.background = 'var(--bear)';
+          banner.textContent = '🔴 Breeze token expired — reverting to Yahoo Finance';
+          setTimeout(() => banner.remove(), 4000);
+          break outer;
+        }
+
+        // Final summary line
+        if (obj.done) {
+          elapsed = obj.elapsed || 0;
+          failed  = obj.failed  || [];
+          break outer;
+        }
+
+        // Symbol data line — merge immediately, discard after
+        if (obj.ok && obj.sym_id && obj.data) {
+          const sym  = obj.sym_id;
+          const rows = obj.data;
+          if (isBreezeMode) {
+            _loadedOHLC[sym] = _mergeBreezeIntoOHLC(_loadedOHLC[sym] || [], rows, fetchFrom, fetchTo);
+          } else {
+            if (yfOriginals[sym]) {
+              const yfTail = yfOriginals[sym].filter(c => c.date >= fetchFrom && c.date <= fetchTo);
+              if (yfTail.length) _compareResults[sym] = _buildComparison(sym, yfTail, rows);
+            }
+          }
+          fetched++;
+          // Update banner every 10 symbols so user sees progress
+          if (fetched % 10 === 0) {
+            banner.textContent = `⚡ ${modeLabel}: ${fetched}/${syms.length} symbols…`;
+          }
         }
       }
-      fetched++;
-    });
+    }
 
-    const elapsed  = json.elapsed ? ` · ${json.elapsed}s` : '';
-    const failNote = failed.length ? ` · ${failed.length} failed` : '';
-    const tailNote = isBacktestContext ? ' (tail overlay)' : '';
-    banner.textContent = `✅ ${modeLabel}: ${fetched}/${syms.length} symbols${tailNote}${failNote}${elapsed}`;
+    const elapsedStr = elapsed ? ` · ${elapsed}s` : '';
+    const failNote   = failed.length ? ` · ${failed.length} failed` : '';
+    const tailNote   = isBacktestContext ? ' (tail overlay)' : '';
+    banner.textContent = `✅ ${modeLabel}: ${fetched}/${syms.length} symbols${tailNote}${failNote}${elapsedStr}`;
     setTimeout(() => banner.remove(), 3500);
 
   } catch (e) {
@@ -9259,6 +9315,29 @@ loadSavedDefaults();
           color:var(--bear);font-family:'DM Mono',monospace;font-size:11px;">
         Clear
       </button>
+    </div>
+
+    <!-- Tail days setting -->
+    <div style="margin-top:14px;display:flex;align-items:center;gap:10px;
+      padding:10px 14px;background:var(--surface2);border-radius:9px;border:1px solid var(--border);">
+      <div style="flex:1;">
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);margin-bottom:2px;">
+          Days to fetch from Breeze on ☁️ Load
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">
+          1 = today only (live scan) · 5 = compare mode validation
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button onclick="setBreezeTailDays(Math.max(1, BREEZE_TAIL_DAYS - 1))"
+          style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border2);
+            background:var(--surface);cursor:pointer;font-size:14px;line-height:1;">−</button>
+        <span id="breezeTailDaysLabel" style="font-family:'DM Mono',monospace;font-size:14px;
+          font-weight:700;color:var(--text);min-width:20px;text-align:center;">5</span>
+        <button onclick="setBreezeTailDays(Math.min(30, BREEZE_TAIL_DAYS + 1))"
+          style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border2);
+            background:var(--surface);cursor:pointer;font-size:14px;line-height:1;">+</button>
+      </div>
     </div>
 
     <!-- Info note -->
