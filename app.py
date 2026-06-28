@@ -995,6 +995,16 @@ def futures_endpoint():
     })
 
 
+# ── Breeze API setup ──────────────────────────────────────────────────────────
+try:
+    from breeze_connect import BreezeConnect
+    _BREEZE_AVAILABLE = True
+except ImportError:
+    _BREEZE_AVAILABLE = False
+
+BREEZE_API_KEY    = os.environ.get("BREEZE_API_KEY", "")
+BREEZE_API_SECRET = os.environ.get("BREEZE_API_SECRET", "")
+
 # ── /breeze/ohlc/bulk endpoint ────────────────────────────────────────────────
 #
 # POST /breeze/ohlc/bulk
