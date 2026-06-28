@@ -4176,109 +4176,96 @@ async function _prefetchBreezeData(syms, from, to, context) {
     return { sym_id: sym, stock_code: mapping.stock_code, exchange_code: mapping.exchange_code };
   });
 
-  // ── Single bulk POST to Render ────────────────────────────────────────────
+  // ── Chunked bulk POSTs to Render ─────────────────────────────────────────
+  // Split 210 symbols into chunks of ~100 — each chunk takes ~35s on Render,
+  // well within timeout and memory limits of the free tier.
+  // Each chunk is a separate POST; results merged into _loadedOHLC as chunks complete.
+  const CHUNK_SIZE = 20;
+  const chunks     = [];
+  for (let i = 0; i < symbolList.length; i += CHUNK_SIZE) {
+    chunks.push(symbolList.slice(i, i + CHUNK_SIZE));
+  }
+
+  const yfOriginals = {};
+  if (isCompareMode) {
+    syms.forEach(s => { if (_loadedOHLC[s]) yfOriginals[s] = _loadedOHLC[s]; });
+  }
+
+  let fetched = 0, failed = [], totalElapsed = 0;
+
   try {
-    const coldStartTimer = setTimeout(() => {
-      if (banner.isConnected)
-        banner.textContent = `⏳ ${modeLabel}: Render processing ${syms.length} symbols… (~75s)`;
-    }, 8000);
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      banner.textContent = `⚡ ${modeLabel}: chunk ${ci+1}/${chunks.length} (${fetched}/${syms.length} done)…`;
 
-    const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 180000); // 3 min max
+      const coldStartTimer = setTimeout(() => {
+        if (banner.isConnected)
+          banner.textContent = `⏳ ${modeLabel}: chunk ${ci+1}/${chunks.length} — Render processing…`;
+      }, 8000);
 
-    let res;
-    try {
-      res = await fetch(`${TRADEEDGE_API_URL}/breeze/ohlc/bulk`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ symbols: symbolList, from: fetchFrom, to: fetchTo, token }),
-        signal:  controller.signal,
-      });
-    } finally {
-      clearTimeout(coldStartTimer);
-      clearTimeout(timeoutId);
-    }
+      const controller = new AbortController();
+      const timeoutId  = setTimeout(() => controller.abort(), 90000); // 90s per chunk
 
-    if (res.status === 401) {
-      localStorage.removeItem(BREEZE_TOKEN_KEY);
-      localStorage.removeItem(BREEZE_TOKEN_TS);
-      _updateBreezeButtonState();
-      setDataSource('yahoo');
-      banner.style.background = 'var(--bear)';
-      banner.textContent = '🔴 Breeze token invalid — reverting to Yahoo Finance';
-      setTimeout(() => banner.remove(), 4000);
-      return;
-    }
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-
-    // ── Read NDJSON stream — merge each symbol as it arrives ─────────────
-    // Server streams one JSON line per symbol → flat memory on both sides.
-    const yfOriginals = {};
-    if (isCompareMode) {
-      syms.forEach(s => { if (_loadedOHLC[s]) yfOriginals[s] = _loadedOHLC[s]; });
-    }
-
-    const reader  = res.body.getReader();
-    const decoder = new TextDecoder();
-    let   buf     = '';
-    let   fetched = 0;
-    let   failed  = [];
-    let   elapsed = 0;
-
-    outer: while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      // Process all complete lines in buffer
-      const lines = buf.split('\n');
-      buf = lines.pop(); // keep incomplete last line
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        let obj;
-        try { obj = JSON.parse(trimmed); } catch { continue; }
-
-        // Token expired mid-stream
-        if (obj.error === 'token_expired') {
-          localStorage.removeItem(BREEZE_TOKEN_KEY);
-          localStorage.removeItem(BREEZE_TOKEN_TS);
-          _updateBreezeButtonState();
-          setDataSource('yahoo');
-          banner.style.background = 'var(--bear)';
-          banner.textContent = '🔴 Breeze token expired — reverting to Yahoo Finance';
-          setTimeout(() => banner.remove(), 4000);
-          break outer;
-        }
-
-        // Final summary line
-        if (obj.done) {
-          elapsed = obj.elapsed || 0;
-          failed  = obj.failed  || [];
-          break outer;
-        }
-
-        // Symbol data line — merge immediately, discard after
-        if (obj.ok && obj.sym_id && obj.data) {
-          const sym  = obj.sym_id;
-          const rows = obj.data;
-          if (isBreezeMode) {
-            _loadedOHLC[sym] = _mergeBreezeIntoOHLC(_loadedOHLC[sym] || [], rows, fetchFrom, fetchTo);
-          } else {
-            if (yfOriginals[sym]) {
-              const yfTail = yfOriginals[sym].filter(c => c.date >= fetchFrom && c.date <= fetchTo);
-              if (yfTail.length) _compareResults[sym] = _buildComparison(sym, yfTail, rows);
-            }
-          }
-          fetched++;
-          // Update banner every 10 symbols so user sees progress
-          if (fetched % 10 === 0) {
-            banner.textContent = `⚡ ${modeLabel}: ${fetched}/${syms.length} symbols…`;
-          }
-        }
+      let res;
+      try {
+        res = await fetch(`${TRADEEDGE_API_URL}/breeze/ohlc/bulk`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ symbols: chunk, from: fetchFrom, to: fetchTo, token }),
+          signal:  controller.signal,
+        });
+      } finally {
+        clearTimeout(coldStartTimer);
+        clearTimeout(timeoutId);
       }
+
+      if (res.status === 401) {
+        localStorage.removeItem(BREEZE_TOKEN_KEY);
+        localStorage.removeItem(BREEZE_TOKEN_TS);
+        _updateBreezeButtonState();
+        setDataSource('yahoo');
+        banner.style.background = 'var(--bear)';
+        banner.textContent = '🔴 Breeze token invalid — reverting to Yahoo Finance';
+        setTimeout(() => banner.remove(), 4000);
+        return;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      // Single JSON response — Render processes all symbols then returns at once
+      const json = await res.json();
+
+      if (json.error === 'token_expired') {
+        localStorage.removeItem(BREEZE_TOKEN_KEY);
+        localStorage.removeItem(BREEZE_TOKEN_TS);
+        _updateBreezeButtonState();
+        setDataSource('yahoo');
+        banner.style.background = 'var(--bear)';
+        banner.textContent = '🔴 Breeze token expired — reverting to Yahoo Finance';
+        setTimeout(() => banner.remove(), 4000);
+        return;
+      }
+
+      // Merge chunk results into _loadedOHLC
+      const chunkData = json.data || {};
+      failed.push(...(json.failed || []));
+      totalElapsed += json.elapsed || 0;
+
+      Object.entries(chunkData).forEach(([sym, rows]) => {
+        if (!rows || !rows.length) return;
+        if (isBreezeMode) {
+          _loadedOHLC[sym] = _mergeBreezeIntoOHLC(_loadedOHLC[sym] || [], rows, fetchFrom, fetchTo);
+        } else {
+          if (yfOriginals[sym]) {
+            const yfTail = yfOriginals[sym].filter(c => c.date >= fetchFrom && c.date <= fetchTo);
+            if (yfTail.length) _compareResults[sym] = _buildComparison(sym, yfTail, rows);
+          }
+        }
+        fetched++;
+      });
+      banner.textContent = `⚡ ${modeLabel}: ${fetched}/${syms.length} symbols…`;
     }
 
-    const elapsedStr = elapsed ? ` · ${elapsed}s` : '';
+    const elapsedStr = totalElapsed ? ` · ${Math.round(totalElapsed)}s` : '';
     const failNote   = failed.length ? ` · ${failed.length} failed` : '';
     const tailNote   = isBacktestContext ? ' (tail overlay)' : '';
     banner.textContent = `✅ ${modeLabel}: ${fetched}/${syms.length} symbols${tailNote}${failNote}${elapsedStr}`;
@@ -4287,7 +4274,7 @@ async function _prefetchBreezeData(syms, from, to, context) {
   } catch (e) {
     banner.style.background = 'var(--bear)';
     banner.textContent = e.name === 'AbortError'
-      ? '⚠️ Breeze bulk fetch timed out — using Yahoo CSV data'
+      ? '⚠️ Breeze chunk timed out — using Yahoo CSV data'
       : `⚠️ Breeze fetch failed (${e.message}) — using Yahoo CSV data`;
     setTimeout(() => banner.remove(), 4000);
     console.warn('[Breeze bulk]', e);
