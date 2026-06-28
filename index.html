@@ -3570,15 +3570,15 @@ function _breezeSymbol(symId) {
 }
 
 // ── Breeze OHLC fetch via Render backend ──────────────────────────────────────
-async function _fetchOHLCBreeze(symId, from, to, token) {
+async function _fetchOHLCBreeze(symId, from, to, token, timeoutMs = 15000) {
   const { stock_code, exchange_code } = _breezeSymbol(symId);
   const url = `${TRADEEDGE_API_URL}/breeze/ohlc?`
     + `stock_code=${encodeURIComponent(stock_code)}`
     + `&exchange_code=${encodeURIComponent(exchange_code)}`
     + `&from=${from}&to=${to}`
     + `&token=${encodeURIComponent(token)}`;
-  // 60s timeout — Render free tier can take 30-60s to wake from cold start
-  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 60000));
+  // timeoutMs: 60s for probe (cold start), 15s for regular per-symbol fetches
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs));
   const res = await Promise.race([fetch(url), timeout]);
 
   // 401 = bad/expired token — tag it so callers can fast-fail
@@ -4096,32 +4096,22 @@ function renderCompareSummaryPanel(context) {
 }
 
 // ── _prefetchBreezeData ───────────────────────────────────────────────────────
-// Before a backtest/scanner run in breeze or compare mode:
-//  - breeze mode:  overlays _loadedOHLC with fresh Breeze candles
-//  - compare mode: keeps _loadedOHLC as Yahoo (primary), stores Breeze diff
-//
-// DATE RANGE STRATEGY:
-//  - backtest / silent-backtest:
-//      History already loaded from CSV (Yahoo-sourced, in _loadedOHLC).
-//      Only fetch the last BREEZE_TAIL_DAYS from Breeze to refresh the tail.
-//      This is what matters — the most recent candles for live signal accuracy.
-//  - scanner / mobile-scanner:
-//      Use the window passed in by the caller (already a short 30-day window).
-//      The scan date candle is the critical one — Breeze gives real-time open.
-//
-// FAST-FAIL: probes a single symbol first — aborts immediately on bad token.
-const BREEZE_TAIL_DAYS = 5; // days to fetch from Breeze for backtest overlay
+// Fetches Breeze OHLC for all symbols in ONE bulk request to /breeze/ohlc/bulk.
+// The server fetches sequentially with 0.35s pause (matching breeze_fetch.py),
+// then returns all data in one response — far faster than 210 individual calls.
+// Also fetches today's live candle via get_quotes() for each symbol (server-side).
+const BREEZE_TAIL_DAYS = 5;
 
 async function _prefetchBreezeData(syms, from, to, context) {
   const token = _getBreezeToken();
 
-  // No token — silently reset to Yahoo and bail (no API calls)
+  // No token — silently reset to Yahoo and bail
   if (!token) {
     if (_dataSource !== 'yahoo') setDataSource('yahoo');
     return;
   }
 
-  // Token older than 20h — treat as expired immediately, no API calls at all
+  // Token older than 20h — treat as expired immediately
   const ts    = localStorage.getItem(BREEZE_TOKEN_TS);
   const ageMs = ts ? Date.now() - parseInt(ts, 10) : Infinity;
   if (ageMs > 20 * 60 * 60 * 1000) {
@@ -4137,128 +4127,118 @@ async function _prefetchBreezeData(syms, from, to, context) {
   const isCompareMode = _dataSource === 'compare';
   if (!isBreezeMode && !isCompareMode) return;
 
-  // ── Determine actual fetch window ─────────────────────────────────────────
-  const isBacktestContext = context === 'backtest' || context === 'silent-backtest';
-
+  // ── Determine fetch window ────────────────────────────────────────────────
+  const isBacktestContext = context === 'backtest' || context === 'silent-backtest'
+                         || context === 'cloud-load';
   let fetchFrom, fetchTo;
   if (isBacktestContext) {
-    // Only refresh the tail — CSV history covers everything older
-    fetchTo   = to;
-    const d   = new Date(to + 'T00:00:00');
-    // Go back BREEZE_TAIL_DAYS calendar days (covers weekends too)
+    fetchTo = to;
+    const d = new Date(to + 'T00:00:00');
     d.setDate(d.getDate() - Math.ceil(BREEZE_TAIL_DAYS * 1.5));
     fetchFrom = d.toISOString().slice(0, 10);
   } else {
-    // Scanner: use the window the caller already computed (short, ~30 days)
     fetchFrom = from;
     fetchTo   = to;
   }
 
-  const modeLabel  = isBreezeMode ? 'Breeze' : 'Compare';
-  const rangeLabel = isBacktestContext
-    ? `last ${BREEZE_TAIL_DAYS}d tail`
-    : `${fetchFrom} → ${fetchTo}`;
+  const modeLabel = isBreezeMode ? 'Breeze' : 'Compare';
+  const banner    = _showBreezeBanner(`⚡ ${modeLabel}: connecting to Breeze…`);
 
-  const banner = _showBreezeBanner(`⚡ Breeze: validating token…`);
+  // ── Build symbol list for bulk request ───────────────────────────────────
+  const symbolList = syms.map(sym => {
+    const mapping = _breezeSymbol(sym);
+    return { sym_id: sym, stock_code: mapping.stock_code, exchange_code: mapping.exchange_code };
+  });
 
-  // ── Token probe — test with one reliable symbol before full fetch ──────────
-  const probeSyms = ['RELIANCE', 'INFY', 'TCS', 'HDFCBANK'];
-  const probeSym  = probeSyms.find(s => syms.includes(s)) || syms[0];
-  const probeFrom = (() => {
-    const d = new Date(fetchTo + 'T00:00:00'); d.setDate(d.getDate() - 5);
-    return d.toISOString().slice(0, 10);
-  })();
-
+  // ── Single bulk POST to Render ────────────────────────────────────────────
   try {
-    banner.textContent = `⚡ Breeze: validating token via ${probeSym}…`;
-    // If probe takes >8s, Render is likely waking from cold start — show warning
     const coldStartTimer = setTimeout(() => {
-      if (banner.isConnected) {
-        banner.textContent = `⏳ Breeze: waking up Render server… (cold start, ~30-60s)`;
-      }
+      if (banner.isConnected)
+        banner.textContent = `⏳ ${modeLabel}: Render processing ${syms.length} symbols… (~75s)`;
     }, 8000);
-    await _fetchOHLCBreeze(probeSym, probeFrom, fetchTo, token);
-    clearTimeout(coldStartTimer);
-    // ✅ Token valid — proceed
-  } catch (e) {
-    clearTimeout(coldStartTimer);
-    if (e.tokenExpired) {
-      banner.style.background = 'var(--bear)';
-      banner.textContent = '🔴 Breeze token invalid — reverting to Yahoo Finance';
-      _breezeTokenExpiredWarned = true;
+
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 180000); // 3 min max
+
+    let res;
+    try {
+      res = await fetch(`${TRADEEDGE_API_URL}/breeze/ohlc/bulk`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ symbols: symbolList, from: fetchFrom, to: fetchTo, token }),
+        signal:  controller.signal,
+      });
+    } finally {
+      clearTimeout(coldStartTimer);
+      clearTimeout(timeoutId);
+    }
+
+    if (res.status === 401) {
       localStorage.removeItem(BREEZE_TOKEN_KEY);
+      localStorage.removeItem(BREEZE_TOKEN_TS);
       _updateBreezeButtonState();
       setDataSource('yahoo');
+      banner.style.background = 'var(--bear)';
+      banner.textContent = '🔴 Breeze token invalid — reverting to Yahoo Finance';
       setTimeout(() => banner.remove(), 4000);
       return;
     }
-    // Non-auth error (timeout, network) — warn but continue
-    console.warn('[Breeze] Probe failed with non-auth error:', e.message, '— continuing');
-  }
 
-  // ── Full fetch loop ───────────────────────────────────────────────────────
-  const yfOriginals = {};
-  if (isCompareMode) {
-    syms.forEach(s => { if (_loadedOHLC[s]) yfOriginals[s] = _loadedOHLC[s]; });
-  }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
 
-  const BATCH = 8;
-  let fetched = 0, failed = 0, tokenFailed = false;
+    const json = await res.json();
+    if (json.error === 'token_expired') {
+      localStorage.removeItem(BREEZE_TOKEN_KEY);
+      localStorage.removeItem(BREEZE_TOKEN_TS);
+      _updateBreezeButtonState();
+      setDataSource('yahoo');
+      banner.style.background = 'var(--bear)';
+      banner.textContent = '🔴 Breeze token expired — reverting to Yahoo Finance';
+      setTimeout(() => banner.remove(), 4000);
+      return;
+    }
 
-  for (let i = 0; i < syms.length; i += BATCH) {
-    if (tokenFailed) break;
+    // ── Merge results into _loadedOHLC ────────────────────────────────────
+    const bzData  = json.data   || {};
+    const failed  = json.failed || [];
+    let fetched = 0;
 
-    const batch = syms.slice(i, i + BATCH);
-    banner.textContent = `⚡ Breeze (${rangeLabel}): ${i}/${syms.length} symbols…`;
+    const yfOriginals = {};
+    if (isCompareMode) {
+      syms.forEach(s => { if (_loadedOHLC[s]) yfOriginals[s] = _loadedOHLC[s]; });
+    }
 
-    await Promise.all(batch.map(async sym => {
-      if (tokenFailed) return;
-      try {
-        const bzData = await _fetchOHLCBreeze(sym, fetchFrom, fetchTo, token);
-        if (bzData && bzData.length) {
-          if (isBreezeMode) {
-            // Overlay: Breeze candles replace CSV data for the fetch window only.
-            // Older history from CSV is preserved untouched.
-            _loadedOHLC[sym] = _mergeBreezeIntoOHLC(
-              _loadedOHLC[sym] || [], bzData, fetchFrom, fetchTo
-            );
-          } else {
-            // Compare: diff Breeze tail against same window from CSV
-            if (yfOriginals[sym]) {
-              // Slice Yahoo data to the same tail window for apples-to-apples comparison
-              const yfTail = yfOriginals[sym].filter(c => c.date >= fetchFrom && c.date <= fetchTo);
-              if (yfTail.length) {
-                _compareResults[sym] = _buildComparison(sym, yfTail, bzData);
-              }
-            }
-          }
-          fetched++;
+    syms.forEach(sym => {
+      const rows = bzData[sym];
+      if (!rows || !rows.length) return;
+      if (isBreezeMode) {
+        _loadedOHLC[sym] = _mergeBreezeIntoOHLC(_loadedOHLC[sym] || [], rows, fetchFrom, fetchTo);
+      } else {
+        if (yfOriginals[sym]) {
+          const yfTail = yfOriginals[sym].filter(c => c.date >= fetchFrom && c.date <= fetchTo);
+          if (yfTail.length) _compareResults[sym] = _buildComparison(sym, yfTail, rows);
         }
-      } catch (e) {
-        if (e.tokenExpired && !tokenFailed) {
-          tokenFailed = true;
-          banner.style.background = 'var(--bear)';
-          banner.textContent = `🔴 Breeze token expired mid-run (${fetched} fetched) — reverting to Yahoo`;
-          localStorage.removeItem(BREEZE_TOKEN_KEY);
-          _updateBreezeButtonState();
-          setDataSource('yahoo');
-          setTimeout(() => banner.remove(), 4000);
-        }
-        failed++;
       }
-    }));
+      fetched++;
+    });
 
-    await new Promise(r => setTimeout(r, 0)); // yield to UI
+    const elapsed  = json.elapsed ? ` · ${json.elapsed}s` : '';
+    const failNote = failed.length ? ` · ${failed.length} failed` : '';
+    const tailNote = isBacktestContext ? ' (tail overlay)' : '';
+    banner.textContent = `✅ ${modeLabel}: ${fetched}/${syms.length} symbols${tailNote}${failNote}${elapsed}`;
+    setTimeout(() => banner.remove(), 3500);
+
+  } catch (e) {
+    banner.style.background = 'var(--bear)';
+    banner.textContent = e.name === 'AbortError'
+      ? '⚠️ Breeze bulk fetch timed out — using Yahoo CSV data'
+      : `⚠️ Breeze fetch failed (${e.message}) — using Yahoo CSV data`;
+    setTimeout(() => banner.remove(), 4000);
+    console.warn('[Breeze bulk]', e);
   }
 
-  if (tokenFailed) return;
-
-  const tailNote = isBacktestContext ? ` (tail overlay — history from CSV)` : '';
-  banner.textContent = `✅ ${modeLabel}: ${fetched} symbols fetched${tailNote}${failed ? ` · ${failed} failed` : ''}`;
-  setTimeout(() => banner.remove(), 3000);
 }
 
-// Merge Breeze candles into existing CSV OHLC: Breeze candles override for their date range
 function _mergeBreezeIntoOHLC(csvOHLC, bzData, from, to) {
   const bzByDate = {};
   bzData.forEach(c => { bzByDate[c.date] = c; });

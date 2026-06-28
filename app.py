@@ -888,195 +888,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 
-# ── /breeze/ohlc endpoint ─────────────────────────────────────────────────────
-#
-# GET /breeze/ohlc?stock_code=RELIANCE&exchange_code=NSE&from=2026-01-01&to=2026-06-27&token=XXXXXXXX
-#
-# Fetches real-time/historical daily OHLC from ICICI Breeze API.
-# API key + secret are stored as Render env vars (never in code).
-# Session token is supplied per-request by the browser (expires daily).
-# adjClose is back-adjusted for corporate actions (splits/bonuses) using
-# the same >30% threshold logic as breeze_fetch.py — prevents phantom gap signals.
-
-try:
-    from breeze_connect import BreezeConnect
-    _BREEZE_AVAILABLE = True
-except ImportError:
-    _BREEZE_AVAILABLE = False
-
-BREEZE_API_KEY    = os.environ.get("BREEZE_API_KEY", "")
-BREEZE_API_SECRET = os.environ.get("BREEZE_API_SECRET", "")
-
-_CORP_ACTION_THRESHOLD = 0.30   # >30% day-over-day move = corporate action, not market
-
-
-def _compute_adj_close(closes: list) -> list:
-    """
-    Back-adjust a raw close series for corporate actions (splits / bonus issues).
-
-    Walks newest → oldest. When a day-over-day ratio exceeds ±30%
-    (above NSE's ±20% circuit limit, so only corporate actions trigger it),
-    applies a cumulative multiplier to all earlier candles — matching the
-    Yahoo Finance adjClose convention so gap signals are identical from both
-    data sources.
-    """
-    if not closes:
-        return []
-    adj        = closes[:]
-    cumulative = 1.0
-    for i in range(len(closes) - 1, 0, -1):
-        if closes[i] == 0:
-            continue
-        ratio = closes[i - 1] / closes[i]          # older / newer
-        if abs(ratio - 1.0) > _CORP_ACTION_THRESHOLD:
-            cumulative *= ratio
-        adj[i - 1] = closes[i - 1] / cumulative if cumulative else closes[i - 1]
-    return adj
-
-
-@app.route("/breeze/ohlc", methods=["GET", "OPTIONS"])
-def breeze_ohlc():
-    """
-    Fetch historical daily OHLC from Breeze API and return JSON.
-
-    Query params:
-        stock_code    — Breeze stock code  (e.g. RELIANCE, NIFTY, CNXBAN)
-        exchange_code — NSE or NFO          (default: NSE)
-        from          — YYYY-MM-DD
-        to            — YYYY-MM-DD
-        token         — Breeze session token (apisession value from login URL)
-
-    Response (success):
-        {"data": [{date, open, high, low, close, adjClose}, ...],
-         "source": "breeze", "symbol": "...", "exchange": "...", "candles": N}
-
-    Error responses:
-        {"error": "token_expired"}                    — 401
-        {"error": "missing_params",   "msg": "..."}   — 400
-        {"error": "server_config",    "msg": "..."}   — 500
-        {"error": "breeze_error",     "msg": "..."}   — 502
-    """
-    if request.method == "OPTIONS":
-        return cors_response({"ok": True})
-
-    if not _BREEZE_AVAILABLE:
-        return cors_response({"error": "server_config",
-                              "msg": "breeze-connect not installed"}, 500)
-
-    stock_code    = request.args.get("stock_code",    "").strip()
-    exchange_code = request.args.get("exchange_code", "NSE").strip().upper()
-    from_date     = request.args.get("from",          "").strip()
-    to_date       = request.args.get("to",            "").strip()
-    session_token = request.args.get("token",         "").strip()
-
-    # ── Validate ──────────────────────────────────────────────────────────────
-    if not all([stock_code, from_date, to_date, session_token]):
-        return cors_response({"error": "missing_params",
-                              "msg": "stock_code, from, to, token are all required"}, 400)
-
-    if not BREEZE_API_KEY or not BREEZE_API_SECRET:
-        return cors_response({"error": "server_config",
-                              "msg": "BREEZE_API_KEY / BREEZE_API_SECRET not set on server"}, 500)
-
-    # ── Connect + generate session ────────────────────────────────────────────
-    try:
-        breeze = BreezeConnect(api_key=BREEZE_API_KEY)
-        breeze.generate_session(
-            api_secret=BREEZE_API_SECRET,
-            session_token=session_token,
-        )
-    except Exception as e:
-        err = str(e).lower()
-        if any(k in err for k in ("invalid", "unauthori", "session", "expired", "token")):
-            return cors_response({"error": "token_expired"}, 401)
-        return cors_response({"error": "breeze_connect_failed", "msg": str(e)}, 502)
-
-    # ── Fetch historical data ─────────────────────────────────────────────────
-    from_dt      = from_date + "T07:00:00.000Z"
-    to_dt        = to_date   + "T07:00:00.000Z"
-    product_type = "futures" if exchange_code == "NFO" else "cash"
-
-    try:
-        resp = breeze.get_historical_data_v2(
-            interval="1day",
-            from_date=from_dt,
-            to_date=to_dt,
-            stock_code=stock_code,
-            exchange_code=exchange_code,
-            product_type=product_type,
-        )
-    except Exception as e:
-        err = str(e).lower()
-        if any(k in err for k in ("invalid", "unauthori", "session", "expired", "token")):
-            return cors_response({"error": "token_expired"}, 401)
-        return cors_response({"error": "breeze_error", "msg": str(e)}, 502)
-
-    # ── Parse response ────────────────────────────────────────────────────────
-    # Breeze returns: {"Success": [...], "Status": 200, "Error": None}
-    if not resp or resp.get("Status") != 200:
-        err_msg = (resp or {}).get("Error", "Empty response")
-        if err_msg and any(k in str(err_msg).lower() for k in ("invalid", "session", "token")):
-            return cors_response({"error": "token_expired"}, 401)
-        return cors_response({"error": "breeze_error", "msg": str(err_msg)}, 502)
-
-    rows = resp.get("Success") or []
-    if not rows:
-        return cors_response({"data": [], "source": "breeze",
-                              "symbol": stock_code, "exchange": exchange_code, "candles": 0})
-
-    # ── Normalise to TradeEdge OHLC format ────────────────────────────────────
-    data = []
-    for row in rows:
-        try:
-            raw_dt   = row.get("datetime") or row.get("date") or ""
-            date_str = str(raw_dt)[:10]        # YYYY-MM-DD only
-            if not date_str or date_str == "None":
-                continue
-            open_  = float(row.get("open")  or 0)
-            high   = float(row.get("high")  or 0)
-            low    = float(row.get("low")   or 0)
-            close  = float(row.get("close") or 0)
-            if not (open_ and high and low and close):
-                continue
-            data.append({
-                "date":     date_str,
-                "open":     round(open_, 4),
-                "high":     round(high,  4),
-                "low":      round(low,   4),
-                "close":    round(close, 4),
-                "adjClose": round(close, 4),   # overwritten below after back-adjustment
-            })
-        except (ValueError, TypeError):
-            continue
-
-    if not data:
-        return cors_response({"data": [], "source": "breeze",
-                              "symbol": stock_code, "exchange": exchange_code, "candles": 0})
-
-    # Sort ascending (Breeze may return newest-first)
-    data.sort(key=lambda r: r["date"])
-
-    # ── Back-adjust for corporate actions ─────────────────────────────────────
-    # Breeze delivers raw unadjusted closes. A 1:1 bonus issue creates a −50%
-    # phantom gap on ex-date which triggers a false Short signal. We detect
-    # moves > ±30% and apply a multiplicative back-adjustment identical to
-    # Yahoo Finance adjClose — so both data sources produce the same signals.
-    raw_closes = [r["close"] for r in data]
-    adj_closes = _compute_adj_close(raw_closes)
-    for i, row in enumerate(data):
-        row["adjClose"] = round(adj_closes[i], 4)
-
-    print(f"[breeze/ohlc] {stock_code}/{exchange_code} → {len(data)} candles "
-          f"({data[0]['date']} → {data[-1]['date']})")
-
-    return cors_response({
-        "data":     data,
-        "source":   "breeze",
-        "symbol":   stock_code,
-        "exchange": exchange_code,
-        "candles":  len(data),
-    })
-
 # ── /futures endpoint ─────────────────────────────────────────────────────────
 #
 # GET /futures?symbols=LTIM,INFY,TCS
@@ -1183,3 +994,360 @@ def futures_endpoint():
         "count": len(symbols),
     })
 
+
+# ── /breeze/ohlc/bulk endpoint ────────────────────────────────────────────────
+#
+# POST /breeze/ohlc/bulk
+# Body (JSON):
+#   {
+#     "symbols": [
+#       {"sym_id": "RELIANCE", "stock_code": "RELIND",  "exchange_code": "NSE"},
+#       {"sym_id": "NIFTY50",  "stock_code": "NIFTY",   "exchange_code": "NFO"},
+#       {"sym_id": "BSE",      "stock_code": "BSE",      "exchange_code": "BSE"},
+#       ...
+#     ],
+#     "from":  "2026-06-20",
+#     "to":    "2026-06-28",
+#     "token": "55699845"
+#   }
+#
+# Returns:
+#   {
+#     "status": "ok",
+#     "data": {
+#       "RELIANCE": [{date,open,high,low,close,adjClose}, ...],
+#       "NIFTY50":  [...],
+#       ...
+#     },
+#     "failed":  ["SWIGGY"],          # symbols with no data or API error
+#     "elapsed": 74.3,                # seconds
+#     "candles": {"RELIANCE": 5, ...} # candle count per symbol
+#   }
+#
+# Fetches all symbols sequentially with API_PAUSE_SECONDS between calls —
+# matching the cadence used by breeze_fetch.py to respect Breeze rate limits.
+# Uses get_quotes() for today's live candle (faster than historical API),
+# exactly as breeze_fetch.py does in delta mode.
+#
+# Single Breeze session is created once and reused for all symbols.
+
+import time as _time
+
+API_PAUSE_SECONDS = 0.35   # same as breeze_fetch.py — respect Breeze rate limit
+
+# Index ShortNames — get_quotes() does NOT work for indices; use historical API
+_INDEX_SHORT_NAMES = {
+    "NIFTY", "CNXBAN", "NIFFIN", "NIFSEL", "NIFNEX", "NATMIN",
+    "CNXIT",  "CNXAUT", "CNXPHA", "CNXENE", "CNXMET",
+    "CNXFMC", "CNXINF", "CNXCON",
+}
+
+
+def _breeze_iso(dt_str: str, end_of_day: bool = False) -> str:
+    """Convert YYYY-MM-DD to Breeze ISO format in UTC."""
+    from datetime import datetime, timezone, timedelta
+    IST_OFFSET = timedelta(hours=5, minutes=30)
+    dt = datetime.strptime(dt_str, "%Y-%m-%d")
+    if end_of_day:
+        dt = dt.replace(hour=23, minute=59, second=59)
+    else:
+        dt = dt.replace(hour=0, minute=0, second=0)
+    # Convert IST → UTC
+    utc = dt - IST_OFFSET
+    return utc.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def _parse_breeze_rows(rows: list, sym_id: str) -> list:
+    """Normalise raw Breeze rows → TradeEdge OHLC format [{date,open,high,low,close,adjClose}]."""
+    data = []
+    for row in rows:
+        try:
+            raw_dt  = row.get("datetime") or row.get("date") or ""
+            date_str = str(raw_dt)[:10]
+            if not date_str or date_str == "None":
+                continue
+            open_  = float(row.get("open")  or 0)
+            high   = float(row.get("high")  or 0)
+            low    = float(row.get("low")   or 0)
+            close  = float(row.get("close") or 0)
+            vol    = float(row.get("volume") or 0)
+            if not (open_ and high and low and close):
+                continue
+            data.append({
+                "date":     date_str,
+                "open":     round(open_, 4),
+                "high":     round(high,  4),
+                "low":      round(low,   4),
+                "close":    round(close, 4),
+                "adjClose": round(close, 4),  # overwritten after back-adjustment
+                "volume":   int(vol),
+            })
+        except (ValueError, TypeError):
+            continue
+    data.sort(key=lambda r: r["date"])
+    return data
+
+
+def _fetch_today_quotes(breeze, stock_code: str, exchange_code: str) -> dict | None:
+    """
+    Fetch today's live OHLC via get_quotes() during market hours.
+    Returns a single OHLC dict or None if not available / pre-market.
+    Mirrors fetch_today_daily_from_quotes() in breeze_fetch.py.
+
+    Guards:
+    - Returns None before 9:15 AM IST (market not open yet)
+    - Validates open > 0 (pre-market ltp may be yesterday's close)
+    """
+    from datetime import datetime, timedelta
+    IST_OFFSET = timedelta(hours=5, minutes=30)
+    now_ist    = datetime.utcnow() + IST_OFFSET
+
+    # Before 9:15 AM IST — market not open, get_quotes returns stale data
+    if now_ist.hour < 9 or (now_ist.hour == 9 and now_ist.minute < 15):
+        return None
+
+    try:
+        resp = breeze.get_quotes(
+            stock_code=stock_code,
+            exchange_code=exchange_code,
+            product_type="cash",
+        )
+        if not isinstance(resp, dict) or resp.get("Error"):
+            return None
+        success = resp.get("Success")
+        if not isinstance(success, list) or not success:
+            return None
+        row = next(
+            (r for r in success
+             if isinstance(r, dict)
+             and str(r.get("exchange_code", "")).upper() == exchange_code.upper()),
+            success[0] if isinstance(success[0], dict) else None
+        )
+        if not row:
+            return None
+        open_v  = row.get("open")
+        high_v  = row.get("high")
+        low_v   = row.get("low")
+        close_v = row.get("ltp") or row.get("close")
+        vol_v   = row.get("total_quantity_traded") or row.get("volume") or 0
+        if None in (open_v, high_v, low_v, close_v):
+            return None
+        # open = 0 means market hasn't opened yet for this symbol
+        if float(open_v) <= 0:
+            return None
+        today = now_ist.strftime("%Y-%m-%d")
+        return {
+            "date":     today,
+            "open":     round(float(open_v),  4),
+            "high":     round(float(high_v),  4),
+            "low":      round(float(low_v),   4),
+            "close":    round(float(close_v), 4),
+            "adjClose": round(float(close_v), 4),
+            "volume":   int(float(vol_v)),
+        }
+    except Exception:
+        return None
+
+
+def _fetch_today_historical(breeze, stock_code: str, exchange_code: str,
+                             product_type: str) -> dict | None:
+    """
+    Fetch today's candle via historical API.
+    Used for:
+    - Indices (get_quotes doesn't work for them)
+    - Fallback when get_quotes returns nothing for equities
+    During market hours returns the candle up to last completed bar.
+    After 3:30 PM IST returns the full completed day candle.
+    """
+    from datetime import datetime, timedelta
+    IST_OFFSET = timedelta(hours=5, minutes=30)
+    now_ist    = datetime.utcnow() + IST_OFFSET
+
+    # Before 9:15 AM IST — no data yet
+    if now_ist.hour < 9 or (now_ist.hour == 9 and now_ist.minute < 15):
+        return None
+
+    today_str = now_ist.strftime("%Y-%m-%d")
+    from_iso  = _breeze_iso(today_str, end_of_day=False)
+    to_iso    = _breeze_iso(today_str, end_of_day=True)
+
+    try:
+        resp = breeze.get_historical_data_v2(
+            interval="1day",
+            from_date=from_iso,
+            to_date=to_iso,
+            stock_code=stock_code,
+            exchange_code=exchange_code,
+            product_type=product_type,
+        )
+        if not resp or resp.get("Status") != 200:
+            return None
+        rows = resp.get("Success") or []
+        if not rows:
+            return None
+        parsed = _parse_breeze_rows(rows, stock_code)
+        if not parsed:
+            return None
+        row = parsed[-1]
+        # Only use if it's actually today's date
+        if row["date"] != today_str:
+            return None
+        return row
+    except Exception:
+        return None
+
+
+@app.route("/breeze/ohlc/bulk", methods=["POST", "OPTIONS"])
+def breeze_ohlc_bulk():
+    """
+    Bulk OHLC fetch — one Breeze session, sequential calls with 0.35s pause.
+    Dramatically faster than 210 individual browser→Render→Breeze round trips.
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    if not _BREEZE_AVAILABLE:
+        return cors_response({"error": "server_config",
+                              "msg": "breeze-connect not installed"}, 500)
+
+    body          = request.get_json(force=True) or {}
+    symbols       = body.get("symbols", [])   # [{sym_id, stock_code, exchange_code}]
+    from_date     = (body.get("from") or "").strip()
+    to_date       = (body.get("to")   or "").strip()
+    session_token = (body.get("token") or "").strip()
+
+    if not all([symbols, from_date, to_date, session_token]):
+        return cors_response({"error": "missing_params",
+                              "msg": "symbols[], from, to, token are required"}, 400)
+
+    if not BREEZE_API_KEY or not BREEZE_API_SECRET:
+        return cors_response({"error": "server_config",
+                              "msg": "BREEZE_API_KEY / BREEZE_API_SECRET not set"}, 500)
+
+    # ── Single session for all symbols ────────────────────────────────────────
+    try:
+        breeze = BreezeConnect(api_key=BREEZE_API_KEY)
+        breeze.generate_session(api_secret=BREEZE_API_SECRET, session_token=session_token)
+    except Exception as e:
+        err = str(e).lower()
+        if any(k in err for k in ("invalid", "unauthori", "session", "expired", "token")):
+            return cors_response({"error": "token_expired"}, 401)
+        return cors_response({"error": "breeze_connect_failed", "msg": str(e)}, 502)
+
+    # ── Is today within the requested range? ─────────────────────────────────
+    from datetime import datetime, timedelta, timezone
+    IST_OFFSET = timedelta(hours=5, minutes=30)
+    today_ist  = (datetime.utcnow() + IST_OFFSET).strftime("%Y-%m-%d")
+    fetch_today = (to_date >= today_ist)   # include live candle if range covers today
+
+    from_dt_iso = _breeze_iso(from_date, end_of_day=False)
+    to_dt_iso   = _breeze_iso(to_date,   end_of_day=True)
+
+    # ── Sequential fetch loop — 0.35s pause (matches breeze_fetch.py) ─────────
+    t0      = _time.time()
+    data    = {}   # sym_id → [ohlc rows]
+    candles = {}   # sym_id → count
+    failed  = []
+
+    for i, sym_entry in enumerate(symbols):
+        sym_id        = sym_entry.get("sym_id", "")
+        stock_code    = sym_entry.get("stock_code", sym_id)
+        exchange_code = sym_entry.get("exchange_code", "NSE").upper()
+        product_type  = "futures" if exchange_code == "NFO" else "cash"
+
+        try:
+            # ── Historical candles ────────────────────────────────────────────
+            resp = breeze.get_historical_data_v2(
+                interval="1day",
+                from_date=from_dt_iso,
+                to_date=to_dt_iso,
+                stock_code=stock_code,
+                exchange_code=exchange_code,
+                product_type=product_type,
+            )
+
+            if not resp or resp.get("Status") != 200:
+                err_msg = (resp or {}).get("Error", "")
+                if err_msg and any(k in str(err_msg).lower()
+                                   for k in ("invalid", "session", "token", "expired")):
+                    # Token expired mid-run — abort immediately
+                    return cors_response({
+                        "error":   "token_expired",
+                        "fetched": i,
+                        "data":    data,
+                        "failed":  failed,
+                    }, 401)
+                failed.append(sym_id)
+                _time.sleep(API_PAUSE_SECONDS)
+                continue
+
+            rows = resp.get("Success") or []
+            ohlc = _parse_breeze_rows(rows, sym_id)
+
+            # ── Today's live candle ───────────────────────────────────────────
+            # Strategy (mirrors breeze_fetch.py delta mode):
+            #   Equities → get_quotes() first (live LTP, faster during market hours)
+            #              fallback to historical API if get_quotes returns nothing
+            #   Indices  → historical API only (get_quotes doesn't work for indices)
+            # Both return None before 9:15 AM IST (pre-market).
+            if fetch_today:
+                today_row = None
+                if stock_code in _INDEX_SHORT_NAMES:
+                    # Indices: use historical API for today's bar
+                    today_row = _fetch_today_historical(
+                        breeze, stock_code, exchange_code, product_type
+                    )
+                else:
+                    # Equities: try get_quotes() first (live), fall back to historical
+                    today_row = _fetch_today_quotes(breeze, stock_code, exchange_code)
+                    if not today_row:
+                        today_row = _fetch_today_historical(
+                            breeze, stock_code, exchange_code, product_type
+                        )
+                if today_row:
+                    # Replace or append today's candle in the series
+                    ohlc = [r for r in ohlc if r["date"] != today_row["date"]]
+                    ohlc.append(today_row)
+                    ohlc.sort(key=lambda r: r["date"])
+
+            if not ohlc:
+                failed.append(sym_id)
+                _time.sleep(API_PAUSE_SECONDS)
+                continue
+
+            # ── Back-adjust for corporate actions ─────────────────────────────
+            raw_closes = [r["close"] for r in ohlc]
+            adj_closes = _compute_adj_close(raw_closes)
+            for j, row in enumerate(ohlc):
+                row["adjClose"] = round(adj_closes[j], 4)
+
+            data[sym_id]    = ohlc
+            candles[sym_id] = len(ohlc)
+
+        except Exception as e:
+            err = str(e).lower()
+            if any(k in err for k in ("invalid", "unauthori", "session", "expired", "token")):
+                return cors_response({
+                    "error":   "token_expired",
+                    "fetched": i,
+                    "data":    data,
+                    "failed":  failed,
+                }, 401)
+            failed.append(sym_id)
+
+        # ── Rate-limit pause between symbols ──────────────────────────────────
+        if i < len(symbols) - 1:
+            _time.sleep(API_PAUSE_SECONDS)
+
+    elapsed = round(_time.time() - t0, 1)
+    print(f"[breeze/bulk] {len(data)}/{len(symbols)} symbols · "
+          f"{sum(candles.values())} candles · {elapsed}s · {len(failed)} failed")
+
+    return cors_response({
+        "status":  "ok",
+        "data":    data,
+        "failed":  failed,
+        "elapsed": elapsed,
+        "candles": candles,
+        "count":   len(data),
+    })
