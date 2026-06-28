@@ -893,15 +893,17 @@ def _do_breeze_fetch_job():
                                 "adj_close": row["adj_close"],
                             })
                     existing.sort(key=lambda r: r.get("date",""))
+                    _FIELDS = ["date","open","high","low","close","adj_close"]
                     with open(csv_path, "w", newline='') as cf:
-                        writer = csv.DictWriter(cf, fieldnames=["date","open","high","low","close","adj_close"])
+                        writer = csv.DictWriter(cf, fieldnames=_FIELDS, extrasaction='ignore')
                         writer.writeheader()
                         writer.writerows(existing)
                 else:
                     # No existing CSV — write fresh
                     import csv
+                    _FIELDS = ["date","open","high","low","close","adj_close"]
                     with open(csv_path, "w", newline='') as cf:
-                        writer = csv.DictWriter(cf, fieldnames=["date","open","high","low","close","adj_close"])
+                        writer = csv.DictWriter(cf, fieldnames=_FIELDS, extrasaction='ignore')
                         writer.writeheader()
                         writer.writerows([{
                             "date": r["date"], "open": r["open"], "high": r["high"],
