@@ -3510,7 +3510,13 @@ function saveBreezeToken() {
   // Brief success flash then close
   const btn = document.querySelector('#breezeModal button[onclick="saveBreezeToken()"]');
   if (btn) { btn.textContent = '✓ Saved!'; btn.style.background = 'var(--bull)'; }
-  setTimeout(() => closeBreezeModal(), 900);
+  setTimeout(() => {
+    closeBreezeModal();
+    // Remind user to reload cloud data to activate Breeze overlay
+    if (_dataSource !== 'yahoo') {
+      showToast('📌 Tap ☁️ to reload cloud data and activate Breeze overlay', 4000);
+    }
+  }, 900);
 }
 
 function clearBreezeToken() {
@@ -3571,7 +3577,8 @@ async function _fetchOHLCBreeze(symId, from, to, token) {
     + `&exchange_code=${encodeURIComponent(exchange_code)}`
     + `&from=${from}&to=${to}`
     + `&token=${encodeURIComponent(token)}`;
-  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000));
+  // 60s timeout — Render free tier can take 30-60s to wake from cold start
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 60000));
   const res = await Promise.race([fetch(url), timeout]);
 
   // 401 = bad/expired token — tag it so callers can fast-fail
@@ -3611,6 +3618,11 @@ function setDataSource(src) {
     ['scan-ds-yahoo', 'scan-ds-breeze', 'scan-ds-compare'],
     ['mob-ds-yahoo', 'mob-ds-breeze', 'mob-ds-compare'],
   ];
+
+  // If switching to Breeze/Compare and data is already loaded, remind to reload cloud
+  if (src !== 'yahoo' && getAllLoadedSymbols().length > 0) {
+    showToast('📌 Tap ☁️ to reload cloud data and activate Breeze overlay', 4000);
+  }
   const activeClass = src === 'breeze' ? 'ds-breeze-active'
                     : src === 'compare' ? 'ds-compare-active' : '';
 
@@ -3884,10 +3896,203 @@ function _buildComparison(symId, yfData, bzData) {
 function getCompareSummary() {
   const syms = Object.keys(_compareResults);
   if (!syms.length) return null;
-  const totalMismatches = syms.reduce((n, s) => n + _compareResults[s].mismatches.length, 0);
-  const totalRows = syms.reduce((n, s) => n + _compareResults[s].totalRows, 0);
-  return { syms: syms.length, totalRows, totalMismatches,
-           mismatchPct: totalRows ? (totalMismatches / totalRows * 100).toFixed(1) : '0' };
+
+  let totalRows = 0, totalMismatches = 0;
+  let maxCloseDiff = 0, maxCloseSym = '', maxOpenDiff = 0, maxOpenSym = '';
+  let sumCloseDiff = 0, sumOpenDiff = 0, matchCount = 0;
+
+  syms.forEach(s => {
+    const r = _compareResults[s];
+    totalRows       += r.totalRows;
+    totalMismatches += r.mismatches.length;
+    r.rows.forEach(row => {
+      const cd = Math.abs(row.close_diff_pct);
+      const od = Math.abs(row.open_diff_pct);
+      sumCloseDiff += cd;
+      sumOpenDiff  += od;
+      matchCount++;
+      if (cd > maxCloseDiff) { maxCloseDiff = cd; maxCloseSym = s; }
+      if (od > maxOpenDiff)  { maxOpenDiff  = od; maxOpenSym  = s; }
+    });
+  });
+
+  const avgClose = matchCount ? sumCloseDiff / matchCount : 0;
+  const avgOpen  = matchCount ? sumOpenDiff  / matchCount : 0;
+  const mismatchPct = totalRows ? (totalMismatches / totalRows * 100) : 0;
+  const consistent  = mismatchPct < 1 && avgClose < 0.05;
+
+  return {
+    syms: syms.length, totalRows, totalMismatches, mismatchPct: mismatchPct.toFixed(1),
+    avgCloseDiff: avgClose.toFixed(3), maxCloseDiff: maxCloseDiff.toFixed(2), maxCloseSym,
+    avgOpenDiff:  avgOpen.toFixed(3),  maxOpenDiff:  maxOpenDiff.toFixed(2),  maxOpenSym,
+    consistent,
+  };
+}
+
+// ── Compare Summary Panel ─────────────────────────────────────────────────────
+// Rendered after backtest/scan completes in Compare mode.
+// Inserts a collapsible panel just above the results section.
+function renderCompareSummaryPanel(context) {
+  // Remove any existing panel
+  const existing = document.getElementById('te-compare-panel');
+  if (existing) existing.remove();
+  if (_dataSource !== 'compare') return;
+
+  const s = getCompareSummary();
+  if (!s) return;
+
+  const statusColor = s.consistent ? 'var(--bull)'  : 'var(--bear)';
+  const statusBg    = s.consistent ? 'rgba(26,107,60,0.08)' : 'rgba(181,41,14,0.08)';
+  const statusBorder= s.consistent ? 'rgba(26,107,60,0.25)' : 'rgba(181,41,14,0.25)';
+  const statusIcon  = s.consistent ? '✅' : '⚠️';
+  const statusText  = s.consistent
+    ? 'Sources are highly consistent — safe to use Breeze'
+    : 'Notable differences detected — review before switching to Breeze';
+
+  const panel = document.createElement('div');
+  panel.id = 'te-compare-panel';
+  panel.style.cssText = `margin:0 0 16px 0;border-radius:12px;overflow:hidden;
+    border:1px solid ${statusBorder};background:${statusBg};`;
+
+  panel.innerHTML = `
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;
+      border-bottom:1px solid ${statusBorder};"
+      onclick="this.parentElement.querySelector('.cmp-body').style.display =
+        this.parentElement.querySelector('.cmp-body').style.display==='none'?'block':'none';
+        this.querySelector('.cmp-chev').textContent =
+        this.parentElement.querySelector('.cmp-body').style.display==='none'?'▶':'▼';">
+      <span style="font-size:15px;">${statusIcon}</span>
+      <div style="flex:1;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--text);">
+          Yahoo vs Breeze Comparison
+          <span style="font-family:'DM Mono',monospace;font-weight:400;font-size:10px;
+            color:var(--text3);margin-left:8px;">
+            last 5d tail · ${s.syms} symbols · ${s.totalRows} candles
+          </span>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:${statusColor};margin-top:2px;">
+          ${statusText}
+        </div>
+      </div>
+      <span class="cmp-chev" style="font-size:11px;color:var(--text3);">▼</span>
+    </div>
+
+    <!-- Body -->
+    <div class="cmp-body" style="padding:14px 16px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+
+        <!-- Close diff -->
+        <div style="padding:10px 14px;background:var(--surface);border-radius:9px;
+          border:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
+            margin-bottom:4px;">CLOSE PRICE DIFF</div>
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;
+            color:var(--text);">avg ${s.avgCloseDiff}%</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);
+            margin-top:3px;">max ${s.maxCloseDiff}%
+            ${s.maxCloseSym ? `<span style="color:var(--accent)">(${s.maxCloseSym})</span>` : ''}
+          </div>
+        </div>
+
+        <!-- Open diff -->
+        <div style="padding:10px 14px;background:var(--surface);border-radius:9px;
+          border:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
+            margin-bottom:4px;">OPEN PRICE DIFF</div>
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;
+            color:var(--text);">avg ${s.avgOpenDiff}%</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);
+            margin-top:3px;">max ${s.maxOpenDiff}%
+            ${s.maxOpenSym ? `<span style="color:var(--accent)">(${s.maxOpenSym})</span>` : ''}
+          </div>
+        </div>
+
+        <!-- Mismatches -->
+        <div style="padding:10px 14px;background:var(--surface);border-radius:9px;
+          border:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
+            margin-bottom:4px;">CANDLE MISMATCHES &gt;0.1%</div>
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;
+            color:${s.totalMismatches > 0 ? 'var(--bear)' : 'var(--bull)'};">
+            ${s.totalMismatches}
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);
+            margin-top:3px;">${s.mismatchPct}% of ${s.totalRows} candles</div>
+        </div>
+
+        <!-- Verdict -->
+        <div style="padding:10px 14px;background:var(--surface);border-radius:9px;
+          border:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
+            margin-bottom:4px;">VERDICT</div>
+          <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
+            color:${statusColor};line-height:1.3;">
+            ${s.consistent ? 'Switch to Breeze ✓' : 'Review diffs first'}
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);
+            margin-top:3px;">
+            ${s.consistent
+              ? 'Data quality confirmed'
+              : `${s.totalMismatches} candle${s.totalMismatches!==1?'s':''} differ`}
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Mismatch detail table (only if there are mismatches) -->
+      ${s.totalMismatches > 0 ? `
+      <div style="margin-top:12px;">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
+          margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">
+          Candles with &gt;0.1% close price difference:
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:11px;">
+            <thead>
+              <tr style="color:var(--text3);border-bottom:1px solid var(--border);">
+                <th style="text-align:left;padding:4px 8px;">Symbol</th>
+                <th style="text-align:left;padding:4px 8px;">Date</th>
+                <th style="text-align:right;padding:4px 8px;">YF Close</th>
+                <th style="text-align:right;padding:4px 8px;">BZ Close</th>
+                <th style="text-align:right;padding:4px 8px;">Diff %</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.entries(_compareResults)
+                .flatMap(([sym, r]) => r.mismatches.map(m => ({ sym, ...m })))
+                .sort((a, b) => Math.abs(b.close_diff_pct) - Math.abs(a.close_diff_pct))
+                .slice(0, 20)   // max 20 rows
+                .map(m => `
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:5px 8px;color:var(--accent);font-weight:600;">${m.sym}</td>
+                    <td style="padding:5px 8px;color:var(--text2);">${m.date}</td>
+                    <td style="padding:5px 8px;text-align:right;">₹${m.yf_close.toFixed(2)}</td>
+                    <td style="padding:5px 8px;text-align:right;">₹${m.bz_close.toFixed(2)}</td>
+                    <td style="padding:5px 8px;text-align:right;
+                      color:${Math.abs(m.close_diff_pct)>0.5?'var(--bear)':'var(--text2)'};">
+                      ${m.close_diff_pct > 0 ? '+' : ''}${m.close_diff_pct.toFixed(2)}%
+                    </td>
+                  </tr>`).join('')}
+            </tbody>
+          </table>
+          ${Object.values(_compareResults).flatMap(r=>r.mismatches).length > 20
+            ? `<div style="font-size:10px;color:var(--text3);padding:6px 8px;">
+                Showing top 20 of ${Object.values(_compareResults).flatMap(r=>r.mismatches).length} mismatches
+               </div>` : ''}
+        </div>
+      </div>` : ''}
+
+    </div>`;
+
+  // Insert above results section (backtest) or scannerBody (scanner)
+  if (context === 'backtest') {
+    const resultsEl = document.getElementById('results');
+    if (resultsEl) resultsEl.parentNode.insertBefore(panel, resultsEl);
+  } else {
+    const scannerBody = document.getElementById('scannerBody');
+    if (scannerBody) scannerBody.insertBefore(panel, scannerBody.firstChild);
+  }
 }
 
 // ── _prefetchBreezeData ───────────────────────────────────────────────────────
@@ -3966,9 +4171,17 @@ async function _prefetchBreezeData(syms, from, to, context) {
 
   try {
     banner.textContent = `⚡ Breeze: validating token via ${probeSym}…`;
+    // If probe takes >8s, Render is likely waking from cold start — show warning
+    const coldStartTimer = setTimeout(() => {
+      if (banner.isConnected) {
+        banner.textContent = `⏳ Breeze: waking up Render server… (cold start, ~30-60s)`;
+      }
+    }, 8000);
     await _fetchOHLCBreeze(probeSym, probeFrom, fetchTo, token);
+    clearTimeout(coldStartTimer);
     // ✅ Token valid — proceed
   } catch (e) {
+    clearTimeout(coldStartTimer);
     if (e.tokenExpired) {
       banner.style.background = 'var(--bear)';
       banner.textContent = '🔴 Breeze token invalid — reverting to Yahoo Finance';
@@ -4576,10 +4789,7 @@ async function runBacktestSilent() {
   const params     = readCurrentParams();
   const { from, to } = readBacktestDates();
 
-  // Breeze / Compare pre-fetch for silent backtest
-  if (_dataSource !== 'yahoo') {
-    await _prefetchBreezeData(syms, from, to, 'silent-backtest');
-  }
+  // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
 
   allTrades = [];
   for (let i = 0; i < syms.length; i++) {
@@ -4691,16 +4901,12 @@ async function runBacktest() {
       Click ▶ Scan to find gap signals across all loaded symbols
     </div>`;
 
-  // ── Breeze / Compare pre-fetch ───────────────────────────────────────────
-  // In breeze or compare mode, overlay _loadedOHLC with fresh Breeze data
-  // for the backtest date range before the main loop runs.
-  if (_dataSource !== 'yahoo') {
-    await _prefetchBreezeData(syms, from, to, 'backtest');
-  }
-  // ────────────────────────────────────────────────────────────────────────
+  // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
+
+  // Clear compare results from previous run
+  Object.keys(_compareResults).forEach(k => delete _compareResults[k]);
 
   allTrades = [];
-  const skipped = [];
 
   for (let i = 0; i < syms.length; i++) {
     const sym = syms[i];
@@ -4816,6 +5022,8 @@ async function runBacktest() {
   buildResults(skipped);
   document.getElementById('results').style.display = 'block';
   document.getElementById('emptyState').style.display = 'none';
+  // Show compare summary panel if in compare mode
+  renderCompareSummaryPanel('backtest');
   // Show Hist WR filter in scanner now that backtest data is available
   resetRunBtn();
   // On mobile: auto-navigate to Summary after backtest
@@ -5560,17 +5768,7 @@ async function runScanner() {
   }
 
   // ── Proceed with scan ──────────────────────────────────────────────────────
-
-  // ── Breeze / Compare pre-fetch ──────────────────────────────────────────
-  if (_dataSource !== 'yahoo') {
-    // Scanner needs only a few days — gap = D1 close vs D2 open,
-    // so 5 calendar days back covers the scan date candle + previous day.
-    const scanDt = new Date(scanDate + 'T00:00:00');
-    scanDt.setDate(scanDt.getDate() - 5);
-    const fetchFrom = scanDt.toISOString().slice(0, 10);
-    await _prefetchBreezeData(syms, fetchFrom, scanDate, 'scanner');
-  }
-  // ────────────────────────────────────────────────────────────────────────
+  // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
 
   if (_strategy === 'intraday') {
     runScannerIntraday(scanDate, syms);
@@ -5684,6 +5882,8 @@ async function runScanner() {
   shorts.sort(_signalSortFn);
 
   const maxTotal = +document.getElementById('maxSignalsDay').value || 0;
+  // Clear compare results from previous scan run
+  Object.keys(_compareResults).forEach(k => delete _compareResults[k]);
   let longsOut, shortsOut;
   if (maxTotal > 0) {
     const allSigs = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
@@ -5700,6 +5900,8 @@ async function runScanner() {
   }
 
   renderScannerResults(scanDate, longsOut, shortsOut, params, wrThreshold, pnlThreshold);
+  // Show compare summary panel if in compare mode
+  renderCompareSummaryPanel('scanner');
 
   document.getElementById('scanSpinner').classList.remove('show');
   document.getElementById('scanBtnLabel').textContent = '▶ Scan';
@@ -6484,6 +6686,31 @@ async function loadFromCloud() {
     countEl.textContent = `${loaded} symbol(s) — caching in browser…`;
     let idbSaved = 0;
     try { idbSaved = await _idbSaveAll(); } catch(e) { console.warn('[cloud] IDB save failed:', e); }
+
+    // Step 4: Breeze tail overlay (only if token is fresh and mode is breeze/compare)
+    // Fetches last BREEZE_TAIL_DAYS from Breeze for all symbols and merges into
+    // _loadedOHLC — so all subsequent scans/backtests use real-time data instantly,
+    // with zero Breeze calls at run time.
+    const breezeToken = _getBreezeToken();
+    const breezeTs    = localStorage.getItem(BREEZE_TOKEN_TS);
+    const breezeAge   = breezeTs ? Date.now() - parseInt(breezeTs, 10) : Infinity;
+    const breezeReady = breezeToken && breezeAge < 20 * 60 * 60 * 1000;
+
+    if (breezeReady && _dataSource !== 'yahoo') {
+      bar.style.width   = '99%';
+      label.textContent = `⚡ Refreshing last ${BREEZE_TAIL_DAYS} days from Breeze… (may take ~60s on first run)`;
+      countEl.textContent = 'Overlaying real-time data…';
+
+      const symsForBreeze = getAllLoadedSymbols();
+      const tailTo   = new Date().toISOString().slice(0, 10);
+      const tailFrom = (() => {
+        const d = new Date(); d.setDate(d.getDate() - Math.ceil(BREEZE_TAIL_DAYS * 1.5));
+        return d.toISOString().slice(0, 10);
+      })();
+
+      await _prefetchBreezeData(symsForBreeze, tailFrom, tailTo, 'cloud-load');
+      // _prefetchBreezeData shows its own banner — no extra UI needed here
+    }
 
     allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
 
@@ -9059,7 +9286,8 @@ loadSavedDefaults();
       border:1px solid rgba(184,134,11,0.25);font-family:'DM Mono',monospace;font-size:10px;
       color:var(--gold);line-height:1.6;">
       ⚡ When token is set, TradeEdge fetches real-time OHLC via Breeze API instead of 15-min delayed Yahoo Finance.<br>
-      Token expires daily — refresh each morning from your Breeze portal.
+      Token expires daily — refresh each morning from your Breeze portal.<br><br>
+      📌 After saving token, select <strong>Breeze</strong> or <strong>Compare</strong> mode and tap ☁️ to reload cloud data — this merges today's Breeze candles into the history.
     </div>
   </div>
 </div>
@@ -9705,15 +9933,7 @@ async function runMobileScanner() {
     await runBacktestSilent();
   }
 
-  // ── Breeze / Compare pre-fetch (mobile) ──────────────────────────────────
-  if (_dataSource !== 'yahoo') {
-    const symsForBreeze = getAllLoadedSymbols();
-    const scanDt = new Date(scanDate + 'T00:00:00');
-    scanDt.setDate(scanDt.getDate() - 5);
-    const fetchFrom = scanDt.toISOString().slice(0, 10);
-    await _prefetchBreezeData(symsForBreeze, fetchFrom, scanDate, 'mobile-scanner');
-  }
-  // ─────────────────────────────────────────────────────────────────────────
+  // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
 
   // Clear signal registry
 
