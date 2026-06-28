@@ -3631,7 +3631,7 @@ function setDataSource(src) {
 
   // If switching to Breeze/Compare and data is already loaded, remind to reload cloud
   if (src !== 'yahoo' && getAllLoadedSymbols().length > 0) {
-    showToast('📌 Tap ☁️ to reload cloud data and activate Breeze overlay', 4000);
+    showToast('📌 Tap ☁️ to reload cloud data with fresh Breeze overlay', 3000);
   }
   const activeClass = src === 'breeze' ? 'ds-breeze-active'
                     : src === 'compare' ? 'ds-compare-active' : '';
@@ -6723,16 +6723,15 @@ async function loadFromCloud() {
     let idbSaved = 0;
     try { idbSaved = await _idbSaveAll(); } catch(e) { console.warn('[cloud] IDB save failed:', e); }
 
-    // Step 4: Breeze tail overlay (only if token is fresh and mode is breeze/compare)
-    // Fetches last BREEZE_TAIL_DAYS from Breeze for all symbols and merges into
-    // _loadedOHLC — so all subsequent scans/backtests use real-time data instantly,
-    // with zero Breeze calls at run time.
+    // Step 4: Breeze tail overlay — fetch last N days from Breeze and merge into _loadedOHLC.
+    // Triggered whenever a fresh Breeze token exists, regardless of current data source toggle.
+    // This ensures today's live candle is always available for the scanner even in Yahoo mode.
     const breezeToken = _getBreezeToken();
     const breezeTs    = localStorage.getItem(BREEZE_TOKEN_TS);
     const breezeAge   = breezeTs ? Date.now() - parseInt(breezeTs, 10) : Infinity;
     const breezeReady = breezeToken && breezeAge < 20 * 60 * 60 * 1000;
 
-    if (breezeReady && _dataSource !== 'yahoo') {
+    if (breezeReady) {
       bar.style.width   = '99%';
       label.textContent = `⚡ Refreshing last ${BREEZE_TAIL_DAYS} days from Breeze… (may take ~60s on first run)`;
       countEl.textContent = 'Overlaying real-time data…';
@@ -6744,8 +6743,12 @@ async function loadFromCloud() {
         return d.toISOString().slice(0, 10);
       })();
 
+      // Temporarily set dataSource to 'breeze' for the overlay fetch if currently on yahoo,
+      // then restore — so _prefetchBreezeData always runs the merge path.
+      const prevSource = _dataSource;
+      if (_dataSource === 'yahoo') _dataSource = 'breeze';
       await _prefetchBreezeData(symsForBreeze, tailFrom, tailTo, 'cloud-load');
-      // _prefetchBreezeData shows its own banner — no extra UI needed here
+      _dataSource = prevSource;
     }
 
     allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
@@ -9344,9 +9347,9 @@ loadSavedDefaults();
     <div style="margin-top:14px;padding:10px 12px;border-radius:8px;background:var(--gold-bg);
       border:1px solid rgba(184,134,11,0.25);font-family:'DM Mono',monospace;font-size:10px;
       color:var(--gold);line-height:1.6;">
-      ⚡ When token is set, TradeEdge fetches real-time OHLC via Breeze API instead of 15-min delayed Yahoo Finance.<br>
+      ⚡ When token is set, TradeEdge automatically overlays today's real-time OHLC from Breeze on every ☁️ Load — no need to switch data source first.<br>
       Token expires daily — refresh each morning from your Breeze portal.<br><br>
-      📌 After saving token, select <strong>Breeze</strong> or <strong>Compare</strong> mode and tap ☁️ to reload cloud data — this merges today's Breeze candles into the history.
+      📌 After saving token, tap ☁️ to load cloud data — Breeze tail is fetched automatically.
     </div>
   </div>
 </div>
