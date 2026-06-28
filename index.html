@@ -3556,23 +3556,63 @@ async function runBreezeFetch() {
       // 3. Poll fetch-status until done
       let done = false;
       let attempts = 0;
-      while (!done && attempts < 60) {  // max 5 min (60 × 5s)
+      while (!done && attempts < 60) {
         await new Promise(r => setTimeout(r, 5000));
         attempts++;
         try {
           const statusRes  = await fetch(`${TRADEEDGE_API_URL}/fetch-status`);
           const statusJson = await statusRes.json();
-          const pct = statusJson.progress ?? statusJson.pct ?? '';
-          banner.textContent = `⏳ Breeze fetch: ${statusJson.status || 'running'}${pct ? ' · ' + pct : ''}…`;
-          if (statusJson.status === 'idle' || statusJson.done) {
+          const ok         = statusJson.ok      ?? 0;
+          const failed     = statusJson.failed   ?? 0;
+          const total      = statusJson.total    ?? 0;
+          const pct        = statusJson.pct      ?? '';
+          const failedSyms = statusJson.failedSyms ?? [];
+
+          // Build banner text with live ok/failed counts
+          let bannerText = `⏳ Breeze fetch: ${statusJson.status || 'running'}`;
+          if (total > 0) {
+            bannerText = `⏳ Breeze: ${pct || ok + '/' + total}`;
+            if (ok > 0)     bannerText += ` ✓${ok}`;
+            if (failed > 0) bannerText += ` ✗${failed}`;
+          }
+          banner.textContent = bannerText;
+
+          // Turn banner orange if failures are accumulating
+          if (failed > 0 && failed > ok * 0.5) {
+            banner.style.background = 'var(--accent)';  // orange warning
+          }
+
+          // Log failed symbols to console for debugging
+          if (failedSyms.length > 0) {
+            console.warn('[Breeze fetch] Failed symbols so far:', failedSyms);
+          }
+
+          if (statusJson.status === 'idle' || statusJson.done ||
+              (statusJson.status && statusJson.status.startsWith('done'))) {
             done = true;
           }
         } catch { /* ignore poll errors */ }
       }
 
-      banner.style.background = 'var(--bull)';
-      banner.textContent = '✅ Breeze data fetched — tap ☁️ to load updated CSVs';
-      setTimeout(() => banner.remove(), 5000);
+      // Get final status for summary
+      let finalOk = 0, finalFailed = 0, finalFailedSyms = [];
+      try {
+        const finalRes  = await fetch(`${TRADEEDGE_API_URL}/fetch-status`);
+        const finalJson = await finalRes.json();
+        finalOk         = finalJson.ok         ?? 0;
+        finalFailed     = finalJson.failed      ?? 0;
+        finalFailedSyms = finalJson.failedSyms  ?? [];
+      } catch {}
+
+      banner.style.background = finalFailed > finalOk * 0.3 ? 'var(--accent)' : 'var(--bull)';
+      banner.textContent = finalFailed > 0
+        ? `⚠️ Breeze: ${finalOk} ✓ · ${finalFailed} ✗ failed — tap ☁️ to load`
+        : `✅ Breeze: ${finalOk} symbols fetched — tap ☁️ to load updated CSVs`;
+
+      if (finalFailedSyms.length > 0) {
+        console.warn('[Breeze fetch] Failed symbols:', finalFailedSyms);
+      }
+      setTimeout(() => banner.remove(), 8000);
     } else {
       throw new Error(fetchJson.error || 'Fetch job failed to start');
     }

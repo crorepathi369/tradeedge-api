@@ -139,6 +139,7 @@ _fetch_status = {
     "finishedAt": None,
     "ok":         0,
     "failed":     0,
+    "total":      0,
     "failedSyms": [],
     "lastError":  None,
     "log":        [],        # last N log lines
@@ -714,10 +715,14 @@ def _do_breeze_fetch_job():
     import json as _json
     global _fetch_status
 
-    _fetch_status["running"] = True
-    _fetch_status["status"]  = "starting"
-    _fetch_status["done"]    = False
-    _fetch_status["error"]   = None
+    _fetch_status["running"]    = True
+    _fetch_status["status"]     = "starting"
+    _fetch_status["done"]       = False
+    _fetch_status["error"]      = None
+    _fetch_status["ok"]         = 0
+    _fetch_status["failed"]     = 0
+    _fetch_status["failedSyms"] = []
+    _fetch_status["total"]      = 0
 
     try:
         # Read stored token
@@ -753,6 +758,7 @@ def _do_breeze_fetch_job():
         failed     = []
         _PAUSE     = 0.35   # same as breeze_fetch.py
 
+        _fetch_status["total"]  = total
         _fetch_status["status"] = f"fetching Breeze data for {total} symbols"
 
         for i, sym in enumerate(symbols):
@@ -836,6 +842,8 @@ def _do_breeze_fetch_job():
 
                 if not rows:
                     failed.append(sym)
+                    _fetch_status["failed"]     = len(failed)
+                    _fetch_status["failedSyms"] = failed[-20:]
                     _time.sleep(_PAUSE)
                     continue
 
@@ -860,6 +868,8 @@ def _do_breeze_fetch_job():
 
                 if not parsed:
                     failed.append(sym)
+                    _fetch_status["failed"]     = len(failed)
+                    _fetch_status["failedSyms"] = failed[-20:]
                     _time.sleep(_PAUSE)
                     continue
 
@@ -911,10 +921,13 @@ def _do_breeze_fetch_job():
                         } for r in parsed])
 
                 fetched += 1
+                _fetch_status["ok"] = fetched
 
             except Exception as e:
                 print(f"[breeze/fetch] {sym} error: {e}")
                 failed.append(sym)
+                _fetch_status["failed"]     = len(failed)
+                _fetch_status["failedSyms"] = failed[-20:]  # keep last 20 failed syms
 
             _time.sleep(_PAUSE)
 
