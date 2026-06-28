@@ -849,6 +849,9 @@ def _do_breeze_fetch_job():
             # 104 symbols not in Breeze file — will use NSE symbol as-is
             # These will be attempted and may fail; that is acceptable
         }
+        INDEX_PREFIXES = ('NIFTY50', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY',
+                          'CNXIT', 'CNXAUTO', 'CNXPHARMA', 'CNXENERGY',
+                          'CNXMETAL', 'CNXFMCG', 'CNXINFRA', 'CNXCONSUM')
         symbols    = [s for s in ALL_SYMBOLS if not any(s == idx for idx in INDEX_PREFIXES)]
         total      = len(symbols)
         fetched    = 0
