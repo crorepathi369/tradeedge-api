@@ -1313,6 +1313,20 @@ def breeze_ohlc_bulk():
                 product_type=product_type,
             )
 
+            # Log first symbol response in full so we can see exact Breeze output
+            if sym_id == symbols[0].get("sym_id"):
+                print(f"[breeze/bulk] FIRST SYMBOL RAW RESPONSE for {sym_id}:")
+                print(f"  from_dt_iso  : {from_dt_iso}")
+                print(f"  to_dt_iso    : {to_dt_iso}")
+                print(f"  stock_code   : {stock_code}")
+                print(f"  exchange_code: {exchange_code}")
+                print(f"  product_type : {product_type}")
+                print(f"  resp Status  : {resp.get('Status') if resp else 'None'}")
+                print(f"  resp Error   : {resp.get('Error') if resp else 'None'}")
+                rows_preview = (resp.get('Success') or [])[:2] if resp else []
+                print(f"  rows count   : {len(resp.get('Success') or []) if resp else 0}")
+                print(f"  first 2 rows : {rows_preview}")
+
             if not resp or resp.get("Status") != 200:
                 err_msg = (resp or {}).get("Error", "")
                 print(f"[breeze/bulk] {sym_id} ({stock_code}/{exchange_code}) FAIL: status={resp.get('Status') if resp else None} err={err_msg!r} rows={len((resp or {}).get('Success') or [])}")
