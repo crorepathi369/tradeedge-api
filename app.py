@@ -1315,6 +1315,7 @@ def breeze_ohlc_bulk():
 
             if not resp or resp.get("Status") != 200:
                 err_msg = (resp or {}).get("Error", "")
+                print(f"[breeze/bulk] {sym_id} ({stock_code}/{exchange_code}) FAIL: status={resp.get('Status') if resp else None} err={err_msg!r} rows={len((resp or {}).get('Success') or [])}")
                 if err_msg and any(k in str(err_msg).lower()
                                    for k in ("invalid", "session", "token", "expired")):
                     return cors_response({"error": "token_expired",
