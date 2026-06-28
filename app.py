@@ -1230,17 +1230,9 @@ def _fetch_today_historical(breeze, stock_code: str, exchange_code: str,
 @app.route("/breeze/ohlc/bulk", methods=["POST", "OPTIONS"])
 def breeze_ohlc_bulk():
     """
-    Bulk OHLC fetch using streaming JSON response.
-    Streams each symbol's result as it's fetched — flat memory usage regardless
-    of symbol count. One Breeze session, sequential calls with 0.35s pause.
-    
-    Response: newline-delimited JSON (NDJSON), one object per line:
-      {"sym_id": "RELIANCE", "data": [...], "ok": true}
-      {"sym_id": "INFY",     "data": [...], "ok": true}
-      ...
-      {"done": true, "elapsed": 74.2, "count": 210, "failed": []}
-    
-    Frontend reads the stream and merges into _loadedOHLC as each line arrives.
+    Bulk OHLC fetch — single JSON response (no streaming).
+    Render processes all symbols sequentially with no pause,
+    returns one complete JSON object. Browser merges on receipt.
     """
     if request.method == "OPTIONS":
         return cors_response({"ok": True})
@@ -1263,7 +1255,7 @@ def breeze_ohlc_bulk():
         return cors_response({"error": "server_config",
                               "msg": "BREEZE_API_KEY / BREEZE_API_SECRET not set"}, 500)
 
-    # ── Single session for all symbols ────────────────────────────────────────
+    # ── Single Breeze session ─────────────────────────────────────────────────
     try:
         breeze = BreezeConnect(api_key=BREEZE_API_KEY)
         breeze.generate_session(api_secret=BREEZE_API_SECRET, session_token=session_token)
@@ -1281,90 +1273,81 @@ def breeze_ohlc_bulk():
     from_dt_iso = _breeze_iso(from_date, end_of_day=False)
     to_dt_iso   = _breeze_iso(to_date,   end_of_day=True)
 
-    import json as _json
+    # ── Sequential fetch — no pause ───────────────────────────────────────────
+    t0     = _time.time()
+    data   = {}
+    failed = []
 
-    def generate():
-        t0     = _time.time()
-        count  = 0
-        failed = []
+    for sym_entry in symbols:
+        sym_id        = sym_entry.get("sym_id", "")
+        stock_code    = sym_entry.get("stock_code", sym_id)
+        exchange_code = sym_entry.get("exchange_code", "NSE").upper()
+        product_type  = "futures" if exchange_code == "NFO" else "cash"
 
-        for i, sym_entry in enumerate(symbols):
-            sym_id        = sym_entry.get("sym_id", "")
-            stock_code    = sym_entry.get("stock_code", sym_id)
-            exchange_code = sym_entry.get("exchange_code", "NSE").upper()
-            product_type  = "futures" if exchange_code == "NFO" else "cash"
+        try:
+            resp = breeze.get_historical_data_v2(
+                interval="1day",
+                from_date=from_dt_iso,
+                to_date=to_dt_iso,
+                stock_code=stock_code,
+                exchange_code=exchange_code,
+                product_type=product_type,
+            )
 
-            try:
-                resp = breeze.get_historical_data_v2(
-                    interval="1day",
-                    from_date=from_dt_iso,
-                    to_date=to_dt_iso,
-                    stock_code=stock_code,
-                    exchange_code=exchange_code,
-                    product_type=product_type,
-                )
+            if not resp or resp.get("Status") != 200:
+                err_msg = (resp or {}).get("Error", "")
+                if err_msg and any(k in str(err_msg).lower()
+                                   for k in ("invalid", "session", "token", "expired")):
+                    return cors_response({"error": "token_expired",
+                                          "data": data, "failed": failed}, 401)
+                failed.append(sym_id)
+                continue
 
-                if not resp or resp.get("Status") != 200:
-                    err_msg = (resp or {}).get("Error", "")
-                    if err_msg and any(k in str(err_msg).lower()
-                                       for k in ("invalid", "session", "token", "expired")):
-                        yield _json.dumps({"error": "token_expired", "fetched": i}) + "\n"
-                        return
-                    failed.append(sym_id)
-                    continue
+            rows = resp.get("Success") or []
+            ohlc = _parse_breeze_rows(rows, sym_id)
 
-                rows = resp.get("Success") or []
-                ohlc = _parse_breeze_rows(rows, sym_id)
-
-                # Today's live candle
-                if fetch_today:
-                    today_row = None
-                    if stock_code in _INDEX_SHORT_NAMES:
+            # Today's live candle
+            if fetch_today:
+                today_row = None
+                if stock_code in _INDEX_SHORT_NAMES:
+                    today_row = _fetch_today_historical(
+                        breeze, stock_code, exchange_code, product_type)
+                else:
+                    today_row = _fetch_today_quotes(breeze, stock_code, exchange_code)
+                    if not today_row:
                         today_row = _fetch_today_historical(
                             breeze, stock_code, exchange_code, product_type)
-                    else:
-                        today_row = _fetch_today_quotes(breeze, stock_code, exchange_code)
-                        if not today_row:
-                            today_row = _fetch_today_historical(
-                                breeze, stock_code, exchange_code, product_type)
-                    if today_row:
-                        ohlc = [r for r in ohlc if r["date"] != today_row["date"]]
-                        ohlc.append(today_row)
-                        ohlc.sort(key=lambda r: r["date"])
+                if today_row:
+                    ohlc = [r for r in ohlc if r["date"] != today_row["date"]]
+                    ohlc.append(today_row)
+                    ohlc.sort(key=lambda r: r["date"])
 
-                if not ohlc:
-                    failed.append(sym_id)
-                    continue
-
-                # Back-adjust for corporate actions
-                raw_closes = [r["close"] for r in ohlc]
-                adj_closes = _compute_adj_close(raw_closes)
-                for j, row in enumerate(ohlc):
-                    row["adjClose"] = round(adj_closes[j], 4)
-
-                # Stream immediately — no accumulation in memory
-                yield _json.dumps({"sym_id": sym_id, "data": ohlc, "ok": True}) + "\n"
-                count += 1
-
-            except Exception as e:
-                err = str(e).lower()
-                if any(k in err for k in ("invalid", "unauthori", "session", "expired", "token")):
-                    yield _json.dumps({"error": "token_expired", "fetched": i}) + "\n"
-                    return
+            if not ohlc:
                 failed.append(sym_id)
-            # No pause — 5-day fetch is tiny, Breeze handles it without rate limiting
+                continue
 
-        elapsed = round(_time.time() - t0, 1)
-        print(f"[breeze/bulk] {count}/{len(symbols)} symbols · {elapsed}s · {len(failed)} failed")
-        yield _json.dumps({"done": True, "elapsed": elapsed,
-                           "count": count, "failed": failed}) + "\n"
+            raw_closes = [r["close"] for r in ohlc]
+            adj_closes = _compute_adj_close(raw_closes)
+            for j, row in enumerate(ohlc):
+                row["adjClose"] = round(adj_closes[j], 4)
 
-    # Stream with CORS headers
-    response = app.response_class(
-        generate(),
-        mimetype="application/x-ndjson",
-    )
-    response.headers["Access-Control-Allow-Origin"]  = "*"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    response.headers["X-Content-Type-Options"]       = "nosniff"
-    return response
+            data[sym_id] = ohlc
+
+        except Exception as e:
+            err = str(e).lower()
+            if any(k in err for k in ("invalid", "unauthori", "session", "expired", "token")):
+                return cors_response({"error": "token_expired",
+                                      "data": data, "failed": failed}, 401)
+            failed.append(sym_id)
+
+    elapsed = round(_time.time() - t0, 1)
+    print(f"[breeze/bulk] {len(data)}/{len(symbols)} · {elapsed}s · {len(failed)} failed")
+
+    return cors_response({
+        "status":  "ok",
+        "data":    data,
+        "failed":  failed,
+        "elapsed": elapsed,
+        "count":   len(data),
+    })
+
