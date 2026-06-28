@@ -170,45 +170,7 @@
     box-shadow: 0 1px 6px rgba(0,0,0,0.15);
   }
 
-  /* Data Source toggle buttons */
-  .ds-btn {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 4px 10px;
-    border-radius: 6px;
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--text2);
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-  .ds-btn:hover:not(.active) { background: var(--surface); color: var(--text); }
-  .ds-btn.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-    box-shadow: 0 1px 4px rgba(200,80,10,0.25);
-  }
-  /* breeze active state — green */
-  .ds-btn.active.ds-breeze-active {
-    background: var(--bull);
-    border-color: var(--bull);
-    box-shadow: 0 1px 4px rgba(26,107,60,0.25);
-  }
-  /* compare active state — gold */
-  .ds-btn.active.ds-compare-active {
-    background: var(--gold);
-    border-color: var(--gold);
-    color: #fff;
-    box-shadow: 0 1px 4px rgba(184,134,11,0.25);
-  }
-  .ds-btn-sm {
-    font-size: 10px;
-    padding: 3px 7px;
-    border-radius: 5px;
-  }
+
 
   /* Strategy tabs — desktop */
   #msConfig .section-header,
@@ -2472,6 +2434,7 @@
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <button class="desk-icon-btn" id="breezeTokenBtn" onclick="showBreezeModal()" title="Set Breeze API Session">🔑</button>
+    <button class="desk-icon-btn" id="breezeFetchBtn" onclick="runBreezeFetch()" title="Fetch today's data from Breeze API">📡</button>
     <button class="desk-icon-btn" id="cloudBarBtn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
     <button class="desk-icon-btn" onclick="showCacheStatus()" title="Cache status">🗄</button>
     <button class="desk-icon-btn" onclick="purgeAllCache()" title="Clear cache" style="color:var(--bear);">🗑</button>
@@ -2659,13 +2622,6 @@
 
     <!-- Row 3: Data Source + action buttons -->
     <div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
-      <!-- Data Source Toggle -->
-      <div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;">
-        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);padding:0 4px;white-space:nowrap;">Data:</span>
-        <button class="ds-btn active" id="ds-yahoo"   onclick="setDataSource('yahoo')"   title="15-min delayed Yahoo Finance data">Yahoo</button>
-        <button class="ds-btn"       id="ds-breeze"  onclick="setDataSource('breeze')"  title="Real-time Breeze API data (token required)">Breeze</button>
-        <button class="ds-btn"       id="ds-compare" onclick="setDataSource('compare')" title="Fetch from both and compare results">Compare</button>
-      </div>
       <div style="width:1px;height:24px;background:var(--border);"></div>
       <button class="btn btn-primary" id="runBtn" onclick="runBacktest()">
         <div class="spinner" id="btnSpinner"></div>
@@ -2745,12 +2701,7 @@
             <div class="spinner" id="scanSpinner"></div>
             <span id="scanBtnLabel">▶ Scan</span>
           </button>
-          <!-- Scanner data source toggle — mirrors backtest toggle -->
-          <div style="display:flex;align-items:center;gap:4px;padding:3px 5px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;">
-            <button class="ds-btn ds-btn-sm active" id="scan-ds-yahoo"   onclick="setDataSource('yahoo')"   title="Yahoo Finance">YF</button>
-            <button class="ds-btn ds-btn-sm"        id="scan-ds-breeze"  onclick="setDataSource('breeze')"  title="Breeze API">BZ</button>
-            <button class="ds-btn ds-btn-sm"        id="scan-ds-compare" onclick="setDataSource('compare')" title="Compare both">⇄</button>
-          </div>
+
         </div>
       </div>
       <!-- Scanner body — collapsible -->
@@ -3494,8 +3445,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.removeItem(BREEZE_TOKEN_KEY);
       localStorage.removeItem(BREEZE_TOKEN_TS);
     }
-    // Ensure UI is locked to Yahoo on load
-    _dataSource = 'yahoo';
+
   }
 
   _updateBreezeButtonState();
@@ -3511,22 +3461,105 @@ function saveBreezeToken() {
     return;
   }
 
+  // Save locally
   localStorage.setItem(BREEZE_TOKEN_KEY, token);
   localStorage.setItem(BREEZE_TOKEN_TS, Date.now().toString());
   errEl.textContent = '';
   _renderBreezeStatus();
   _updateBreezeButtonState();
 
+  // Also POST to Render so server-side fetch jobs can use it
+  fetch(`${TRADEEDGE_API_URL}/breeze/set-token`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ token }),
+  }).then(r => r.json())
+    .then(j => console.log('[Breeze] Token stored on server:', j))
+    .catch(e => console.warn('[Breeze] Could not store token on server:', e));
+
   // Brief success flash then close
   const btn = document.querySelector('#breezeModal button[onclick="saveBreezeToken()"]');
   if (btn) { btn.textContent = '✓ Saved!'; btn.style.background = 'var(--bull)'; }
   setTimeout(() => {
     closeBreezeModal();
-    // Remind user to reload cloud data to activate Breeze overlay
-    if (_dataSource !== 'yahoo') {
-      showToast('📌 Tap ☁️ to reload cloud data and activate Breeze overlay', 4000);
-    }
+    showToast('📌 Tap 📡 to fetch today\'s Breeze data, then ☁️ to load', 3000);
   }, 900);
+}
+
+// ── 📡 Breeze Fetch — triggers server-side fetch of today's data ──────────────
+async function runBreezeFetch() {
+  const token = _getBreezeToken();
+  if (!token) {
+    showToast('⚠️ No Breeze token — tap 🔑 to set session first', 3500);
+    return;
+  }
+
+  // Check token age
+  const ts    = localStorage.getItem(BREEZE_TOKEN_TS);
+  const ageMs = ts ? Date.now() - parseInt(ts, 10) : Infinity;
+  if (ageMs > 20 * 60 * 60 * 1000) {
+    showToast('🔴 Breeze token expired — tap 🔑 to refresh', 3500);
+    localStorage.removeItem(BREEZE_TOKEN_KEY);
+    _updateBreezeButtonState();
+    return;
+  }
+
+  // Disable button during fetch
+  const btns = ['breezeFetchBtn', 'mobBreezeFetchBtn'];
+  btns.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+
+  const banner = _showBreezeBanner('⚡ Sending Breeze token to server…');
+
+  try {
+    // 1. Store token server-side
+    const setRes = await fetch(`${TRADEEDGE_API_URL}/breeze/set-token`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ token }),
+    });
+    if (!setRes.ok) throw new Error('Failed to store token: HTTP ' + setRes.status);
+
+    // 2. Trigger Breeze fetch job
+    banner.textContent = '⚡ Fetching today\'s data from Breeze for all 210 symbols…';
+    const fetchRes = await fetch(`${TRADEEDGE_API_URL}/run-fetch?mode=breeze`, { method: 'POST' });
+    if (!fetchRes.ok) throw new Error('HTTP ' + fetchRes.status);
+    const fetchJson = await fetchRes.json();
+
+    if (fetchJson.status === 'started' || fetchJson.ok) {
+      banner.textContent = '⏳ Breeze fetch running… polling for completion';
+
+      // 3. Poll fetch-status until done
+      let done = false;
+      let attempts = 0;
+      while (!done && attempts < 60) {  // max 5 min (60 × 5s)
+        await new Promise(r => setTimeout(r, 5000));
+        attempts++;
+        try {
+          const statusRes  = await fetch(`${TRADEEDGE_API_URL}/fetch-status`);
+          const statusJson = await statusRes.json();
+          const pct = statusJson.progress ?? statusJson.pct ?? '';
+          banner.textContent = `⏳ Breeze fetch: ${statusJson.status || 'running'}${pct ? ' · ' + pct : ''}…`;
+          if (statusJson.status === 'idle' || statusJson.done) {
+            done = true;
+          }
+        } catch { /* ignore poll errors */ }
+      }
+
+      banner.style.background = 'var(--bull)';
+      banner.textContent = '✅ Breeze data fetched — tap ☁️ to load updated CSVs';
+      setTimeout(() => banner.remove(), 5000);
+    } else {
+      throw new Error(fetchJson.error || 'Fetch job failed to start');
+    }
+
+  } catch (e) {
+    banner.style.background = 'var(--bear)';
+    banner.textContent = `⚠️ Breeze fetch failed: ${e.message}`;
+    setTimeout(() => banner.remove(), 4000);
+    console.error('[runBreezeFetch]', e);
+  } finally {
+    btns.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+  }
 }
 
 function clearBreezeToken() {
@@ -3579,106 +3612,6 @@ function _breezeSymbol(symId) {
   return { stock_code: symId, exchange_code: 'NSE' };
 }
 
-// ── Breeze OHLC fetch via Render backend ──────────────────────────────────────
-async function _fetchOHLCBreeze(symId, from, to, token, timeoutMs = 15000) {
-  const { stock_code, exchange_code } = _breezeSymbol(symId);
-  const url = `${TRADEEDGE_API_URL}/breeze/ohlc?`
-    + `stock_code=${encodeURIComponent(stock_code)}`
-    + `&exchange_code=${encodeURIComponent(exchange_code)}`
-    + `&from=${from}&to=${to}`
-    + `&token=${encodeURIComponent(token)}`;
-  // timeoutMs: 60s for probe (cold start), 15s for regular per-symbol fetches
-  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs));
-  const res = await Promise.race([fetch(url), timeout]);
-
-  // 401 = bad/expired token — tag it so callers can fast-fail
-  if (res.status === 401) {
-    throw Object.assign(new Error('token_expired'), { tokenExpired: true });
-  }
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-
-  const json = await res.json();
-  // Also handle token_expired in JSON body (belt-and-suspenders)
-  if (json.error === 'token_expired') {
-    throw Object.assign(new Error('token_expired'), { tokenExpired: true });
-  }
-  if (!Array.isArray(json.data) || !json.data.length) throw new Error('No data from Breeze');
-  return json.data; // [{date,open,high,low,close,adjClose}]
-}
-
-let _breezeTokenExpiredWarned = false;
-
-// ── Data Source state ─────────────────────────────────────────────────────────
-// 'yahoo' | 'breeze' | 'compare'
-let _dataSource = 'yahoo';
-
-function setDataSource(src) {
-  _dataSource = src;
-
-  // Guard: if breeze/compare selected but no token → warn and revert
-  if (src !== 'yahoo' && !_getBreezeToken()) {
-    showToast('⚠️ No Breeze token set — tap 🔑 to add session', 3500);
-    _dataSource = 'yahoo';
-    src = 'yahoo';
-  }
-
-  // IDs for all toggle button groups
-  const groups = [
-    ['ds-yahoo', 'ds-breeze', 'ds-compare'],
-    ['scan-ds-yahoo', 'scan-ds-breeze', 'scan-ds-compare'],
-    ['mob-ds-yahoo', 'mob-ds-breeze', 'mob-ds-compare'],
-  ];
-
-  // If switching to Breeze/Compare and data is already loaded, remind to reload cloud
-  if (src !== 'yahoo' && getAllLoadedSymbols().length > 0) {
-    showToast('📌 Tap ☁️ to reload cloud data with fresh Breeze overlay', 3000);
-  }
-  const activeClass = src === 'breeze' ? 'ds-breeze-active'
-                    : src === 'compare' ? 'ds-compare-active' : '';
-
-  groups.forEach(([yId, bId, cId]) => {
-    [yId, bId, cId].forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.classList.remove('active', 'ds-breeze-active', 'ds-compare-active');
-    });
-    const activeId = src === 'yahoo' ? yId : src === 'breeze' ? bId : cId;
-    const el = document.getElementById(activeId);
-    if (el) { el.classList.add('active'); if (activeClass) el.classList.add(activeClass); }
-  });
-
-  // Mobile status dot
-  const dot = document.getElementById('mobBreezeStatusDot');
-  if (dot) {
-    dot.style.background = src === 'yahoo' ? 'var(--border)'
-                         : src === 'breeze' ? 'var(--bull)' : 'var(--gold)';
-    dot.title = src === 'yahoo' ? 'Yahoo Finance active'
-              : src === 'breeze' ? 'Breeze API active' : 'Compare mode active';
-  }
-}
-
-// ── Toast helper (lightweight, no dependency) ─────────────────────────────────
-function showToast(msg, duration = 2500) {
-  let t = document.getElementById('te-toast');
-  if (!t) {
-    t = document.createElement('div');
-    t.id = 'te-toast';
-    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);'
-      + 'background:#1a1814;color:#fff;font-family:\'DM Mono\',monospace;font-size:12px;'
-      + 'padding:10px 18px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.3);'
-      + 'z-index:2000;opacity:0;transition:opacity 0.2s,transform 0.2s;pointer-events:none;'
-      + 'max-width:90vw;text-align:center;';
-    document.body.appendChild(t);
-  }
-  t.textContent = msg;
-  t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)';
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => {
-    t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(12px)';
-  }, duration);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 function _yfCacheKey(ticker, from, to) {
   return `gt_yf_${ticker}_${from}_${to}`;
@@ -3696,28 +3629,8 @@ function parseYahoo(text) {
   return r;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// fetchOHLC — data-source aware entry point
-// symId: internal symbol (e.g. 'RELIANCE', 'NIFTY50')
-// ticker: Yahoo Finance ticker (e.g. 'RELIANCE.NS') — used only in yahoo mode
-// In breeze/compare mode the symId is used to look up BREEZE_SYMBOL_MAP.
-// ─────────────────────────────────────────────────────────────────────────────
-async function fetchOHLC(ticker, from, to, symId) {
-  // symId is the 4th arg added for Breeze. If not supplied, derive from ticker.
-  if (!symId) symId = ticker.replace(/\.NS$/i, '').replace(/=F$/i, '');
 
-  if (_dataSource === 'breeze') {
-    return _fetchOHLCWithBreeze(symId, ticker, from, to);
-  }
-  if (_dataSource === 'compare') {
-    return _fetchOHLCCompare(symId, ticker, from, to);
-  }
-  // Default: yahoo
-  return _fetchOHLCYahoo(ticker, from, to);
-}
-
-// ── Yahoo path (original logic, unchanged) ────────────────────────────────────
-async function _fetchOHLCYahoo(ticker, from, to) {
+async function fetchOHLC(ticker, from, to) {
   const cacheKey = _yfCacheKey(ticker, from, to);
 
   // Layer 1: memory cache
@@ -3818,499 +3731,6 @@ async function _fetchOHLCYahoo(ticker, from, to) {
   return data;
 }
 
-// ── Breeze path ───────────────────────────────────────────────────────────────
-async function _fetchOHLCWithBreeze(symId, ticker, from, to) {
-  const token = _getBreezeToken();
-  if (!token) {
-    // No token — silently fall back to Yahoo
-    return _fetchOHLCYahoo(ticker, from, to);
-  }
-
-  const cacheKey = `gt_bz_${symId}_${from}_${to}`;
-  if (_fetchMem[cacheKey]) return _fetchMem[cacheKey];
-  try {
-    const raw = sessionStorage.getItem(cacheKey);
-    if (raw) {
-      const { ts, data } = JSON.parse(raw);
-      if (Date.now() - ts < 4 * 60 * 1000) { _fetchMem[cacheKey] = data; return data; }
-    }
-  } catch {}
-
-  try {
-    const data = await _fetchOHLCBreeze(symId, from, to, token);
-    _fetchMem[cacheKey] = data;
-    try { sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })); } catch {}
-    return data;
-  } catch (e) {
-    if (e.tokenExpired && !_breezeTokenExpiredWarned) {
-      _breezeTokenExpiredWarned = true;
-      showToast('🔴 Breeze token expired — tap 🔑 to refresh. Falling back to Yahoo.', 5000);
-      localStorage.removeItem(BREEZE_TOKEN_KEY);
-      _updateBreezeButtonState();
-      setDataSource('yahoo');
-    }
-    console.warn('[TradeEdge] Breeze fetch failed for', symId, '— falling back to Yahoo:', e.message);
-    return _fetchOHLCYahoo(ticker, from, to);
-  }
-}
-
-// ── Compare path ──────────────────────────────────────────────────────────────
-// Returns Yahoo data as the primary result but attaches .breeze for comparison.
-// The backtest/scanner engines work normally on .data (Yahoo).
-// _compareResults stores per-symbol comparison for the compare panel.
-const _compareResults = {};
-
-async function _fetchOHLCCompare(symId, ticker, from, to) {
-  const token = _getBreezeToken();
-
-  // Fetch both in parallel
-  const [yfData, bzData] = await Promise.all([
-    _fetchOHLCYahoo(ticker, from, to).catch(() => null),
-    token ? _fetchOHLCBreeze(symId, from, to, token).catch(() => null) : Promise.resolve(null),
-  ]);
-
-  // Store comparison for the results panel
-  if (yfData && bzData) {
-    _compareResults[symId] = _buildComparison(symId, yfData, bzData);
-  }
-
-  // Primary result is Yahoo (backtest engine uses this)
-  return yfData;
-}
-
-function _buildComparison(symId, yfData, bzData) {
-  // Build a date-keyed map for quick lookup
-  const bzMap = {};
-  bzData.forEach(c => { bzMap[c.date] = c; });
-
-  const rows = yfData.map(yc => {
-    const bc = bzMap[yc.date];
-    if (!bc) return null;
-    const closeDiff = yc.close > 0 ? ((bc.close - yc.close) / yc.close * 100) : 0;
-    const openDiff  = yc.open  > 0 ? ((bc.open  - yc.open)  / yc.open  * 100) : 0;
-    return {
-      date:      yc.date,
-      yf_open:   yc.open,   yf_close: yc.close,
-      bz_open:   bc.open,   bz_close: bc.close,
-      close_diff_pct: closeDiff,
-      open_diff_pct:  openDiff,
-      match: Math.abs(closeDiff) < 0.1,  // within 0.1% = effectively same
-    };
-  }).filter(Boolean);
-
-  const mismatches = rows.filter(r => !r.match);
-  return { symId, rows, mismatches, totalRows: rows.length };
-}
-
-// Expose compare summary after a backtest/scan run (called from results rendering)
-function getCompareSummary() {
-  const syms = Object.keys(_compareResults);
-  if (!syms.length) return null;
-
-  let totalRows = 0, totalMismatches = 0;
-  let maxCloseDiff = 0, maxCloseSym = '', maxOpenDiff = 0, maxOpenSym = '';
-  let sumCloseDiff = 0, sumOpenDiff = 0, matchCount = 0;
-
-  syms.forEach(s => {
-    const r = _compareResults[s];
-    totalRows       += r.totalRows;
-    totalMismatches += r.mismatches.length;
-    r.rows.forEach(row => {
-      const cd = Math.abs(row.close_diff_pct);
-      const od = Math.abs(row.open_diff_pct);
-      sumCloseDiff += cd;
-      sumOpenDiff  += od;
-      matchCount++;
-      if (cd > maxCloseDiff) { maxCloseDiff = cd; maxCloseSym = s; }
-      if (od > maxOpenDiff)  { maxOpenDiff  = od; maxOpenSym  = s; }
-    });
-  });
-
-  const avgClose = matchCount ? sumCloseDiff / matchCount : 0;
-  const avgOpen  = matchCount ? sumOpenDiff  / matchCount : 0;
-  const mismatchPct = totalRows ? (totalMismatches / totalRows * 100) : 0;
-  const consistent  = mismatchPct < 1 && avgClose < 0.05;
-
-  return {
-    syms: syms.length, totalRows, totalMismatches, mismatchPct: mismatchPct.toFixed(1),
-    avgCloseDiff: avgClose.toFixed(3), maxCloseDiff: maxCloseDiff.toFixed(2), maxCloseSym,
-    avgOpenDiff:  avgOpen.toFixed(3),  maxOpenDiff:  maxOpenDiff.toFixed(2),  maxOpenSym,
-    consistent,
-  };
-}
-
-// ── Compare Summary Panel ─────────────────────────────────────────────────────
-// Rendered after backtest/scan completes in Compare mode.
-// Inserts a collapsible panel just above the results section.
-function renderCompareSummaryPanel(context) {
-  // Remove any existing panel
-  const existing = document.getElementById('te-compare-panel');
-  if (existing) existing.remove();
-  if (_dataSource !== 'compare') return;
-
-  const s = getCompareSummary();
-  if (!s) return;
-
-  const statusColor = s.consistent ? 'var(--bull)'  : 'var(--bear)';
-  const statusBg    = s.consistent ? 'rgba(26,107,60,0.08)' : 'rgba(181,41,14,0.08)';
-  const statusBorder= s.consistent ? 'rgba(26,107,60,0.25)' : 'rgba(181,41,14,0.25)';
-  const statusIcon  = s.consistent ? '✅' : '⚠️';
-  const statusText  = s.consistent
-    ? 'Sources are highly consistent — safe to use Breeze'
-    : 'Notable differences detected — review before switching to Breeze';
-
-  const panel = document.createElement('div');
-  panel.id = 'te-compare-panel';
-  panel.style.cssText = `margin:0 0 16px 0;border-radius:12px;overflow:hidden;
-    border:1px solid ${statusBorder};background:${statusBg};`;
-
-  panel.innerHTML = `
-    <!-- Header -->
-    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;
-      border-bottom:1px solid ${statusBorder};"
-      onclick="this.parentElement.querySelector('.cmp-body').style.display =
-        this.parentElement.querySelector('.cmp-body').style.display==='none'?'block':'none';
-        this.querySelector('.cmp-chev').textContent =
-        this.parentElement.querySelector('.cmp-body').style.display==='none'?'▶':'▼';">
-      <span style="font-size:15px;">${statusIcon}</span>
-      <div style="flex:1;">
-        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--text);">
-          Yahoo vs Breeze Comparison
-          <span style="font-family:'DM Mono',monospace;font-weight:400;font-size:10px;
-            color:var(--text3);margin-left:8px;">
-            last 5d tail · ${s.syms} symbols · ${s.totalRows} candles
-          </span>
-        </div>
-        <div style="font-family:'DM Mono',monospace;font-size:11px;color:${statusColor};margin-top:2px;">
-          ${statusText}
-        </div>
-      </div>
-      <span class="cmp-chev" style="font-size:11px;color:var(--text3);">▼</span>
-    </div>
-
-    <!-- Body -->
-    <div class="cmp-body" style="padding:14px 16px;">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
-
-        <!-- Close diff -->
-        <div style="padding:10px 14px;background:var(--surface);border-radius:9px;
-          border:1px solid var(--border);">
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
-            margin-bottom:4px;">CLOSE PRICE DIFF</div>
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;
-            color:var(--text);">avg ${s.avgCloseDiff}%</div>
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);
-            margin-top:3px;">max ${s.maxCloseDiff}%
-            ${s.maxCloseSym ? `<span style="color:var(--accent)">(${s.maxCloseSym})</span>` : ''}
-          </div>
-        </div>
-
-        <!-- Open diff -->
-        <div style="padding:10px 14px;background:var(--surface);border-radius:9px;
-          border:1px solid var(--border);">
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
-            margin-bottom:4px;">OPEN PRICE DIFF</div>
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;
-            color:var(--text);">avg ${s.avgOpenDiff}%</div>
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);
-            margin-top:3px;">max ${s.maxOpenDiff}%
-            ${s.maxOpenSym ? `<span style="color:var(--accent)">(${s.maxOpenSym})</span>` : ''}
-          </div>
-        </div>
-
-        <!-- Mismatches -->
-        <div style="padding:10px 14px;background:var(--surface);border-radius:9px;
-          border:1px solid var(--border);">
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
-            margin-bottom:4px;">CANDLE MISMATCHES &gt;0.1%</div>
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;
-            color:${s.totalMismatches > 0 ? 'var(--bear)' : 'var(--bull)'};">
-            ${s.totalMismatches}
-          </div>
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);
-            margin-top:3px;">${s.mismatchPct}% of ${s.totalRows} candles</div>
-        </div>
-
-        <!-- Verdict -->
-        <div style="padding:10px 14px;background:var(--surface);border-radius:9px;
-          border:1px solid var(--border);">
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
-            margin-bottom:4px;">VERDICT</div>
-          <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
-            color:${statusColor};line-height:1.3;">
-            ${s.consistent ? 'Switch to Breeze ✓' : 'Review diffs first'}
-          </div>
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);
-            margin-top:3px;">
-            ${s.consistent
-              ? 'Data quality confirmed'
-              : `${s.totalMismatches} candle${s.totalMismatches!==1?'s':''} differ`}
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Mismatch detail table (only if there are mismatches) -->
-      ${s.totalMismatches > 0 ? `
-      <div style="margin-top:12px;">
-        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
-          margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">
-          Candles with &gt;0.1% close price difference:
-        </div>
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:11px;">
-            <thead>
-              <tr style="color:var(--text3);border-bottom:1px solid var(--border);">
-                <th style="text-align:left;padding:4px 8px;">Symbol</th>
-                <th style="text-align:left;padding:4px 8px;">Date</th>
-                <th style="text-align:right;padding:4px 8px;">YF Close</th>
-                <th style="text-align:right;padding:4px 8px;">BZ Close</th>
-                <th style="text-align:right;padding:4px 8px;">Diff %</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${Object.entries(_compareResults)
-                .flatMap(([sym, r]) => r.mismatches.map(m => ({ sym, ...m })))
-                .sort((a, b) => Math.abs(b.close_diff_pct) - Math.abs(a.close_diff_pct))
-                .slice(0, 20)   // max 20 rows
-                .map(m => `
-                  <tr style="border-bottom:1px solid var(--border);">
-                    <td style="padding:5px 8px;color:var(--accent);font-weight:600;">${m.sym}</td>
-                    <td style="padding:5px 8px;color:var(--text2);">${m.date}</td>
-                    <td style="padding:5px 8px;text-align:right;">₹${m.yf_close.toFixed(2)}</td>
-                    <td style="padding:5px 8px;text-align:right;">₹${m.bz_close.toFixed(2)}</td>
-                    <td style="padding:5px 8px;text-align:right;
-                      color:${Math.abs(m.close_diff_pct)>0.5?'var(--bear)':'var(--text2)'};">
-                      ${m.close_diff_pct > 0 ? '+' : ''}${m.close_diff_pct.toFixed(2)}%
-                    </td>
-                  </tr>`).join('')}
-            </tbody>
-          </table>
-          ${Object.values(_compareResults).flatMap(r=>r.mismatches).length > 20
-            ? `<div style="font-size:10px;color:var(--text3);padding:6px 8px;">
-                Showing top 20 of ${Object.values(_compareResults).flatMap(r=>r.mismatches).length} mismatches
-               </div>` : ''}
-        </div>
-      </div>` : ''}
-
-    </div>`;
-
-  // Insert above results section (backtest) or scannerBody (scanner)
-  if (context === 'backtest') {
-    const resultsEl = document.getElementById('results');
-    if (resultsEl) resultsEl.parentNode.insertBefore(panel, resultsEl);
-  } else {
-    const scannerBody = document.getElementById('scannerBody');
-    if (scannerBody) scannerBody.insertBefore(panel, scannerBody.firstChild);
-  }
-}
-
-// ── _prefetchBreezeData ───────────────────────────────────────────────────────
-// Fetches Breeze OHLC for all symbols in ONE bulk request to /breeze/ohlc/bulk.
-// The server fetches sequentially with 0.35s pause (matching breeze_fetch.py),
-// then returns all data in one response — far faster than 210 individual calls.
-// Also fetches today's live candle via get_quotes() for each symbol (server-side).
-// ── Breeze tail fetch days ────────────────────────────────────────────────────
-// How many calendar days of data to fetch from Breeze on ☁️ Load Cloud.
-//
-// Real-world usage:
-//   During market hours (~3 PM IST):
-//     Yahoo CSVs have yesterday as the latest candle.
-//     Breeze fetches TODAY's partial candle (via get_quotes live LTP).
-//     → Only 1 day needed for live scanning.
-//
-//   For Compare mode validation (Yahoo vs Breeze data quality check):
-//     Fetch last 5 days so we can diff multiple candles across symbols.
-//     Once Breeze data quality is confirmed, reduce back to 1.
-//
-// Persisted in localStorage so it survives page reloads.
-// Configurable from the 🔑 Breeze modal without touching code.
-const BREEZE_TAIL_DAYS_DEFAULT = 5;
-let BREEZE_TAIL_DAYS = parseInt(localStorage.getItem('te_breeze_tail_days') || BREEZE_TAIL_DAYS_DEFAULT, 10);
-
-async function _prefetchBreezeData(syms, from, to, context) {
-  const token = _getBreezeToken();
-
-  // No token — silently reset to Yahoo and bail
-  if (!token) {
-    if (_dataSource !== 'yahoo') setDataSource('yahoo');
-    return;
-  }
-
-  // Token older than 20h — treat as expired immediately
-  const ts    = localStorage.getItem(BREEZE_TOKEN_TS);
-  const ageMs = ts ? Date.now() - parseInt(ts, 10) : Infinity;
-  if (ageMs > 20 * 60 * 60 * 1000) {
-    localStorage.removeItem(BREEZE_TOKEN_KEY);
-    localStorage.removeItem(BREEZE_TOKEN_TS);
-    _updateBreezeButtonState();
-    setDataSource('yahoo');
-    showToast('🔴 Breeze token expired — tap 🔑 to refresh', 4000);
-    return;
-  }
-
-  const isBreezeMode  = _dataSource === 'breeze';
-  const isCompareMode = _dataSource === 'compare';
-  if (!isBreezeMode && !isCompareMode) return;
-
-  // ── Determine fetch window ────────────────────────────────────────────────
-  const isBacktestContext = context === 'backtest' || context === 'silent-backtest'
-                         || context === 'cloud-load';
-  let fetchFrom, fetchTo;
-  if (isBacktestContext) {
-    fetchTo = to;
-    const d = new Date(to + 'T00:00:00');
-    d.setDate(d.getDate() - Math.ceil(BREEZE_TAIL_DAYS * 1.5));
-    fetchFrom = d.toISOString().slice(0, 10);
-  } else {
-    fetchFrom = from;
-    fetchTo   = to;
-  }
-
-  const modeLabel = isBreezeMode ? 'Breeze' : 'Compare';
-  const banner    = _showBreezeBanner(`⚡ ${modeLabel}: connecting to Breeze…`);
-
-  // ── Build symbol list for bulk request ───────────────────────────────────
-  const symbolList = syms.map(sym => {
-    const mapping = _breezeSymbol(sym);
-    return { sym_id: sym, stock_code: mapping.stock_code, exchange_code: mapping.exchange_code };
-  });
-
-  // ── Chunked bulk POSTs to Render ─────────────────────────────────────────
-  // Split 210 symbols into chunks of ~100 — each chunk takes ~35s on Render,
-  // well within timeout and memory limits of the free tier.
-  // Each chunk is a separate POST; results merged into _loadedOHLC as chunks complete.
-  const CHUNK_SIZE = 20;
-  const chunks     = [];
-  for (let i = 0; i < symbolList.length; i += CHUNK_SIZE) {
-    chunks.push(symbolList.slice(i, i + CHUNK_SIZE));
-  }
-
-  const yfOriginals = {};
-  if (isCompareMode) {
-    syms.forEach(s => { if (_loadedOHLC[s]) yfOriginals[s] = _loadedOHLC[s]; });
-  }
-
-  let fetched = 0, failed = [], totalElapsed = 0;
-
-  try {
-    for (let ci = 0; ci < chunks.length; ci++) {
-      const chunk = chunks[ci];
-      banner.textContent = `⚡ ${modeLabel}: chunk ${ci+1}/${chunks.length} (${fetched}/${syms.length} done)…`;
-
-      // Log what we're sending so we can verify dates and symbols
-      console.log(`[Breeze] Chunk ${ci+1}/${chunks.length} REQUEST:`,
-        `from=${fetchFrom}`, `to=${fetchTo}`,
-        `symbols(${chunk.length}):`, chunk.slice(0,3).map(s=>s.sym_id).join(',') + (chunk.length>3?'...':'')
-      );
-
-      const coldStartTimer = setTimeout(() => {
-        if (banner.isConnected)
-          banner.textContent = `⏳ ${modeLabel}: chunk ${ci+1}/${chunks.length} — Render processing…`;
-      }, 8000);
-
-      const controller = new AbortController();
-      const timeoutId  = setTimeout(() => controller.abort(), 90000); // 90s per chunk
-
-      let res;
-      try {
-        res = await fetch(`${TRADEEDGE_API_URL}/breeze/ohlc/bulk`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ symbols: chunk, from: fetchFrom, to: fetchTo, token }),
-          signal:  controller.signal,
-        });
-      } finally {
-        clearTimeout(coldStartTimer);
-        clearTimeout(timeoutId);
-      }
-
-      if (res.status === 401) {
-        localStorage.removeItem(BREEZE_TOKEN_KEY);
-        localStorage.removeItem(BREEZE_TOKEN_TS);
-        _updateBreezeButtonState();
-        setDataSource('yahoo');
-        banner.style.background = 'var(--bear)';
-        banner.textContent = '🔴 Breeze token invalid — reverting to Yahoo Finance';
-        setTimeout(() => banner.remove(), 4000);
-        return;
-      }
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-
-      // Single JSON response — Render processes all symbols then returns at once
-      const json = await res.json();
-
-      // ── Browser debug logs ────────────────────────────────────────────────
-      console.log(`[Breeze] Chunk ${ci+1}/${chunks.length} response:`,
-        `status=${res.status}`,
-        `count=${json.count ?? '?'}`,
-        `failed=${(json.failed||[]).length}`,
-        `elapsed=${json.elapsed ?? '?'}s`,
-        `error=${json.error ?? 'none'}`
-      );
-      if (json.failed && json.failed.length > 0) {
-        console.warn('[Breeze] Failed symbols in this chunk:', json.failed);
-      }
-      if (json.data) {
-        const symKeys = Object.keys(json.data);
-        const sample  = symKeys[0];
-        if (sample) {
-          console.log(`[Breeze] Sample — ${sample}:`,
-            `${json.data[sample].length} candles`,
-            `first=${json.data[sample][0]?.date ?? '?'}`,
-            `last=${json.data[sample].at(-1)?.date ?? '?'}`
-          );
-        }
-      }
-      // ─────────────────────────────────────────────────────────────────────
-
-      if (json.error === 'token_expired') {
-        localStorage.removeItem(BREEZE_TOKEN_KEY);
-        localStorage.removeItem(BREEZE_TOKEN_TS);
-        _updateBreezeButtonState();
-        setDataSource('yahoo');
-        banner.style.background = 'var(--bear)';
-        banner.textContent = '🔴 Breeze token expired — reverting to Yahoo Finance';
-        setTimeout(() => banner.remove(), 4000);
-        return;
-      }
-
-      // Merge chunk results into _loadedOHLC
-      const chunkData = json.data || {};
-      failed.push(...(json.failed || []));
-      totalElapsed += json.elapsed || 0;
-
-      Object.entries(chunkData).forEach(([sym, rows]) => {
-        if (!rows || !rows.length) return;
-        if (isBreezeMode) {
-          _loadedOHLC[sym] = _mergeBreezeIntoOHLC(_loadedOHLC[sym] || [], rows, fetchFrom, fetchTo);
-        } else {
-          if (yfOriginals[sym]) {
-            const yfTail = yfOriginals[sym].filter(c => c.date >= fetchFrom && c.date <= fetchTo);
-            if (yfTail.length) _compareResults[sym] = _buildComparison(sym, yfTail, rows);
-          }
-        }
-        fetched++;
-      });
-      banner.textContent = `⚡ ${modeLabel}: ${fetched}/${syms.length} symbols…`;
-    }
-
-    const elapsedStr = totalElapsed ? ` · ${Math.round(totalElapsed)}s` : '';
-    const failNote   = failed.length ? ` · ${failed.length} failed` : '';
-    const tailNote   = isBacktestContext ? ' (tail overlay)' : '';
-    banner.textContent = `✅ ${modeLabel}: ${fetched}/${syms.length} symbols${tailNote}${failNote}${elapsedStr}`;
-    setTimeout(() => banner.remove(), 3500);
-
-  } catch (e) {
-    banner.style.background = 'var(--bear)';
-    banner.textContent = e.name === 'AbortError'
-      ? '⚠️ Breeze chunk timed out — using Yahoo CSV data'
-      : `⚠️ Breeze fetch failed (${e.message}) — using Yahoo CSV data`;
-    setTimeout(() => banner.remove(), 4000);
-    console.warn('[Breeze bulk]', e);
-  }
-
-}
 
 function _mergeBreezeIntoOHLC(csvOHLC, bzData, from, to) {
   const bzByDate = {};
@@ -4842,9 +4262,7 @@ async function runBacktestSilent() {
   const params     = readCurrentParams();
   const { from, to } = readBacktestDates();
 
-  // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
-
-  allTrades = [];
+allTrades = [];
   for (let i = 0; i < syms.length; i++) {
     const sym = syms[i];
     if (i % 20 === 0) await new Promise(r => setTimeout(r, 0)); // keep UI responsive
@@ -4956,10 +4374,7 @@ async function runBacktest() {
 
   // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
 
-  // Clear compare results from previous run
-  Object.keys(_compareResults).forEach(k => delete _compareResults[k]);
-
-  allTrades = [];
+allTrades = [];
 
   for (let i = 0; i < syms.length; i++) {
     const sym = syms[i];
@@ -5075,8 +4490,7 @@ async function runBacktest() {
   buildResults(skipped);
   document.getElementById('results').style.display = 'block';
   document.getElementById('emptyState').style.display = 'none';
-  // Show compare summary panel if in compare mode
-  renderCompareSummaryPanel('backtest');
+
   // Show Hist WR filter in scanner now that backtest data is available
   resetRunBtn();
   // On mobile: auto-navigate to Summary after backtest
@@ -5935,9 +5349,7 @@ async function runScanner() {
   shorts.sort(_signalSortFn);
 
   const maxTotal = +document.getElementById('maxSignalsDay').value || 0;
-  // Clear compare results from previous scan run
-  Object.keys(_compareResults).forEach(k => delete _compareResults[k]);
-  let longsOut, shortsOut;
+let longsOut, shortsOut;
   if (maxTotal > 0) {
     const allSigs = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
     allSigs.sort(_signalSortFn);
@@ -5953,8 +5365,7 @@ async function runScanner() {
   }
 
   renderScannerResults(scanDate, longsOut, shortsOut, params, wrThreshold, pnlThreshold);
-  // Show compare summary panel if in compare mode
-  renderCompareSummaryPanel('scanner');
+
 
   document.getElementById('scanSpinner').classList.remove('show');
   document.getElementById('scanBtnLabel').textContent = '▶ Scan';
@@ -6739,34 +6150,6 @@ async function loadFromCloud() {
     countEl.textContent = `${loaded} symbol(s) — caching in browser…`;
     let idbSaved = 0;
     try { idbSaved = await _idbSaveAll(); } catch(e) { console.warn('[cloud] IDB save failed:', e); }
-
-    // Step 4: Breeze tail overlay — fetch last N days from Breeze and merge into _loadedOHLC.
-    // Triggered whenever a fresh Breeze token exists, regardless of current data source toggle.
-    // This ensures today's live candle is always available for the scanner even in Yahoo mode.
-    const breezeToken = _getBreezeToken();
-    const breezeTs    = localStorage.getItem(BREEZE_TOKEN_TS);
-    const breezeAge   = breezeTs ? Date.now() - parseInt(breezeTs, 10) : Infinity;
-    const breezeReady = breezeToken && breezeAge < 20 * 60 * 60 * 1000;
-
-    if (breezeReady) {
-      bar.style.width   = '99%';
-      label.textContent = `⚡ Refreshing last ${BREEZE_TAIL_DAYS} days from Breeze… (may take ~60s on first run)`;
-      countEl.textContent = 'Overlaying real-time data…';
-
-      const symsForBreeze = getAllLoadedSymbols();
-      const tailTo   = new Date().toISOString().slice(0, 10);
-      const tailFrom = (() => {
-        const d = new Date(); d.setDate(d.getDate() - Math.ceil(BREEZE_TAIL_DAYS * 1.5));
-        return d.toISOString().slice(0, 10);
-      })();
-
-      // Temporarily set dataSource to 'breeze' for the overlay fetch if currently on yahoo,
-      // then restore — so _prefetchBreezeData always runs the merge path.
-      const prevSource = _dataSource;
-      if (_dataSource === 'yahoo') _dataSource = 'breeze';
-      await _prefetchBreezeData(symsForBreeze, tailFrom, tailTo, 'cloud-load');
-      _dataSource = prevSource;
-    }
 
     allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
 
@@ -9412,6 +8795,7 @@ loadSavedDefaults();
 
     <!-- Icon-only action buttons -->
     <button id="mobBreezeBtn" class="mob-icon-btn" onclick="showBreezeModal()" title="Set Breeze API Session">🔑</button>
+    <button id="mobBreezeFetchBtn" class="mob-icon-btn" onclick="runBreezeFetch()" title="Fetch today's data from Breeze">📡</button>
     <button id="mobCloudBtn" class="mob-icon-btn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
     <button class="mob-icon-btn" onclick="mobClearCache()" title="Clear IDB cache" style="background:rgba(220,60,60,0.18);color:var(--bear);">🗑</button>
   </div>
@@ -9454,16 +8838,6 @@ loadSavedDefaults();
       </button>
       <button id="mobSettingsBtn" onclick="openMobSettings()" title="Scanner settings">⚙</button>
     </div>
-    <!-- Row 3: Data source toggle -->
-    <div style="display:flex;align-items:center;gap:6px;padding:5px 12px 7px;border-top:1px solid var(--border);">
-      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);white-space:nowrap;">Data:</span>
-      <button class="ds-btn ds-btn-sm active" id="mob-ds-yahoo"   onclick="setDataSource('yahoo')"   title="Yahoo Finance (15-min delayed)">Yahoo</button>
-      <button class="ds-btn ds-btn-sm"        id="mob-ds-breeze"  onclick="setDataSource('breeze')"  title="Breeze API (real-time, token required)">Breeze</button>
-      <button class="ds-btn ds-btn-sm"        id="mob-ds-compare" onclick="setDataSource('compare')" title="Fetch from both and compare">Compare</button>
-      <div id="mobBreezeStatusDot" style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0;" title="No Breeze token"></div>
-    </div>
-  </div>
-
   <!-- Scanner Tab content — hidden when Stats tab active -->
   <div id="mobScannerContent" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0;">
   <!-- Results -->
@@ -10012,9 +9386,7 @@ async function runMobileScanner() {
     await runBacktestSilent();
   }
 
-  // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
-
-  // Clear signal registry
+// Clear signal registry
 
   // Now scan
   document.getElementById('scanDate').value = scanDate;
