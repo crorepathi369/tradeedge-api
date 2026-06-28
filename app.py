@@ -658,6 +658,51 @@ def _do_fetch_job():
     _log(f"[fetch-job] Done — ok={ok_count}  failed={len(fail_syms)}")
 
 
+# ── Breeze helpers ────────────────────────────────────────────────────────────
+
+import time as _time
+
+_BREEZE_TOKEN_FILE = "/tmp/breeze_session.txt"
+
+try:
+    from breeze_connect import BreezeConnect
+    _BREEZE_AVAILABLE = True
+except ImportError:
+    _BREEZE_AVAILABLE = False
+
+BREEZE_API_KEY    = os.environ.get("BREEZE_API_KEY", "")
+BREEZE_API_SECRET = os.environ.get("BREEZE_API_SECRET", "")
+
+_CORP_ACTION_THRESHOLD = 0.30
+
+
+def _compute_adj_close(closes: list) -> list:
+    """Back-adjust close series for corporate actions (splits/bonuses)."""
+    if not closes:
+        return []
+    adj        = closes[:]
+    cumulative = 1.0
+    for i in range(len(closes) - 1, 0, -1):
+        if closes[i] == 0:
+            continue
+        ratio = closes[i - 1] / closes[i]
+        if abs(ratio - 1.0) > _CORP_ACTION_THRESHOLD:
+            cumulative *= ratio
+        adj[i - 1] = closes[i - 1] / cumulative if cumulative else closes[i - 1]
+    return adj
+
+
+def _breeze_iso(dt_str: str, end_of_day: bool = False) -> str:
+    """Convert YYYY-MM-DD to Breeze ISO format in UTC."""
+    from datetime import datetime, timedelta
+    IST_OFFSET = timedelta(hours=5, minutes=30)
+    dt = datetime.strptime(dt_str, "%Y-%m-%d")
+    dt = dt.replace(hour=23, minute=59, second=59) if end_of_day \
+         else dt.replace(hour=0, minute=0, second=0)
+    utc = dt - IST_OFFSET
+    return utc.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
 def _do_breeze_fetch_job():
     """
     Background worker: fetch today's OHLC from Breeze for all F&O symbols,
@@ -1316,19 +1361,7 @@ def futures_endpoint():
 
 # ── /breeze/set-token ────────────────────────────────────────────────────────
 # Receives the daily Breeze session token from the TradeEdge 📡 button.
-# Stores it server-side so tradeedge_fetch.py --breeze can use it.
-
-import time as _time
-
-BREEZE_API_KEY    = os.environ.get("BREEZE_API_KEY", "")
-BREEZE_API_SECRET = os.environ.get("BREEZE_API_SECRET", "")
-_BREEZE_TOKEN_FILE = "/tmp/breeze_session.txt"
-
-try:
-    from breeze_connect import BreezeConnect
-    _BREEZE_AVAILABLE = True
-except ImportError:
-    _BREEZE_AVAILABLE = False
+# Stores it server-side so _do_breeze_fetch_job can use it.
 
 
 @app.route("/breeze/set-token", methods=["POST", "OPTIONS"])

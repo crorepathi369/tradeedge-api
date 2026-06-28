@@ -4374,7 +4374,8 @@ async function runBacktest() {
 
   // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
 
-allTrades = [];
+  allTrades = [];
+  const skipped = [];
 
   for (let i = 0; i < syms.length; i++) {
     const sym = syms[i];
