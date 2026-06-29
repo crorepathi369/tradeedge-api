@@ -954,8 +954,9 @@ def _do_breeze_fetch_job():
                    if not any(s == idx for idx in INDEX_PREFIXES)
                    and s not in NOT_IN_BREEZE]
         total      = len(symbols)
-        fetched    = 0
-        failed     = []
+        fetched      = 0
+        fetched_syms = []   # track successfully fetched symbol names for GitHub push
+        failed       = []
         _PAUSE     = 0.35   # same as breeze_fetch.py
 
         _fetch_status["total"]  = total
@@ -1111,6 +1112,7 @@ def _do_breeze_fetch_job():
                         } for r in parsed])
 
                 fetched += 1
+                fetched_syms.append(sym)
                 _fetch_status["ok"] = fetched
 
             except Exception as e:
@@ -1125,51 +1127,45 @@ def _do_breeze_fetch_job():
         _fetch_status["status"] = "pushing CSVs to GitHub data branch…"
 
         # Push updated CSVs directly to GitHub data branch via API
-        # (same pattern as restore_data_from_github but in reverse)
         try:
             import urllib.request, urllib.error, json as _json2, base64 as _b64
 
-            token  = os.environ.get("GITHUB_TOKEN", "")
-            repo   = os.environ.get("GITHUB_REPO", "crorepathi369/tradeedge-api")
-            branch = os.environ.get("GITHUB_DATA_BRANCH", "data")
+            gh_token = os.environ.get("GITHUB_TOKEN", "")
+            repo     = os.environ.get("GITHUB_REPO", "crorepathi369/tradeedge-api")
+            branch   = os.environ.get("GITHUB_DATA_BRANCH", "data")
 
-            if not token:
+            if not gh_token:
                 print("[breeze/fetch] GITHUB_TOKEN not set — skipping push")
             else:
-                pushed = 0
+                pushed  = 0
                 headers = {
-                    "Authorization": f"token {token}",
+                    "Authorization": f"token {gh_token}",
                     "Accept":        "application/vnd.github.v3+json",
                     "User-Agent":    "TradeEdge-App",
                     "Content-Type":  "application/json",
                 }
 
-                # Only push symbols we successfully fetched
-                for sym in list(data.keys()):
+                # Push all successfully fetched symbols
+                for sym in fetched_syms:
                     csv_path = DATA_DIR / f"{sym}.csv"
                     if not csv_path.exists():
                         continue
                     try:
-                        content     = csv_path.read_bytes()
-                        content_b64 = _b64.b64encode(content).decode()
+                        file_bytes  = csv_path.read_bytes()
+                        content_b64 = _b64.b64encode(file_bytes).decode()
 
-                        # Get current file SHA (needed for update)
+                        # Get current file SHA (required for update)
                         file_url = f"https://api.github.com/repos/{repo}/contents/{sym}.csv"
-                        params   = f"?ref={branch}"
-                        get_req  = urllib.request.Request(
-                            file_url + params,
-                            headers=headers
-                        )
                         sha = None
                         try:
-                            res  = urllib.request.urlopen(get_req, timeout=10)
-                            meta = _json2.loads(res.read())
+                            get_req = urllib.request.Request(
+                                file_url + f"?ref={branch}", headers=headers)
+                            meta = _json2.loads(urllib.request.urlopen(get_req, timeout=10).read())
                             sha  = meta.get("sha")
                         except urllib.error.HTTPError as e:
                             if e.code != 404:
                                 raise
 
-                        # PUT (create or update)
                         body = {
                             "message": f"Breeze update {today_str}: {sym}",
                             "content": content_b64,
@@ -1186,14 +1182,16 @@ def _do_breeze_fetch_job():
                         )
                         urllib.request.urlopen(put_req, timeout=15)
                         pushed += 1
+                        _fetch_status["status"] = f"GitHub push: {pushed}/{len(fetched_syms)}"
 
                     except Exception as e:
                         print(f"[breeze/fetch] GitHub push failed for {sym}: {e}")
 
-                print(f"[breeze/fetch] GitHub push: {pushed}/{len(data)} files pushed")
+                print(f"[breeze/fetch] GitHub push: {pushed}/{len(fetched_syms)} files pushed")
 
         except Exception as e:
             print(f"[breeze/fetch] GitHub push error: {e}")
+
 
         _fetch_status["status"]  = f"done — {fetched}/{total} symbols updated"
         _fetch_status["done"]    = True
