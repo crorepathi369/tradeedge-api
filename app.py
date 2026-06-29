@@ -1451,6 +1451,32 @@ def serve_data_file(filename):
     return resp
 
 
+@app.route("/debug/csv")
+def debug_csv():
+    """
+    Returns latest row + file stats for any symbol.
+    Usage: /debug/csv?sym=RELIANCE
+    Returns last 3 rows so you can verify today's date is present.
+    """
+    sym      = request.args.get("sym", "RELIANCE").upper().strip()
+    csv_path = DATA_DIR / f"{sym}.csv"
+    if not csv_path.exists():
+        return cors_response({"error": f"{sym}.csv not found in DATA_DIR"}, 404)
+    import csv as _csv, os as _os
+    stat     = _os.stat(csv_path)
+    modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    with open(csv_path, newline="") as f:
+        rows = list(_csv.DictReader(f))
+    last3 = rows[-5:] if len(rows) >= 5 else rows
+    return cors_response({
+        "symbol":   sym,
+        "rows":     len(rows),
+        "modified": modified,
+        "last5":    last3,
+        "dataDir":  str(DATA_DIR),
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
