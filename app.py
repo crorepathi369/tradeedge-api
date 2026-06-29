@@ -146,7 +146,8 @@ _fetch_status = {
     "total":      0,
     "failedSyms": [],
     "lastError":  None,
-    "log":        [],        # last N log lines
+    "log":        [],
+    "cancelled":  False,   # set True by /breeze/cancel to stop the fetch loop
 }
 
 def cors_response(data, status=200):
@@ -727,6 +728,7 @@ def _do_breeze_fetch_job():
     _fetch_status["failed"]     = 0
     _fetch_status["failedSyms"] = []
     _fetch_status["total"]      = 0
+    _fetch_status["cancelled"]  = False
 
     try:
         # Read stored token
@@ -960,6 +962,12 @@ def _do_breeze_fetch_job():
         _fetch_status["status"] = f"fetching Breeze data for {total} symbols"
 
         for i, sym in enumerate(symbols):
+            # Check if cancelled by user
+            if _fetch_status.get("cancelled"):
+                print(f"[breeze/fetch] Cancelled at {i}/{total}")
+                _fetch_status["status"] = f"cancelled — {fetched} symbols fetched"
+                break
+
             _fetch_status["pct"]    = f"{i}/{total}"
             _fetch_status["status"] = f"Breeze: {sym} ({i+1}/{total})"
 
@@ -1597,3 +1605,14 @@ def breeze_token_status():
         return cors_response({"hasToken": bool(token), "length": len(token)})
     except FileNotFoundError:
         return cors_response({"hasToken": False})
+
+
+@app.route("/breeze/cancel", methods=["POST", "OPTIONS"])
+def breeze_cancel():
+    """Signal the running Breeze fetch job to stop after current symbol."""
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    if _fetch_status.get("running"):
+        _fetch_status["cancelled"] = True
+        return cors_response({"ok": True, "msg": "Cancel signal sent"})
+    return cors_response({"ok": False, "msg": "No fetch running"})

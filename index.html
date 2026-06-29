@@ -3537,11 +3537,22 @@ async function runBreezeFetch() {
     return;
   }
 
-  // Disable button during fetch
+  // Disable 📡 button, show banner
   const btns = ['breezeFetchBtn', 'mobBreezeFetchBtn'];
   btns.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
 
   const banner = _showBreezeBanner('⚡ Sending Breeze token to server…');
+
+  // Add cancel button to banner
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = '✕ Cancel';
+  cancelBtn.style.cssText = 'margin-left:12px;padding:2px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.5);background:transparent;color:#fff;cursor:pointer;font-size:11px;font-family:"DM Mono",monospace;';
+  cancelBtn.onclick = async () => {
+    cancelBtn.textContent = 'Cancelling…';
+    cancelBtn.disabled = true;
+    try { await fetch(`${TRADEEDGE_API_URL}/breeze/cancel`, { method: 'POST' }); } catch {}
+  };
+  banner.appendChild(cancelBtn);
 
   try {
     // 1. Store token server-side
@@ -3553,70 +3564,73 @@ async function runBreezeFetch() {
     if (!setRes.ok) throw new Error('Failed to store token: HTTP ' + setRes.status);
 
     // 2. Trigger Breeze fetch job
-    banner.textContent = '⚡ Fetching today\'s data from Breeze for all 210 symbols…';
+    banner.firstChild.textContent = '⚡ Starting Breeze fetch…';
     const fetchRes = await fetch(`${TRADEEDGE_API_URL}/run-fetch?mode=breeze`, { method: 'POST' });
     if (!fetchRes.ok) throw new Error('HTTP ' + fetchRes.status);
     const fetchJson = await fetchRes.json();
 
     if (fetchJson.status === 'started' || fetchJson.ok) {
-      banner.textContent = '⏳ Breeze fetch running… polling for completion';
-
-      // 3. Poll fetch-status until done
-      let done = false;
-      let attempts = 0;
-      while (!done && attempts < 60) {
-        await new Promise(r => setTimeout(r, 5000));
+      // 3. Poll fetch-status every 3s — show current symbol + counts
+      let done = false, attempts = 0;
+      while (!done && attempts < 120) {
+        await new Promise(r => setTimeout(r, 3000));
         attempts++;
         try {
           const statusRes  = await fetch(`${TRADEEDGE_API_URL}/fetch-status`);
           const statusJson = await statusRes.json();
-          const ok         = statusJson.ok      ?? 0;
-          const failed     = statusJson.failed   ?? 0;
-          const total      = statusJson.total    ?? 0;
-          const pct        = statusJson.pct      ?? '';
-          const failedSyms = statusJson.failedSyms ?? [];
+          const ok         = statusJson.ok         ?? 0;
+          const failed     = statusJson.failed      ?? 0;
+          const total      = statusJson.total       ?? 0;
+          const status     = statusJson.status      ?? '';
+          const failedSyms = statusJson.failedSyms  ?? [];
 
-          // Build banner text with live ok/failed counts
-          let bannerText = `⏳ Breeze fetch: ${statusJson.status || 'running'}`;
-          if (total > 0) {
-            bannerText = `⏳ Breeze: ${pct || ok + '/' + total}`;
-            if (ok > 0)     bannerText += ` ✓${ok}`;
-            if (failed > 0) bannerText += ` ✗${failed}`;
-          }
-          banner.textContent = bannerText;
+          // Show current symbol being fetched + counts
+          let txt = status.startsWith('Breeze:')
+            ? `⚡ ${status}  ✓${ok}  ✗${failed}`
+            : `⏳ Breeze: ${ok}/${total} fetched  ✓${ok}  ✗${failed}`;
+          banner.firstChild.textContent = txt;
 
-          // Turn banner orange if failures are accumulating
-          if (failed > 0 && failed > ok * 0.5) {
-            banner.style.background = 'var(--accent)';  // orange warning
-          }
+          // Orange if >20% failing
+          banner.style.background = (failed > 0 && total > 0 && failed/total > 0.2)
+            ? 'var(--accent)' : 'var(--bull)';
 
-          // Log failed symbols to console only when new failures appear
+          // Log new failures to console
           if (failedSyms.length > 0 && failedSyms.length !== (window._lastLoggedFailCount || 0)) {
             window._lastLoggedFailCount = failedSyms.length;
-            console.warn('[Breeze fetch] Failed symbols so far:', failedSyms);
+            console.warn('[Breeze] Failed so far:', failedSyms);
           }
 
-          if (statusJson.status === 'idle' || statusJson.done ||
-              (statusJson.status && statusJson.status.startsWith('done'))) {
+          if (statusJson.cancelled || statusJson.done ||
+              (status && (status.startsWith('done') || status.startsWith('cancelled')))) {
             done = true;
           }
         } catch { /* ignore poll errors */ }
       }
 
-      // Get final status for summary
-      let finalOk = 0, finalFailed = 0, finalFailedSyms = [];
+      // Final summary
+      let finalOk = 0, finalFailed = 0, finalFailedSyms = [], cancelled = false;
       try {
-        const finalRes  = await fetch(`${TRADEEDGE_API_URL}/fetch-status`);
-        const finalJson = await finalRes.json();
-        finalOk         = finalJson.ok         ?? 0;
-        finalFailed     = finalJson.failed      ?? 0;
-        finalFailedSyms = finalJson.failedSyms  ?? [];
+        const r = await fetch(`${TRADEEDGE_API_URL}/fetch-status`);
+        const j = await r.json();
+        finalOk        = j.ok         ?? 0;
+        finalFailed    = j.failed      ?? 0;
+        finalFailedSyms= j.failedSyms  ?? [];
+        cancelled      = j.cancelled   ?? false;
       } catch {}
 
-      banner.style.background = finalFailed > finalOk * 0.3 ? 'var(--accent)' : 'var(--bull)';
-      banner.textContent = finalFailed > 0
-        ? `⚠️ Breeze: ${finalOk} ✓ · ${finalFailed} ✗ failed — tap ☁️ to load`
-        : `✅ Breeze: ${finalOk} symbols fetched — tap ☁️ to load updated CSVs`;
+      // Show final failed list in console
+      if (finalFailedSyms.length > 0) {
+        console.warn('[Breeze] Final failed symbols:', finalFailedSyms);
+      }
+
+      banner.style.background = finalFailed > 0 ? 'var(--accent)' : 'var(--bull)';
+      const failNote = finalFailed > 0 ? ` · ${finalFailed} failed (see console)` : '';
+      const cancelNote = cancelled ? ' (cancelled)' : '';
+      banner.firstChild.textContent = cancelled
+        ? `⚠️ Breeze fetch cancelled — ${finalOk} symbols saved${failNote}`
+        : finalFailed > 0
+          ? `⚠️ Breeze: ${finalOk} ✓ · ${finalFailed} ✗ — tap ☁️ to load`
+          : `✅ Breeze: ${finalOk} symbols fetched — tap ☁️ to load`;
 
       if (finalFailedSyms.length > 0) {
         console.warn('[Breeze fetch] Failed symbols:', finalFailedSyms);
@@ -3883,10 +3897,24 @@ function _showBreezeBanner(msg) {
   if (!el) {
     el = document.createElement('div');
     el.id = 'te-breeze-banner';
-    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:1500;'
-      + 'background:var(--bull);color:#fff;font-family:\'DM Mono\',monospace;font-size:12px;'
-      + 'padding:7px 16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
-    document.body.prepend(el);
+    el.style.cssText = [
+      'position:fixed',
+      'top:50px',          // below desktop header (~48px tall)
+      'left:0','right:0',
+      'z-index:900',
+      'background:var(--bull)',
+      'color:#fff',
+      'font-family:"DM Mono",monospace',
+      'font-size:12px',
+      'padding:7px 16px',
+      'text-align:center',
+      'box-shadow:0 2px 8px rgba(0,0,0,0.15)',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'gap:12px',
+    ].join(';');
+    document.body.appendChild(el);
   }
   el.textContent = msg;
   return el;
@@ -8885,9 +8913,8 @@ loadSavedDefaults();
     <div style="margin-top:14px;padding:10px 12px;border-radius:8px;background:var(--gold-bg);
       border:1px solid rgba(184,134,11,0.25);font-family:'DM Mono',monospace;font-size:10px;
       color:var(--gold);line-height:1.6;">
-      ⚡ When token is set, TradeEdge automatically overlays today's real-time OHLC from Breeze on every ☁️ Load — no need to switch data source first.<br>
-      Token expires daily — refresh each morning from your Breeze portal.<br><br>
-      📌 After saving token, tap ☁️ to load cloud data — Breeze tail is fetched automatically.
+      ⚡ Token is saved on <strong>this device</strong> and on the Render server. Each device needs its own token save — paste the same daily token on each device you use.<br>
+      Token expires daily — refresh each morning from your Breeze portal.
     </div>
   </div>
 </div>
