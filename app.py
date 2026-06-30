@@ -1072,18 +1072,37 @@ def _do_breeze_fetch_job():
                 for j, row in enumerate(parsed):
                     row["adj_close"] = round(adj_closes[j], 4)
 
-                # Merge with existing CSV
+                # Merge with existing CSV — skip flat candles (bad Breeze data)
+                # A flat candle has open==high==low==close and volume==0
+                # This happens on market holidays when Breeze returns previous close
                 csv_path = DATA_DIR / f"{sym}.csv"
                 if csv_path.exists():
                     import csv
                     with open(csv_path, newline='') as cf:
                         reader = csv.DictReader(cf)
                         existing = list(reader)
+
+                    # Remove any existing flat candles (holiday artifacts) from CSV
+                    def _is_flat_row(r):
+                        try:
+                            o,h,l,c = float(r.get("open",0)), float(r.get("high",0)), \
+                                      float(r.get("low",0)),  float(r.get("close",0))
+                            v = float(r.get("volume",1) or 1)
+                            return o == h == l == c and v == 0
+                        except: return False
+                    existing = [r for r in existing if not _is_flat_row(r)]
+
                     existing_dates = {r.get("date","") for r in existing}
-                    # Add only new dates from Breeze, update today if exists
                     for row in parsed:
+                        # Skip flat candles from Breeze — market holidays
+                        is_flat = (row["open"] == row["high"] == row["low"] == row["close"]
+                                   and row.get("volume", 1) == 0)
+                        if is_flat:
+                            print(f"[breeze/fetch] {sym} {row['date']} flat candle skipped")
+                            continue
+                        # Only write today's candle or genuinely new dates
+                        # Do NOT overwrite existing historical dates — Yahoo data is authoritative
                         if row["date"] == today_str or row["date"] not in existing_dates:
-                            # Remove old today row if present
                             existing = [r for r in existing if r.get("date") != row["date"]]
                             existing.append({
                                 "date":      row["date"],
@@ -1451,7 +1470,7 @@ def serve_data_file(filename):
     return resp
 
 
-@app.route("/debug/csv")
+@app.route("/debug/csv", methods=["GET"])
 def debug_csv():
     """
     Returns latest row + file stats for any symbol.
