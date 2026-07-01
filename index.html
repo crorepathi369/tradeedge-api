@@ -9581,6 +9581,9 @@ function mobSetStrategy(s) {
   if (currentResults) _mobScanCache[_mobStrategy] = currentResults.innerHTML;
 
   _mobStrategy = s;
+  setStrategy(s); // sync core _strategy + clears _allTradesForWR
+  _mobAtMonth = null; // reset to latest month on strategy switch
+
   document.getElementById('mobStOvernightBtn').classList.toggle('active', s === 'overnight');
   document.getElementById('mobStIntradayBtn').classList.toggle('active', s === 'intraday');
   document.getElementById('mobOvernightSettings').style.display = s === 'overnight' ? '' : 'none';
@@ -9614,6 +9617,9 @@ function mobSetStrategy(s) {
         <div>Select a date and tap <strong>Scan</strong></div>
       </div>`;
   }
+
+  // If Stats tab is open and showing All Trades — rebuild for new strategy
+  if (_mobTradesSubTab === 'alltrades') buildMobTradesTab();
 }
 
 function mobSetDir(d) {
