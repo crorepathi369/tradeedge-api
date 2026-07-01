@@ -7801,6 +7801,7 @@ async function _loadFromDirectoryHandle(handle) {
     console.error('[IDB] Save failed after CSV load:', e);
   }
   _mobTradeCache = { overnight: null, intraday: null };
+  _mobAllTradesCache = { overnight: null, intraday: null };
   allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
   bar.style.width = '100%';
   updateDataStatusBar();
@@ -7918,6 +7919,7 @@ async function _handleCsvFiles(e) {
   }
   // Invalidate Stats trade cache — new data loaded
   _mobTradeCache = { overnight: null, intraday: null };
+  _mobAllTradesCache = { overnight: null, intraday: null };
   allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
   bar.style.width = '100%';
   updateDataStatusBar();
@@ -9582,7 +9584,7 @@ function mobSetStrategy(s) {
 
   _mobStrategy = s;
   setStrategy(s); // sync core _strategy + clears _allTradesForWR
-  _mobAtMonth = null; // reset to latest month on strategy switch
+  _mobAtMonth = null; _mobAtSymFilter = ""; // reset on strategy switch
 
   document.getElementById('mobStOvernightBtn').classList.toggle('active', s === 'overnight');
   document.getElementById('mobStIntradayBtn').classList.toggle('active', s === 'intraday');
@@ -9618,8 +9620,11 @@ function mobSetStrategy(s) {
       </div>`;
   }
 
-  // If Stats tab is open and showing All Trades — rebuild for new strategy
-  if (_mobTradesSubTab === 'alltrades') buildMobTradesTab();
+  // If Stats tab is open — rebuild for new strategy
+  if (_mobActiveTab === 'trades') {
+    _mobAtMonth = null; // reset to latest month
+    buildMobTradesTab();
+  }
 }
 
 function mobSetDir(d) {
@@ -10089,6 +10094,7 @@ let _mobActiveTab = 'scanner';
 let _mobTradesSubTab   = 'summary';   // 'summary' | 'daywise' | 'stockwise' | 'monthly' | 'insights'
 let _mobTradesStratTab = 'overnight'; // default to Gap tab
 let _mobTradeCache     = { overnight: null, intraday: null }; // null = not yet run
+let _mobAllTradesCache = { overnight: null, intraday: null }; // uncapped — for All Trades tab
 let _mobTradesBuilding = false;
 let _lastScanDate      = null; // scan date of the last scanner run — Stats uses same date cap
 
@@ -10162,7 +10168,8 @@ async function _runMobTradeBacktest(strat) {
   document.getElementById('idToDate').value   = mobTo;
 
   await runBacktestSilent();
-  _mobTradeCache[strat] = [...allTrades];
+  _mobTradeCache[strat]     = [...allTrades];          // capped — for all other tabs
+  _mobAllTradesCache[strat] = [..._allTradesForWR];    // uncapped — for All Trades tab
 
   // Restore strategy and direction (dates already correct — they match mobile settings)
   _strategy  = prevStrategy;
@@ -10250,8 +10257,8 @@ async function _ensureMobTradesData() {
     if (onTrades !== null || idTrades !== null) {
       _mobBuildOverlay('Building from Walk-Forward cache…', 10, '⚡ No look-ahead bias');
       await new Promise(r => setTimeout(r, 0));
-      if (onTrades !== null) _mobTradeCache['overnight'] = onTrades;
-      if (idTrades !== null) _mobTradeCache['intraday']  = idTrades;
+      if (onTrades !== null) { _mobTradeCache['overnight'] = onTrades; _mobAllTradesCache['overnight'] = onTrades; }
+      if (idTrades !== null) { _mobTradeCache['intraday']  = idTrades; _mobAllTradesCache['intraday']  = idTrades; }
 
       // For any strategy without WF cache, run silent backtest as fallback
       // Use full loaded range — Stats tab should show all trades, not capped to last scan date
@@ -10277,6 +10284,7 @@ async function _ensureMobTradesData() {
 
     // ── No WF cache — fall back to silent backtest ────────────────────────────
     _mobTradeCache = { overnight: null, intraday: null };
+  _mobAllTradesCache = { overnight: null, intraday: null };
     allTrades = [];
     _allTradesForWR = [];
     _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
@@ -10751,7 +10759,27 @@ function _buildMobStockwise(trades, fmtPct) {
 }
 
 
-let _mobAtMonth = null; // currently viewed month in All Trades — null = latest
+let _mobAtMonth     = null; // currently viewed month in All Trades — null = latest
+let _mobAtSymFilter = '';  // symbol search filter for All Trades
+
+function mobAtSymSearch(val) {
+  _mobAtSymFilter = (val || '').toUpperCase().trim();
+  _mobAtMonth = null;
+  // Only rebuild the trades list — not the whole tab (to preserve input focus)
+  const inner = document.getElementById('mobTradesInner');
+  if (inner) {
+    const newHtml = _buildMobAllTrades(null, null);
+    // Preserve input value and focus after rebuild
+    const inputEl = inner.querySelector('#mobAtSymInput');
+    const cursorPos = inputEl ? inputEl.selectionStart : 0;
+    inner.innerHTML = newHtml;
+    const newInput = inner.querySelector('#mobAtSymInput');
+    if (newInput) {
+      newInput.focus();
+      try { newInput.setSelectionRange(cursorPos, cursorPos); } catch(e) {}
+    }
+  }
+}
 
 function mobAtNavMonth(dir) {
   // dir: -1 = newer month, +1 = older month
@@ -10768,15 +10796,30 @@ function mobAtNavMonth(dir) {
 }
 
 function _buildMobAllTrades(fmtPct, fmtPrice) {
-  let trades = (_allTradesForWR || []).slice();
+  // Use _mobAllTradesCache (uncapped) — populated by _runMobTradeBacktest
+  // Falls back to _allTradesForWR if cache not ready
+  const strat  = _mobTradesStratTab || _strategy || 'overnight';
+  let trades   = (_mobAllTradesCache[strat] || _allTradesForWR || []).slice();
 
-  if (_direction === 'long')  trades = trades.filter(t => t.side === 'LONG');
-  if (_direction === 'short') trades = trades.filter(t => t.side === 'SHORT');
+  // Intraday Momentum = SHORT only (gap down stocks only — strategy design)
+  // Gap strategy respects the user's direction setting
+  if (strat === 'intraday') {
+    trades = trades.filter(t => t.side === 'SHORT');
+  } else {
+    if (_direction === 'long')  trades = trades.filter(t => t.side === 'LONG');
+    if (_direction === 'short') trades = trades.filter(t => t.side === 'SHORT');
+  }
 
   if (!trades.length) {
     return `<div style="text-align:center;padding:40px 20px;color:var(--text3);
       font-family:'DM Mono',monospace;font-size:12px;">Run a backtest to see all trades</div>`;
   }
+
+  // Apply symbol filter if set
+  if (_mobAtSymFilter) trades = trades.filter(t => t.sym.includes(_mobAtSymFilter.toUpperCase()));
+
+  // When symbol filter active — show ALL months (bypass pagination)
+  const symFiltered = !!_mobAtSymFilter;
 
   // Months list (newest first)
   const months = [...new Set(trades.map(t => t.signalDate.slice(0,7)))].sort().reverse();
@@ -10784,9 +10827,10 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
   const curIdx   = months.indexOf(_mobAtMonth);
   const hasPrev  = curIdx < months.length - 1; // older month exists
   const hasNext  = curIdx > 0;                  // newer month exists
-  const [y, mo]  = _mobAtMonth.split('-');
+  const [y, mo]  = (_mobAtMonth||'2026-01').split('-');
   const monthLabel = new Date(+y,+mo-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
-  const mt = trades.filter(t => t.signalDate.startsWith(_mobAtMonth));
+  // When filtering by symbol, show all trades across all months
+  const mt = symFiltered ? trades : trades.filter(t => t.signalDate.startsWith(_mobAtMonth));
 
   // Overall stats
   const totalW   = trades.filter(t=>t.outcome==='WIN').length;
@@ -10806,17 +10850,30 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
   const mPF  = mGL>0 ? (mGW/mGL).toFixed(2) : mGW>0 ? '\u221e' : '0';
 
   let html = `
+  <!-- Symbol search -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+    <input id="mobAtSymInput" value="${_mobAtSymFilter}"
+      placeholder="Search symbol…"
+      oninput="mobAtSymSearch(this.value)"
+      autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+      style="flex:1;padding:7px 12px;border-radius:8px;border:1px solid var(--border2);
+        font-family:'DM Mono',monospace;font-size:12px;background:var(--surface2);color:var(--text);outline:none;">
+    ${_mobAtSymFilter ? `<button onclick="mobAtSymSearch('')"
+      style="padding:6px 12px;border-radius:8px;border:1px solid var(--border2);
+        background:var(--surface2);color:var(--text2);font-size:12px;cursor:pointer;">✕</button>` : ''}
+  </div>
+
   <!-- Overall summary strip -->
   <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);
     margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">
-    All ${trades.length}T
+    ${symFiltered ? `<b style="color:var(--accent)">${_mobAtSymFilter}</b>: ` : 'All '}${trades.length}T
     &nbsp;·&nbsp; WR <b style="color:${totalWR>=50?'var(--bull)':'var(--bear)'}">${totalWR}%</b>
     &nbsp;·&nbsp; Avg <b style="color:${totalAvg>=0?'var(--bull)':'var(--bear)'}">${totalAvg>=0?'+':''}${totalAvg.toFixed(2)}%</b>
     &nbsp;·&nbsp; Total <b style="color:${totalPnl>=0?'var(--bull)':'var(--bear)'}">${totalPnl>=0?'+':''}${totalPnl.toFixed(2)}%</b>
   </div>
 
-  <!-- Month pagination -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+  <!-- Month pagination — hidden when symbol filter is active -->
+  ${symFiltered ? '' : `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
     <button onclick="mobAtNavMonth(1)" ${!hasPrev?'disabled':''} style="width:36px;height:36px;
       border-radius:8px;border:1px solid var(--border2);background:var(--surface2);
       color:${hasPrev?'var(--text)':'var(--border2)'};font-size:20px;cursor:${hasPrev?'pointer':'default'};">&#8249;</button>
@@ -10827,10 +10884,10 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
     <button onclick="mobAtNavMonth(-1)" ${!hasNext?'disabled':''} style="width:36px;height:36px;
       border-radius:8px;border:1px solid var(--border2);background:var(--surface2);
       color:${hasNext?'var(--text)':'var(--border2)'};font-size:20px;cursor:${hasNext?'pointer':'default'};">&#8250;</button>
-  </div>
+  </div>`}
 
-  <!-- Month stats grid -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;
+  <!-- Month stats grid — hidden when symbol search active -->
+  ${symFiltered ? '' : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;
     padding:10px;background:var(--surface2);border-radius:10px;font-family:'DM Mono',monospace;">
     <div style="text-align:center;">
       <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Trades</div>
@@ -10860,11 +10917,11 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
       <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Prof. Factor</div>
       <div style="font-size:13px;font-weight:700;color:var(--text);">${mPF}</div>
     </div>
-  </div>`;
+  </div>`}`;
 
   if (!mt.length) {
     return html + `<div style="text-align:center;padding:20px;color:var(--text3);
-      font-family:'DM Mono',monospace;font-size:12px;">No trades this month</div>`;
+      font-family:'DM Mono',monospace;font-size:12px;">${symFiltered ? 'No trades found for ' + _mobAtSymFilter : 'No trades this month'}</div>`;
   }
 
   mt.slice().sort((a,b)=>b.signalDate.localeCompare(a.signalDate)).forEach(t => {
@@ -10880,7 +10937,8 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
           <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">${t.sym}</span>
           <span style="font-size:10px;color:${dirC}">${t.side==='LONG'?'&#9650;':'&#9660;'}</span>
-          <span style="font-size:10px;color:var(--text3)">${t.signalDate.slice(5)}</span>
+          <span style="font-size:10px;color:var(--text3)">D1: ${t.signalDate.slice(5)}</span>
+          <span style="font-size:10px;color:var(--text3)">→ D2: ${(t.tradeDate||t.exitDate||t.signalDate).slice(5)}</span>
         </div>
         <div style="font-size:11px;color:var(--text3);">
           Gap <span style="color:${t.gapPct>=0?'var(--bull)':'var(--bear)'}">${t.gapPct>=0?'+':''}${t.gapPct}%</span>
@@ -11323,6 +11381,7 @@ function _mobRefreshTradesTab() {
     if (overlay) overlay.style.display = 'none';
     // Invalidate trade cache — fresh data
     _mobTradeCache = { overnight: null, intraday: null };
+  _mobAllTradesCache = { overnight: null, intraday: null };
     allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
     updateDataStatusBar();
   } catch(e) {
