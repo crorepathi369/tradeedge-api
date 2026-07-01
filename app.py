@@ -54,14 +54,14 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # ── GitHub restore — pulls CSVs from 'data' branch on every startup ───────────
 def restore_data_from_github():
     """
-    On startup, download all CSVs + SECTOR_MAP.json from the GitHub 'data' branch
-    into DATA_DIR. Only downloads files that don't exist yet — incremental updates
-    (written by /run-fetch) are kept as-is.
+    On startup, download CSVs + SECTOR_MAP.json from the GitHub data branch
+    into DATA_DIR. Smart restore — only downloads files that:
+      1. Don't exist on disk yet, OR
+      2. Are stale (local file older than 20 hours)
 
-    Required env vars:
-        GITHUB_TOKEN       — personal access token with 'repo' scope
-        GITHUB_REPO        — e.g. crorepathi369/tradeedge-api
-        GITHUB_DATA_BRANCH — branch name, default 'data'
+    This minimises outbound bandwidth on Render restarts/redeploys.
+    A full restore (~186 files x 22 KB = ~4 MB) only happens on the first
+    cold start of the day. Subsequent restarts skip fresh files entirely.
     """
     import urllib.request, urllib.error, json as _json
 
@@ -70,22 +70,24 @@ def restore_data_from_github():
     branch = os.environ.get("GITHUB_DATA_BRANCH", "data")
 
     if not token:
-        print("[restore] GITHUB_TOKEN not set — skipping GitHub restore")
+        print("[restore] GITHUB_TOKEN not set — skipping")
         return
 
-    print(f"[restore] Starting restore from github:{repo}@{branch} → {DATA_DIR}")
-
-    # Step 1: fetch the full file tree of the data branch
-    tree_url = f"https://api.github.com/repos/{repo}/git/trees/{branch}?recursive=1"
-    req = urllib.request.Request(tree_url, headers={
+    headers = {
         "Authorization": f"token {token}",
         "Accept":        "application/vnd.github.v3+json",
         "User-Agent":    "TradeEdge-App",
-    })
+    }
+
+    print(f"[restore] Smart restore from github:{repo}@{branch} -> {DATA_DIR}")
+
+    # Step 1: fetch full file tree (single API call)
+    tree_url = f"https://api.github.com/repos/{repo}/git/trees/{branch}?recursive=1"
     try:
-        tree = _json.loads(urllib.request.urlopen(req, timeout=30).read())
+        tree = _json.loads(urllib.request.urlopen(
+            urllib.request.Request(tree_url, headers=headers), timeout=30).read())
     except Exception as e:
-        print(f"[restore] GitHub tree fetch failed: {e}")
+        print(f"[restore] tree fetch failed: {e}")
         return
 
     files = [
@@ -94,38 +96,38 @@ def restore_data_from_github():
             f["path"].endswith(".csv") or f["path"] == "SECTOR_MAP.json"
         )
     ]
-    print(f"[restore] {len(files)} files found in data branch")
+    print(f"[restore] {len(files)} files in data branch")
 
-    # Step 2: download each file that isn't already on disk
-    downloaded = 0
-    skipped    = 0
-    failed     = 0
+    # Step 2: smart download — skip files fresher than 20 hours
+    # Data pipeline runs at 5 PM IST daily, so 20h covers overnight gap safely
+    FRESH_SECS = 20 * 3600
+    now_ts     = datetime.utcnow().timestamp()
+    downloaded = skipped = failed = 0
 
     for filename in files:
-        dest = DATA_DIR / filename          # filename is just e.g. "RELIANCE.csv"
+        dest = DATA_DIR / filename
         if dest.exists():
-            skipped += 1
-            continue                        # already present — keep local version
+            age = now_ts - dest.stat().st_mtime
+            if age < FRESH_SECS:
+                skipped += 1
+                continue   # fresh enough — no download needed
 
-        raw_url = (
-            f"https://raw.githubusercontent.com/{repo}/{branch}/{filename}"
-        )
-        raw_req = urllib.request.Request(raw_url, headers={
-            "Authorization": f"token {token}",
-            "User-Agent":    "TradeEdge-App",
-        })
+        raw_url = f"https://raw.githubusercontent.com/{repo}/{branch}/{filename}"
         try:
-            data = urllib.request.urlopen(raw_req, timeout=30).read()
+            data = urllib.request.urlopen(
+                urllib.request.Request(raw_url, headers={
+                    "Authorization": f"token {token}",
+                    "User-Agent":    "TradeEdge-App",
+                }), timeout=30).read()
             dest.write_bytes(data)
             downloaded += 1
         except Exception as e:
-            print(f"[restore] ✗ {filename}: {e}")
+            print(f"[restore] x {filename}: {e}")
             failed += 1
 
-    print(
-        f"[restore] Done — downloaded={downloaded}  "
-        f"skipped(already present)={skipped}  failed={failed}"
-    )
+    size_kb = downloaded * 22
+    print(f"[restore] Done — downloaded={downloaded} (~{size_kb} KB)  "
+          f"skipped(fresh)={skipped}  failed={failed}")
 
 # Run restore in a background thread so Flask starts up immediately
 # (Render health check hits '/' within 30s — we can't block startup)

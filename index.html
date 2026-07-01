@@ -2766,6 +2766,7 @@
     <div class="tabs-wrap mobile-section" id="msDaywise">
       <div class="tabs">
         <div class="tab active" onclick="switchTab('daywise',this)">Day-wise Trades</div>
+        <div class="tab" onclick="switchTab('alltrades',this)">All Trades</div>
         <div class="tab" onclick="switchTab('calendar',this)">📅 Calendar View</div>
         <div class="tab" onclick="switchTab('symbolSummary',this)">Symbol Summary</div>
         <div class="tab" onclick="switchTab('verdict',this)">Strategy Verdict</div>
@@ -2816,6 +2817,78 @@
         </div>
         <div id="dayFilterInfo" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);margin-bottom:10px;min-height:18px;display:flex;align-items:center;gap:8px;"></div>
         <div class="day-cards" id="dayCards"></div>
+      </div>
+
+      <!-- ALL TRADES TAB -->
+      <div class="tab-content" id="tab-alltrades">
+
+        <!-- Filter + sort controls -->
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
+          <input id="atSymFilter" placeholder="Symbol…" oninput="buildAllTradesTab()"
+            style="padding:5px 10px;border-radius:8px;border:1px solid var(--border2);
+              font-family:'DM Mono',monospace;font-size:12px;width:100px;background:var(--surface2);">
+          <select id="atDirFilter" onchange="buildAllTradesTab()"
+            style="padding:5px 10px;border-radius:8px;border:1px solid var(--border2);
+              font-family:'DM Mono',monospace;font-size:12px;background:var(--surface2);">
+            <option value="all">All Dirs</option>
+            <option value="LONG">▲ Long</option>
+            <option value="SHORT">▼ Short</option>
+          </select>
+          <select id="atResultFilter" onchange="buildAllTradesTab()"
+            style="padding:5px 10px;border-radius:8px;border:1px solid var(--border2);
+              font-family:'DM Mono',monospace;font-size:12px;background:var(--surface2);">
+            <option value="all">All Results</option>
+            <option value="WIN">Win</option>
+            <option value="LOSS">Loss</option>
+            <option value="SL">SL Hit</option>
+          </select>
+          <select id="atMonthFilter" onchange="buildAllTradesTab()"
+            style="padding:5px 10px;border-radius:8px;border:1px solid var(--border2);
+              font-family:'DM Mono',monospace;font-size:12px;background:var(--surface2);">
+            <option value="all">All Months</option>
+          </select>
+          <select id="atSortBy" onchange="buildAllTradesTab()"
+            style="padding:5px 10px;border-radius:8px;border:1px solid var(--border2);
+              font-family:'DM Mono',monospace;font-size:12px;background:var(--surface2);">
+            <option value="date_desc">Date ↓</option>
+            <option value="date_asc">Date ↑</option>
+            <option value="pnl_desc">PnL ↓</option>
+            <option value="pnl_asc">PnL ↑</option>
+            <option value="gap_desc">Gap ↓</option>
+            <option value="sym_asc">Symbol ↑</option>
+          </select>
+          <button onclick="atResetFilters()"
+            style="padding:5px 12px;border-radius:8px;border:1px solid var(--border2);
+              font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;
+              background:var(--surface2);color:var(--text2);">↺ Reset</button>
+        </div>
+
+        <!-- Summary bar -->
+        <div id="atSummary" style="font-family:'DM Mono',monospace;font-size:12px;
+          color:var(--text2);margin-bottom:10px;"></div>
+
+        <!-- Table -->
+        <div style="overflow-x:auto;">
+          <table id="atTable" style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:12px;">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border2);color:var(--text3);font-size:11px;">
+                <th style="text-align:left;padding:6px 8px;white-space:nowrap;">Signal Date</th>
+                <th style="text-align:left;padding:6px 8px;">Symbol</th>
+                <th style="text-align:center;padding:6px 8px;">Dir</th>
+                <th style="text-align:right;padding:6px 8px;">Gap%</th>
+                <th style="text-align:right;padding:6px 8px;">Entry</th>
+                <th style="text-align:right;padding:6px 8px;">Exit</th>
+                <th style="text-align:right;padding:6px 8px;">PnL%</th>
+                <th style="text-align:center;padding:6px 8px;">Result</th>
+              </tr>
+            </thead>
+            <tbody id="atTableBody"></tbody>
+          </table>
+        </div>
+        <div id="atEmpty" style="display:none;text-align:center;padding:40px;
+          color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;">
+          Run a backtest to see all trades
+        </div>
       </div>
 
       <!-- CALENDAR VIEW -->
@@ -4510,6 +4583,9 @@ allTrades = [];
     });
   }
   computeTradeStats(allTrades);
+  // Refresh All Trades tab if it's active (silent backtest triggered by scanner)
+  const atTab = document.getElementById('tab-alltrades');
+  if (atTab && atTab.classList.contains('active')) buildAllTradesTab();
 }
 
 async function runBacktest() {
@@ -4656,6 +4732,10 @@ async function runBacktest() {
   buildResults(skipped);
   document.getElementById('results').style.display = 'block';
   document.getElementById('emptyState').style.display = 'none';
+
+  // Refresh All Trades tab if it's active
+  const atTab = document.getElementById('tab-alltrades');
+  if (atTab && atTab.classList.contains('active')) buildAllTradesTab();
 
   // Show Hist WR filter in scanner now that backtest data is available
   resetRunBtn();
@@ -4837,6 +4917,10 @@ function setStrategy(s) {
   _allTradesForWR = [];
   _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
   refreshScannerGate();
+  // If All Trades tab is active, rebuild it for new strategy
+  const atContent = document.getElementById('tab-alltrades');
+  if (atContent && atContent.classList.contains('active')) buildAllTradesTab();
+  _mobAtMonth = null; // reset to latest month on strategy switch
   const sweepTab = document.getElementById('sweepTab');
   if (sweepTab) sweepTab.style.display = 'none';
   document.getElementById('scannerBody').innerHTML = `
@@ -8352,6 +8436,140 @@ function switchTab(id, el) {
   el.classList.add('active');
   document.getElementById('tab-' + id).classList.add('active');
   if (id === 'calendar') buildCalendar();
+  if (id === 'alltrades') buildAllTradesTab();
+}
+
+// ── All Trades Tab ────────────────────────────────────────────────────────────
+
+function atResetFilters() {
+  document.getElementById('atSymFilter').value    = '';
+  document.getElementById('atDirFilter').value    = 'all';
+  document.getElementById('atResultFilter').value = 'all';
+  document.getElementById('atMonthFilter').value  = 'all';
+  document.getElementById('atSortBy').value       = 'date_desc';
+  buildAllTradesTab();
+}
+
+function buildAllTradesTab() {
+  const tbody   = document.getElementById('atTableBody');
+  const summary = document.getElementById('atSummary');
+  const empty   = document.getElementById('atEmpty');
+  if (!tbody) return;
+
+  // Use uncapped trades for current strategy
+  let trades = (_allTradesForWR || []).slice();
+
+  // Apply direction filter — _allTradesForWR uses direction:'both' for WR scoring
+  // but display should respect the user's configured direction setting
+  if (_direction === 'long')  trades = trades.filter(t => t.side === 'LONG');
+  if (_direction === 'short') trades = trades.filter(t => t.side === 'SHORT');
+  // Note: Intraday Momentum default is 'short' — set in params, so _direction handles it
+
+  if (!trades.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    summary.textContent = 'Run a backtest first';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Populate month dropdown from available data
+  const monthSel = document.getElementById('atMonthFilter');
+  const months   = [...new Set(trades.map(t => t.signalDate.slice(0,7)))].sort().reverse();
+  const curMonth = monthSel.value;
+  monthSel.innerHTML = '<option value="all">All Months</option>'
+    + months.map(m => {
+        const [y, mo] = m.split('-');
+        const label   = new Date(+y, +mo-1, 1).toLocaleDateString('en-IN',{month:'short',year:'numeric'});
+        return `<option value="${m}"${m===curMonth?' selected':''}>${label}</option>`;
+      }).join('');
+
+  // Apply filters
+  const symF   = (document.getElementById('atSymFilter').value || '').toUpperCase().trim();
+  const dirF   = document.getElementById('atDirFilter').value;
+  const resF   = document.getElementById('atResultFilter').value;
+  const monthF = document.getElementById('atMonthFilter').value;
+  const sort   = document.getElementById('atSortBy').value;
+
+  if (symF)            trades = trades.filter(t => t.sym.includes(symF));
+  if (dirF !== 'all')  trades = trades.filter(t => t.side === dirF);
+  if (resF !== 'all')  trades = trades.filter(t => t.outcome === resF);
+  if (monthF !== 'all') trades = trades.filter(t => t.signalDate.startsWith(monthF));
+
+  // Sort
+  trades.sort((a, b) => {
+    switch (sort) {
+      case 'date_desc': return b.signalDate.localeCompare(a.signalDate);
+      case 'date_asc':  return a.signalDate.localeCompare(b.signalDate);
+      case 'pnl_desc':  return b.pnlPct - a.pnlPct;
+      case 'pnl_asc':   return a.pnlPct - b.pnlPct;
+      case 'gap_desc':  return Math.abs(b.gapPct) - Math.abs(a.gapPct);
+      case 'sym_asc':   return a.sym.localeCompare(b.sym);
+      default: return 0;
+    }
+  });
+
+  // Enhanced summary stats
+  const wins     = trades.filter(t => t.outcome === 'WIN').length;
+  const wr       = trades.length ? Math.round(wins / trades.length * 100) : 0;
+  const avgPnl   = trades.length ? (trades.reduce((s,t) => s + t.pnlPct, 0) / trades.length) : 0;
+  const totalPnl = trades.reduce((s,t) => s + t.pnlPct, 0);
+  const maxProfit = trades.length ? Math.max(...trades.map(t => t.pnlPct)) : 0;
+  const maxLoss   = trades.length ? Math.min(...trades.map(t => t.pnlPct)) : 0;
+  const grossWin  = trades.filter(t => t.pnlPct > 0).reduce((s,t) => s + t.pnlPct, 0);
+  const grossLoss = Math.abs(trades.filter(t => t.pnlPct < 0).reduce((s,t) => s + t.pnlPct, 0));
+  const pf        = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : grossWin > 0 ? '∞' : '0';
+  const tpnlCol   = totalPnl >= 0 ? 'var(--bull)' : 'var(--bear)';
+  const avgCol    = avgPnl   >= 0 ? 'var(--bull)' : 'var(--bear)';
+  const monthNote = monthF !== 'all' ? ` (${monthF})` : ` of ${totalUnfiltered} total`;
+  summary.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;">
+      <span style="color:var(--text);font-weight:600;">${trades.length} trades${monthNote}</span>
+      <span>WR <b style="color:${wr>=50?'var(--bull)':'var(--bear)'}">${wr}%</b></span>
+      <span>Avg <b style="color:${avgCol}">${avgPnl>=0?'+':''}${avgPnl.toFixed(2)}%</b></span>
+      <span>Total <b style="color:${tpnlCol}">${totalPnl>=0?'+':''}${totalPnl.toFixed(2)}%</b></span>
+      <span>Max ↑ <b style="color:var(--bull)">+${maxProfit.toFixed(2)}%</b></span>
+      <span>Max ↓ <b style="color:var(--bear)">${maxLoss.toFixed(2)}%</b></span>
+      <span>PF <b style="color:var(--text)">${pf}</b></span>
+      <span style="color:var(--text3)">${wins}W / ${trades.length-wins}L</span>
+    </div>`;
+
+  // Render rows (max 500 for performance — use month filter to drill down)
+  const MAX_ROWS = 500;
+  const sliced   = trades.slice(0, MAX_ROWS);
+  const truncated = trades.length > MAX_ROWS;
+
+  const rows = sliced.map(t => {
+    const pnlC = t.pnlPct >= 0 ? 'var(--bull)' : 'var(--bear)';
+    const dirC = t.side === 'LONG' ? 'var(--bull)' : 'var(--bear)';
+    const gapC = t.gapPct >= 0 ? 'var(--bull)' : 'var(--bear)';
+    const badge = t.outcome === 'WIN'  ? 'background:var(--bull-bg);color:var(--bull)'
+                : t.outcome === 'SL'   ? 'background:#fff3e0;color:#e65100'
+                                       : 'background:var(--bear-bg);color:var(--bear)';
+    return `<tr style="border-bottom:1px solid var(--border);"
+              onmouseover="this.style.background='var(--surface2)'"
+              onmouseout="this.style.background=''">
+      <td style="padding:7px 8px;color:var(--text3);white-space:nowrap;">${t.signalDate}</td>
+      <td style="padding:7px 8px;font-weight:600;">${t.sym}</td>
+      <td style="padding:7px 8px;text-align:center;color:${dirC};">${t.side==='LONG'?'▲':'▼'} ${t.side}</td>
+      <td style="padding:7px 8px;text-align:right;color:${gapC};">${t.gapPct>=0?'+':''}${t.gapPct}%</td>
+      <td style="padding:7px 8px;text-align:right;">₹${t.entry.toLocaleString('en-IN')}</td>
+      <td style="padding:7px 8px;text-align:right;">₹${t.exit.toLocaleString('en-IN')}</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:600;color:${pnlC};">${t.pnlPct>=0?'+':''}${t.pnlPct}%</td>
+      <td style="padding:7px 8px;text-align:center;">
+        <span style="padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;${badge}">
+          ${t.outcome}
+        </span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.innerHTML = rows
+    + (truncated ? `<tr><td colspan="8" style="text-align:center;padding:12px;
+        color:var(--text3);font-family:'DM Mono',monospace;font-size:11px;">
+        Showing ${MAX_ROWS} of ${trades.length} trades — use Month filter to narrow down
+      </td></tr>` : '')
+    || `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text3);">No trades match filters</td></tr>`;
 }
 
 function clearResults() {
@@ -10171,6 +10389,7 @@ function buildMobTradesTab() {
       <div class="mob-subtab-bar">
         <button class="mob-subtab-btn ${_mobTradesSubTab==='summary'   ?'active':''}" onclick="mobSwitchTradesSubTab('summary')">📈 Summary</button>
         <button class="mob-subtab-btn ${_mobTradesSubTab==='daywise'   ?'active':''}" onclick="mobSwitchTradesSubTab('daywise')">📅 Day-wise</button>
+        <button class="mob-subtab-btn ${_mobTradesSubTab==='alltrades' ?'active':''}" onclick="mobSwitchTradesSubTab('alltrades')">📋 All Trades</button>
         <button class="mob-subtab-btn ${_mobTradesSubTab==='stockwise' ?'active':''}" onclick="mobSwitchTradesSubTab('stockwise')">📊 Stockwise</button>
         <button class="mob-subtab-btn ${_mobTradesSubTab==='monthly'   ?'active':''}" onclick="mobSwitchTradesSubTab('monthly')">🗓 Monthly</button>
         <button class="mob-subtab-btn ${_mobTradesSubTab==='insights'  ?'active':''}" onclick="mobSwitchTradesSubTab('insights')">💡 Insights</button>
@@ -10363,6 +10582,8 @@ function buildMobTradesTab() {
       </div>`;
   } else if (_mobTradesSubTab === 'daywise') {
     html += _buildMobDaywise(trades, fmtPct, fmtPrice);
+  } else if (_mobTradesSubTab === 'alltrades') {
+    html += _buildMobAllTrades(fmtPct, fmtPrice);
   } else if (_mobTradesSubTab === 'stockwise') {
     html += _buildMobStockwise(trades, fmtPct);
   } else if (_mobTradesSubTab === 'monthly') {
@@ -10520,6 +10741,154 @@ function _buildMobStockwise(trades, fmtPct) {
 
   // Cards rendered separately after DOM is ready
   setTimeout(_renderMobStockwiseCards, 0);
+  return html;
+}
+
+
+let _mobAtMonth = null; // currently viewed month in All Trades — null = latest
+
+function mobAtNavMonth(dir) {
+  // dir: -1 = newer month, +1 = older month
+  const all = (_allTradesForWR || []);
+  const filtered = _direction==='long'  ? all.filter(t=>t.side==='LONG')
+                 : _direction==='short' ? all.filter(t=>t.side==='SHORT') : all;
+  const months = [...new Set(filtered.map(t=>t.signalDate.slice(0,7)))].sort().reverse();
+  const curIdx = months.indexOf(_mobAtMonth);
+  const newIdx = curIdx + dir;
+  if (newIdx >= 0 && newIdx < months.length) {
+    _mobAtMonth = months[newIdx];
+    buildMobTradesTab();
+  }
+}
+
+function _buildMobAllTrades(fmtPct, fmtPrice) {
+  let trades = (_allTradesForWR || []).slice();
+
+  if (_direction === 'long')  trades = trades.filter(t => t.side === 'LONG');
+  if (_direction === 'short') trades = trades.filter(t => t.side === 'SHORT');
+
+  if (!trades.length) {
+    return `<div style="text-align:center;padding:40px 20px;color:var(--text3);
+      font-family:'DM Mono',monospace;font-size:12px;">Run a backtest to see all trades</div>`;
+  }
+
+  // Months list (newest first)
+  const months = [...new Set(trades.map(t => t.signalDate.slice(0,7)))].sort().reverse();
+  if (!_mobAtMonth || !months.includes(_mobAtMonth)) _mobAtMonth = months[0];
+  const curIdx   = months.indexOf(_mobAtMonth);
+  const hasPrev  = curIdx < months.length - 1; // older month exists
+  const hasNext  = curIdx > 0;                  // newer month exists
+  const [y, mo]  = _mobAtMonth.split('-');
+  const monthLabel = new Date(+y,+mo-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  const mt = trades.filter(t => t.signalDate.startsWith(_mobAtMonth));
+
+  // Overall stats
+  const totalW   = trades.filter(t=>t.outcome==='WIN').length;
+  const totalWR  = Math.round(totalW/trades.length*100);
+  const totalAvg = trades.reduce((s,t)=>s+t.pnlPct,0)/trades.length;
+  const totalPnl = trades.reduce((s,t)=>s+t.pnlPct,0);
+
+  // Month stats
+  const mW   = mt.filter(t=>t.outcome==='WIN').length;
+  const mWR  = mt.length ? Math.round(mW/mt.length*100) : 0;
+  const mAvg = mt.length ? mt.reduce((s,t)=>s+t.pnlPct,0)/mt.length : 0;
+  const mTot = mt.reduce((s,t)=>s+t.pnlPct,0);
+  const mMax = mt.length ? Math.max(...mt.map(t=>t.pnlPct)) : 0;
+  const mMin = mt.length ? Math.min(...mt.map(t=>t.pnlPct)) : 0;
+  const mGW  = mt.filter(t=>t.pnlPct>0).reduce((s,t)=>s+t.pnlPct,0);
+  const mGL  = Math.abs(mt.filter(t=>t.pnlPct<0).reduce((s,t)=>s+t.pnlPct,0));
+  const mPF  = mGL>0 ? (mGW/mGL).toFixed(2) : mGW>0 ? '\u221e' : '0';
+
+  let html = `
+  <!-- Overall summary strip -->
+  <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);
+    margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">
+    All ${trades.length}T
+    &nbsp;·&nbsp; WR <b style="color:${totalWR>=50?'var(--bull)':'var(--bear)'}">${totalWR}%</b>
+    &nbsp;·&nbsp; Avg <b style="color:${totalAvg>=0?'var(--bull)':'var(--bear)'}">${totalAvg>=0?'+':''}${totalAvg.toFixed(2)}%</b>
+    &nbsp;·&nbsp; Total <b style="color:${totalPnl>=0?'var(--bull)':'var(--bear)'}">${totalPnl>=0?'+':''}${totalPnl.toFixed(2)}%</b>
+  </div>
+
+  <!-- Month pagination -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+    <button onclick="mobAtNavMonth(1)" ${!hasPrev?'disabled':''} style="width:36px;height:36px;
+      border-radius:8px;border:1px solid var(--border2);background:var(--surface2);
+      color:${hasPrev?'var(--text)':'var(--border2)'};font-size:20px;cursor:${hasPrev?'pointer':'default'};">&#8249;</button>
+    <div style="text-align:center;">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">${monthLabel}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">${curIdx+1} / ${months.length} months</div>
+    </div>
+    <button onclick="mobAtNavMonth(-1)" ${!hasNext?'disabled':''} style="width:36px;height:36px;
+      border-radius:8px;border:1px solid var(--border2);background:var(--surface2);
+      color:${hasNext?'var(--text)':'var(--border2)'};font-size:20px;cursor:${hasNext?'pointer':'default'};">&#8250;</button>
+  </div>
+
+  <!-- Month stats grid -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px;
+    padding:10px;background:var(--surface2);border-radius:10px;font-family:'DM Mono',monospace;">
+    <div style="text-align:center;">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Trades</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);">${mt.length}</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Win Rate</div>
+      <div style="font-size:15px;font-weight:700;color:${mWR>=50?'var(--bull)':'var(--bear)'};">${mWR}%</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Avg PnL</div>
+      <div style="font-size:14px;font-weight:700;color:${mAvg>=0?'var(--bull)':'var(--bear)'};">${mAvg>=0?'+':''}${mAvg.toFixed(2)}%</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Total PnL</div>
+      <div style="font-size:13px;font-weight:700;color:${mTot>=0?'var(--bull)':'var(--bear)'};">${mTot>=0?'+':''}${mTot.toFixed(2)}%</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Max ↑ / ↓</div>
+      <div style="font-size:11px;font-weight:700;">
+        <span style="color:var(--bull)">+${mMax.toFixed(1)}%</span>
+        <span style="color:var(--text3)"> / </span>
+        <span style="color:var(--bear)">${mMin.toFixed(1)}%</span>
+      </div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Prof. Factor</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);">${mPF}</div>
+    </div>
+  </div>`;
+
+  if (!mt.length) {
+    return html + `<div style="text-align:center;padding:20px;color:var(--text3);
+      font-family:'DM Mono',monospace;font-size:12px;">No trades this month</div>`;
+  }
+
+  mt.slice().sort((a,b)=>b.signalDate.localeCompare(a.signalDate)).forEach(t => {
+    const pnlC = t.pnlPct>=0 ? 'var(--bull)' : 'var(--bear)';
+    const dirC = t.side==='LONG' ? 'var(--bull)' : 'var(--bear)';
+    const badge = t.outcome==='WIN' ? 'background:var(--bull-bg);color:var(--bull)'
+                : t.outcome==='SL'  ? 'background:#fff3e0;color:#e65100'
+                                    : 'background:var(--bear-bg);color:var(--bear)';
+    html += `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+          <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">${t.sym}</span>
+          <span style="font-size:10px;color:${dirC}">${t.side==='LONG'?'&#9650;':'&#9660;'}</span>
+          <span style="font-size:10px;color:var(--text3)">${t.signalDate.slice(5)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);">
+          Gap <span style="color:${t.gapPct>=0?'var(--bull)':'var(--bear)'}">${t.gapPct>=0?'+':''}${t.gapPct}%</span>
+          &nbsp;&#183;&nbsp; &#8377;${t.entry.toLocaleString('en-IN')} &#8594; &#8377;${t.exit.toLocaleString('en-IN')}
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-weight:700;font-size:13px;color:${pnlC};">${t.pnlPct>=0?'+':''}${t.pnlPct}%</div>
+        <div style="margin-top:3px;">
+          <span style="padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;${badge}">${t.outcome}</span>
+        </div>
+      </div>
+    </div>`;
+  });
   return html;
 }
 
