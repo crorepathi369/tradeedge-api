@@ -8523,7 +8523,8 @@ function buildAllTradesTab() {
   const pf        = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : grossWin > 0 ? '∞' : '0';
   const tpnlCol   = totalPnl >= 0 ? 'var(--bull)' : 'var(--bear)';
   const avgCol    = avgPnl   >= 0 ? 'var(--bull)' : 'var(--bear)';
-  const monthNote = monthF !== 'all' ? ` (${monthF})` : ` of ${totalUnfiltered} total`;
+  const allCount  = (_allTradesForWR || []).length;
+  const monthNote = monthF !== 'all' ? ` (${monthF})` : allCount !== trades.length ? ` of ${allCount} total` : '';
   summary.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;">
       <span style="color:var(--text);font-weight:600;">${trades.length} trades${monthNote}</span>
