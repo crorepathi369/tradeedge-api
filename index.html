@@ -2841,6 +2841,7 @@
             <option value="WIN">Win</option>
             <option value="LOSS">Loss</option>
             <option value="SL">SL Hit</option>
+            <option value="SKIP">Skipped</option>
           </select>
           <select id="atMonthFilter" onchange="buildAllTradesTab()"
             style="padding:5px 10px;border-radius:8px;border:1px solid var(--border2);
@@ -4351,8 +4352,9 @@ function backtest(ohlc, symId, params, debug = false) {
 // Exit:   SL/TP checked via D2 High/Low (intraday), else D2 Close
 // ─────────────────────────────────────────────────────────────────────────────
 function backtestIntraday(ohlc, symId, params, debug = false) {
-  const trades = [];
+  const trades   = [];
   const entryType = params.idEntryType || 'd2_open'; // 'd2_open' | 'd1_close'
+  if (!backtestIntraday._skipLog) backtestIntraday._skipLog = [];
 
   for (let i = 1; i < ohlc.length - 1; i++) {
     const prev    = ohlc[i - 1];
@@ -4405,7 +4407,8 @@ function backtestIntraday(ohlc, symId, params, debug = false) {
           : -onGapPct; // negative onGapPct = gap down (already moved our way for short)
         if (movedInDir > params.idSkipPct) {
           if (debug) console.log(symId, d1.date, `SKIP: D2 open already moved ${movedInDir.toFixed(2)}% in signal direction > skip threshold ${params.idSkipPct}%`);
-          continue;
+          backtestIntraday._skipLog.push({ sym: symId, signalDate: d1.date, tradeDate: d2.date, side, d1MovePct: +d1MovePct.toFixed(2), movedInDir: +movedInDir.toFixed(2) });
+          continue; // silent skip — not recorded in backtest
         }
       }
 
@@ -4513,7 +4516,7 @@ allTrades = [];
     const trades = isIntraday
       ? backtestIntraday(ohlc, sym, params)
       : backtest(ohlc, sym, params);
-    allTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
+    allTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'SKIP'));
   }
 
   if (!isIntraday) {
@@ -4617,6 +4620,7 @@ async function runBacktest() {
 
   allTrades = [];
   const skipped = [];
+  if (typeof backtestIntraday !== 'undefined') backtestIntraday._skipLog = [];
 
   for (let i = 0; i < syms.length; i++) {
     const sym = syms[i];
@@ -4634,7 +4638,7 @@ async function runBacktest() {
     const trades = isIntraday
       ? backtestIntraday(ohlc, sym, params)
       : backtest(ohlc, sym, params);
-    allTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
+    allTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'SKIP'));
   }
 
   // Direction filter for display results only
@@ -4977,9 +4981,11 @@ function wrDataMatchesStrategy() {
 // ── Signal scoring ────────────────────────────────────────────────────────────
 // Computes wilson + expectancy stats from a trade array
 function _scoreFromTrades(histTrades) {
-  const total  = histTrades.length;
-  const wins   = histTrades.filter(t => t.outcome === 'WIN');
-  const losses = histTrades.filter(t => t.outcome !== 'WIN');
+  // Exclude SKIP trades from scoring — they never executed, shouldn't affect WR
+  const scored = histTrades.filter(t => t.outcome !== 'SKIP');
+  const total  = scored.length;
+  const wins   = scored.filter(t => t.outcome === 'WIN');
+  const losses = scored.filter(t => t.outcome !== 'WIN');
   const wilson = total > 0 ? (wins.length + 1) / (total + 2) : 0.5;
   const avgWin  = wins.length   > 0 ? wins.reduce((s,t)=>s+t.pnlPct,0)   / wins.length   : 0;
   const avgLoss = losses.length > 0 ? losses.reduce((s,t)=>s+t.pnlPct,0) / losses.length : 0;
@@ -5545,8 +5551,9 @@ async function runScanner() {
 
     const side = gapDir === 'UP' ? 'LONG' : 'SHORT';
     // Use _allTradesForWR (full uncapped backtest) so the cap doesn't reduce trade counts
+    // Exclude SKIP trades — they never executed, shouldn't affect WR
     const wrSource   = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
-    const histTrades = wrSource.filter(t => t.sym === sym && t.side === side);
+    const histTrades = wrSource.filter(t => t.sym === sym && t.side === side && t.outcome !== 'SKIP');
     const histWins   = histTrades.filter(t => t.outcome === 'WIN').length;
     const histTotal  = histTrades.length;
     const histWR     = histTotal >= 5
@@ -5668,9 +5675,9 @@ function runScannerIntraday(scanDate, syms) {
     const slLevel = side === 'LONG' ? approxEntry * (1 - slPct) : approxEntry * (1 + slPct);
     const tpLevel = side === 'LONG' ? approxEntry * (1 + tpPct) : approxEntry * (1 - tpPct);
 
-    // Hist WR from backtest
+    // Hist WR from backtest — exclude SKIP trades
     const wrSource   = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
-    const histTrades = wrSource.filter(t => t.sym === sym && t.side === side);
+    const histTrades = wrSource.filter(t => t.sym === sym && t.side === side && t.outcome !== 'SKIP');
     const histWins   = histTrades.filter(t => t.outcome === 'WIN').length;
     const histTotal  = histTrades.length;
     const histWR     = histTotal >= 5 ? Math.round(histWins / histTotal * 100) : null;
@@ -5757,9 +5764,9 @@ function runScannerIntraday(scanDate, syms) {
 // Shared outcome strip HTML — used by both desktop and mobile card renderers
 function outcomeHTML(o, d2date) {
   if (!o) return ''; // D2 not yet traded
-  const cls   = o.outcome === 'WIN' ? 'bull' : o.outcome === 'SL' ? 'gold' : 'bear';
-  const color = o.outcome === 'WIN' ? 'var(--bull)' : o.outcome === 'SL' ? 'var(--gold)' : 'var(--bear)';
-  const bg    = o.outcome === 'WIN' ? 'var(--bull-bg)' : o.outcome === 'SL' ? 'var(--gold-bg)' : 'var(--bear-bg)';
+  const cls   = o.outcome === 'WIN' ? 'bull' : o.outcome === 'SL' ? 'gold' : o.outcome === 'SKIP' ? 'mid' : 'bear';
+  const color = o.outcome === 'WIN' ? 'var(--bull)' : o.outcome === 'SL' ? 'var(--gold)' : o.outcome === 'SKIP' ? 'var(--text3)' : 'var(--bear)';
+  const bg    = o.outcome === 'WIN' ? 'var(--bull-bg)' : o.outcome === 'SL' ? 'var(--gold-bg)' : o.outcome === 'SKIP' ? 'var(--surface2)' : 'var(--bear-bg)';
   const sign  = o.pnlPct >= 0 ? '+' : '';
   const d2label = d2date ? `<span style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;">${d2date}</span>` : '';
   return `
@@ -5921,9 +5928,26 @@ function renderScannerIntraday(scanDate, longs, shorts, params) {
           <span class="sc-wr-count">${countLabel}</span>
          </div>`;
 
-    const skipNote = params.idSkipPct > 0
-      ? `<span style="font-size:9px;color:var(--text3);">Skip if open ${isBull ? '>' : '<'} ${params.idSkipPct}%</span>`
-      : '';
+    // Skip note — shows threshold price; if D2 open known, shows PASS/SKIP status
+    let skipNote = '';
+    if (params.idSkipPct > 0) {
+      const thresholdPct  = params.idSkipPct / 100;
+      const skipPrice     = isBull
+        ? (s.entry * (1 + thresholdPct)).toFixed(2)   // Long: skip if opens above
+        : (s.entry * (1 - thresholdPct)).toFixed(2);  // Short: skip if opens below
+      const direction     = isBull ? '>' : '<';
+      if (s.d2open) {
+        // D2 open is known (past date) — show actual PASS/SKIP
+        const movedInDir  = isBull ? ((s.d2open - s.entry)/s.entry*100) : ((s.entry - s.d2open)/s.entry*100);
+        const wasSkipped  = movedInDir > params.idSkipPct;
+        skipNote = wasSkipped
+          ? `<span style="font-size:9px;background:#fff3e0;color:#e65100;padding:1px 5px;border-radius:4px;font-weight:600;">⊘ SKIP — D2 open ₹${s.d2open} moved ${movedInDir.toFixed(1)}%</span>`
+          : `<span style="font-size:9px;color:var(--bull);font-weight:600;">✓ Open ok (₹${s.d2open})</span>`;
+      } else {
+        // D2 open unknown (today's signal) — show threshold to check
+        skipNote = `<span style="font-size:9px;color:var(--text3);">⊘ Skip if open ${direction} ₹${skipPrice} (${params.idSkipPct}%)</span>`;
+      }
+    }
 
     return `
       <div class="signal-card clickable ${isBull ? 'bull-card' : 'bear-card'}"
@@ -6505,6 +6529,8 @@ function buildSummaryCards() {
     bestDayPct, worstDayPct, bestDayRupee, worstDayRupee,
     longs, shorts } = s;
 
+  const skipCount = 0; // Skip filter is pre-trade — shown on scanner cards, not summary
+
   const cards = [
     {
       label: 'Total Trades',
@@ -6541,7 +6567,7 @@ function buildSummaryCards() {
     {
       label: 'Long WR · Short WR',
       val: `<span style="color:${longWR >= 55 ? 'var(--bull)' : longWR >= 45 ? 'var(--gold)' : 'var(--bear)'}">▲ ${longWR.toFixed(1)}%</span> · <span style="color:${shortWR >= 55 ? 'var(--bull)' : shortWR >= 45 ? 'var(--gold)' : 'var(--bear)'}">▼ ${shortWR.toFixed(1)}%</span>`,
-      sub: `${longs.length} long · ${shorts.length} short signals`,
+      sub: `${longs.length} long · ${shorts.length} short signals${skipCount > 0 ? ` · ${skipCount} skipped` : ''}`,
       cls: ''
     },
     {
@@ -8279,12 +8305,14 @@ function renderCalendarYear() {
     const mTrades = Object.entries(byDay)
       .filter(([d]) => d.startsWith(monthPfx))
       .flatMap(([,ts]) => ts);
-    const mTotal = mTrades.length;
-    if (!mTotal) continue; // skip empty months
-    const mWins  = mTrades.filter(t => t.outcome === 'WIN').length;
-    const mLoss  = mTrades.filter(t => t.outcome !== 'WIN' && !t.slHit).length;
-    const mSL    = mTrades.filter(t => t.slHit).length;
-    const mPnl   = mTrades.reduce((s,t) => s + t.pnlPct, 0);
+    const mSkips  = mTrades.filter(t => t.outcome === 'SKIP').length;
+    const mActive = mTrades.filter(t => t.outcome !== 'SKIP');
+    const mTotal  = mActive.length;
+    if (!mTotal && !mSkips) continue; // skip empty months
+    const mWins  = mActive.filter(t => t.outcome === 'WIN').length;
+    const mLoss  = mActive.filter(t => t.outcome !== 'WIN' && !t.slHit).length;
+    const mSL    = mActive.filter(t => t.slHit).length;
+    const mPnl   = mActive.reduce((s,t) => s + t.pnlPct, 0);
     const mPnlCls = _pnlColor(mPnl);
 
     // Mini calendar grid
@@ -8302,19 +8330,22 @@ function renderCalendarYear() {
         continue;
       }
 
-      const wins  = trades.filter(t => t.outcome === 'WIN').length;
-      const slHit = trades.filter(t => t.slHit).length;
-      const pnl   = trades.reduce((s,t) => s + t.pnlPct, 0);
-      const bg    = _pnlBg(pnl);
-      const color = _pnlColor(pnl);
-      const pnlStr = _pnlSign(pnl) + pnl.toFixed(2) + '%';
-      const wlLabel = slHit > 0 ? `${wins}W/${slHit}SL` : `${wins}W/${trades.length - wins}L`;
-      grid += `<div onclick="openCalDay('${dateStr}')" title="${dateStr}: ${trades.length}T ${wins}W ${pnlStr}"
+      const skips  = trades.filter(t => t.outcome === 'SKIP').length;
+      const active = trades.filter(t => t.outcome !== 'SKIP');
+      const wins   = active.filter(t => t.outcome === 'WIN').length;
+      const slHit  = active.filter(t => t.slHit).length;
+      const pnl    = active.reduce((s,t) => s + t.pnlPct, 0);
+      const bg     = active.length ? _pnlBg(pnl) : 'var(--surface2)';
+      const color  = _pnlColor(pnl);
+      const pnlStr = active.length ? _pnlSign(pnl) + pnl.toFixed(2) + '%' : '';
+      const wlLabel = active.length ? (slHit > 0 ? `${wins}W/${slHit}SL` : `${wins}W/${active.length-wins}L`) : '';
+      const skipStr = skips > 0 ? `${skips}⊘` : '';
+      grid += `<div onclick="openCalDay('${dateStr}')" title="${dateStr}: ${active.length}T ${wins}W ${pnlStr}${skips>0?' · '+skips+' skipped':''}"
         style="text-align:center;padding:3px 1px 4px;border-radius:4px;cursor:pointer;
                background:${bg};font-family:'DM Mono',monospace;">
         <div style="font-size:8px;color:var(--text3);line-height:1.3;">${day}</div>
         <div style="font-size:9px;font-weight:700;color:${color};line-height:1.3;">${pnlStr}</div>
-        <div style="font-size:7px;color:var(--text3);line-height:1.2;">${wlLabel}</div>
+        <div style="font-size:7px;color:var(--text3);line-height:1.2;">${wlLabel}${wlLabel&&skipStr?' ':''}${skipStr}</div>
       </div>`;
     }
 
@@ -8342,8 +8373,8 @@ function renderCalendarYear() {
           <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:${mWRcls};">${mWR}%</div>
         </div>
         <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
-          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">W/L/SL</div>
-          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:var(--text);">${mWins}/${mLoss}/${mSL}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">W/L/SL/Skip</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:11px;color:var(--text);">${mWins}/${mLoss}/${mSL}${mSkips>0?"/"+mSkips+"⊘":""}</div>
         </div>
         <div style="text-align:center;padding:6px 4px;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Avg/T</div>
@@ -8548,6 +8579,7 @@ function buildAllTradesTab() {
     const gapC = t.gapPct >= 0 ? 'var(--bull)' : 'var(--bear)';
     const badge = t.outcome === 'WIN'  ? 'background:var(--bull-bg);color:var(--bull)'
                 : t.outcome === 'SL'   ? 'background:#fff3e0;color:#e65100'
+                : t.outcome === 'SKIP' ? 'background:var(--surface2);color:var(--text3)'
                                        : 'background:var(--bear-bg);color:var(--bear)';
     return `<tr style="border-bottom:1px solid var(--border);"
               onmouseover="this.style.background='var(--surface2)'"
@@ -8632,6 +8664,8 @@ let _drillGapChart    = null;
 let _tradeStats = null;
 
 function computeTradeStats(trades) {
+  // Exclude SKIP trades — they never executed, shouldn't affect stats
+  trades = trades.filter(t => t.outcome !== 'SKIP');
   const total   = trades.length;
   const wins    = trades.filter(t => t.outcome === 'WIN');
   const losses  = trades.filter(t => t.outcome === 'LOSS');
@@ -8669,6 +8703,13 @@ function computeTradeStats(trades) {
   trades.forEach(t => {
     (bySignalDay[t.signalDate] = bySignalDay[t.signalDate] || []).push(t);
     (byTradeDay[t.tradeDate]   = byTradeDay[t.tradeDate]   || []).push(t);
+  });
+
+  // Also add SKIP trades to byTradeDay for calendar visibility
+  // SKIPs don't affect PnL — they're tagged with outcome:'SKIP' for rendering only
+  (_allTradesForWR || []).filter(t => t.outcome === 'SKIP').forEach(t => {
+    const d = t.tradeDate || t.signalDate;
+    (byTradeDay[d] = byTradeDay[d] || []).push(t);
   });
 
   // Best / worst day (% sum of trades on that tradeDate)
@@ -10928,8 +10969,9 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
   mt.slice().sort((a,b)=>b.signalDate.localeCompare(a.signalDate)).forEach(t => {
     const pnlC = t.pnlPct>=0 ? 'var(--bull)' : 'var(--bear)';
     const dirC = t.side==='LONG' ? 'var(--bull)' : 'var(--bear)';
-    const badge = t.outcome==='WIN' ? 'background:var(--bull-bg);color:var(--bull)'
-                : t.outcome==='SL'  ? 'background:#fff3e0;color:#e65100'
+    const badge = t.outcome==='WIN'  ? 'background:var(--bull-bg);color:var(--bull)'
+                : t.outcome==='SL'   ? 'background:#fff3e0;color:#e65100'
+                : t.outcome==='SKIP' ? 'background:var(--surface2);color:var(--text3)'
                                     : 'background:var(--bear-bg);color:var(--bear)';
     html += `
     <div style="padding:8px 0;border-bottom:1px solid var(--border);
