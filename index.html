@@ -5115,9 +5115,13 @@ function readCurrentParams() {
 
 // ── Load saved defaults on startup ────────────────────────────────────────────
 function loadSavedDefaults() {
-  // Always restore capital first — shared key, independent of strategy
+  // Always restore capital, WR, PnL first — shared keys, independent of strategy
   const savedCapital = localStorage.getItem('TE_CAPITAL');
+  const savedWr      = localStorage.getItem('TE_WR_THRESHOLD');
+  const savedPnl     = localStorage.getItem('TE_PNL_THRESHOLD');
   if (savedCapital) document.getElementById('capitalPerTrade').value = +savedCapital;
+  if (savedWr)      document.getElementById('scanWrThreshold').value  = +savedWr;
+  if (savedPnl)     document.getElementById('scanPnlThreshold').value = +savedPnl;
   // Overnight Gap — apply saved if exists
   const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
   if (onRaw) {
@@ -5165,9 +5169,13 @@ function loadSavedDefaults() {
 
 // ── Save current params as user defaults ──────────────────────────────────────
 function saveStrategyDefaults() {
-  // Always save capital separately — shared across both strategies
+  // Always save capital, WR, PnL separately — shared across both strategies
   const capital = +document.getElementById('capitalPerTrade').value || 1000000;
+  const wr      = +document.getElementById('scanWrThreshold').value  || 40;
+  const pnl     = +document.getElementById('scanPnlThreshold').value || 0.3;
   localStorage.setItem('TE_CAPITAL', capital);
+  localStorage.setItem('TE_WR_THRESHOLD', wr);
+  localStorage.setItem('TE_PNL_THRESHOLD', pnl);
 
   if (_strategy === 'overnight') {
     const saved = {
@@ -5302,9 +5310,13 @@ function mobSetRanking(mode) {
 }
 
 function saveMobDefaults() {
-  // Always save capital separately — shared across both strategies
+  // Always save capital, WR, PnL separately — shared across both strategies
   const capital = +document.getElementById('mobCapital')?.value || 1000000;
+  const wr      = +document.getElementById('mobWrInput')?.value  || 40;
+  const pnl     = +document.getElementById('mobPnlInput')?.value || 0.3;
   localStorage.setItem('TE_CAPITAL', capital);
+  localStorage.setItem('TE_WR_THRESHOLD', wr);
+  localStorage.setItem('TE_PNL_THRESHOLD', pnl);
 
   if (_mobStrategy === 'overnight') {
     const saved = {
@@ -11440,12 +11452,15 @@ function _mobRefreshTradesTab() {
 function syncMobileDefaults() {
   const el = (id) => document.getElementById(id);
 
-  // Always restore capital from dedicated key
+  // Always restore capital, WR, PnL from dedicated keys — shared across strategies
   const savedCapital = localStorage.getItem('TE_CAPITAL');
-  const capital = savedCapital ? +savedCapital : 1000000;
-  if (el('mobCapital')) el('mobCapital').value = capital;
+  const savedWr      = localStorage.getItem('TE_WR_THRESHOLD');
+  const savedPnl     = localStorage.getItem('TE_PNL_THRESHOLD');
+  if (el('mobCapital'))  el('mobCapital').value  = savedCapital ? +savedCapital : 1000000;
+  if (el('mobWrInput'))  el('mobWrInput').value  = savedWr  ? +savedWr  : 40;
+  if (el('mobPnlInput')) el('mobPnlInput').value = savedPnl ? +savedPnl : 0.3;
 
-  // Overnight Gap
+  // Overnight Gap — strategy-specific params only
   const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
   if (onRaw) {
     try {
@@ -11458,12 +11473,10 @@ function syncMobileDefaults() {
       if (el('mobTpPctVal'))  el('mobTpPctVal').value  = d.tpPct;
       if (el('mobHoldDays'))  el('mobHoldDays').value  = d.holdDays;
       if (el('mobMaxDay'))    el('mobMaxDay').value     = d.maxSignalsDay;
-      if (el('mobWrInput'))   el('mobWrInput').value    = d.wrThreshold  || 40;
-      if (el('mobPnlInput'))  el('mobPnlInput').value   = d.pnlThreshold || 0.5;
     } catch(e) { console.warn('[syncMobileDefaults] overnight error', e); }
   }
 
-  // Intraday
+  // Intraday — strategy-specific params only
   const entryType = el('mobIdEntryType')?.value || 'd2_open';
   const idKey     = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
   const idRaw     = localStorage.getItem(idKey);
@@ -11476,8 +11489,6 @@ function syncMobileDefaults() {
       if (el('mobIdMaxMove')) el('mobIdMaxMove').value  = d.idMaxMove;
       if (el('mobIdMaxOnGap'))el('mobIdMaxOnGap').value = d.idMaxOnGap;
       if (el('mobIdMaxDay'))  el('mobIdMaxDay').value   = d.maxSignalsDay;
-      if (el('mobWrInput'))   el('mobWrInput').value    = d.wrThreshold  || 40;
-      if (el('mobPnlInput'))  el('mobPnlInput').value   = d.pnlThreshold || 0.5;
     } catch(e) { console.warn('[syncMobileDefaults] intraday error', e); }
   }
 }
