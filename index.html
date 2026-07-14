@@ -2569,13 +2569,6 @@
         <div class="control-group" id="idHoldDaysGrpID"><label title="Hold up to N days for TP/SL to trigger. Exit at EOD of last day if neither hit.">Hold Days</label><input type="number" id="idHoldDays" value="1" step="1" min="1" max="20" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
         <div class="control-group" style="display:none;"><label>Max ON Gap %</label><input type="number" id="idMaxOnGap" value="8" step="0.5" min="0" max="20" title="Max allowed overnight gap D1close→D2open (0=no limit)"></div>
       </div>
-      <div style="margin-top:10px;display:flex;align-items:center;gap:6px;">
-        <span style="font-size:11px;font-weight:500;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap;">Stock Universe</span>
-        <div style="display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;">
-          <button id="idUnivAllBtn" onclick="setIntradayUniverse('all')" class="dir-btn active" style="padding:6px 12px;" title="Scan all ~210 F&O stocks">All F&O (210)</button>
-          <button id="idUnivShortBtn" onclick="setIntradayUniverse('shortlist')" class="dir-btn" style="padding:6px 12px;" title="Scan only the curated sector shortlist">Shortlisted (<span id="idUnivShortCount">–</span>)</button>
-        </div>
-      </div>
     </div>
 
     <!-- Row 2: Direction + Cap + Capital -->
@@ -3221,53 +3214,6 @@ function getActiveUniverse() {
   return [...SYMBOLS.indices.map(s => s.id), ...SYMBOLS.stocks];
 }
 
-// ── Intraday Momentum — Shortlisted Stocks ──────────────────────────────────
-// Curated sector shortlist, used when Intraday universe mode = 'shortlist'.
-// Only affects Intraday Momentum (backtest + Live Scanner) — Overnight Gap
-// always scans the full 210 F&O universe regardless of this setting.
-const SECTORSYahoo = {
-  'Banking & Finance': ['HDFCBANK','ICICIBANK','KOTAKBANK','AXISBANK','SBIN','BAJFINANCE','BAJAJFINSV','INDUSINDBK'],
-  'IT':                ['TCS','INFY','WIPRO','HCLTECH','TECHM'],
-  'Energy & Oil':      ['RELIANCE','ONGC','BPCL','IOC','COALINDIA','POWERGRID','NTPC'],
-  'Auto':              ['MARUTI','BAJAJ-AUTO','HEROMOTOCO','M&M'], // EICHERMOT excluded — not in current F&O universe (SYMBOLS.stocks)
-  'Pharma':            ['SUNPHARMA','DRREDDY','CIPLA','DIVISLAB','APOLLOHOSP'],
-  'Consumer':          ['HINDUNILVR','ITC','BRITANNIA','NESTLEIND','ASIANPAINT','PIDILITIND','TITAN'],
-  'Metals':            ['TATASTEEL','JSWSTEEL','HINDALCO','ADANIPORTS'],
-  'Industrials':       ['LT','GRASIM','ULTRACEMCO','SIEMENS','ABB','HAVELLS','BOSCHLTD'],
-};
-const INTRADAY_SHORTLIST_STOCKS = [...new Set(Object.values(SECTORSYahoo).flat())];
-
-// 'all' | 'shortlist' — persisted across sessions, only meaningful for Intraday Momentum
-let _intradayUniverse = localStorage.getItem('TE_INTRADAY_UNIVERSE') || 'all';
-
-// Switches the Intraday stock universe between the full F&O list and the shortlist.
-// Refreshes symbol counts / status bar so the change is visible immediately.
-function setIntradayUniverse(mode) {
-  if (mode !== 'all' && mode !== 'shortlist') return;
-  _intradayUniverse = mode;
-  localStorage.setItem('TE_INTRADAY_UNIVERSE', mode);
-
-  // Desktop toggle buttons
-  const allBtn  = document.getElementById('idUnivAllBtn');
-  const shortBtn = document.getElementById('idUnivShortBtn');
-  if (allBtn)   allBtn.classList.toggle('active', mode === 'all');
-  if (shortBtn) shortBtn.classList.toggle('active', mode === 'shortlist');
-
-  // Mobile toggle buttons
-  const mobAllBtn   = document.getElementById('mobIdUnivAllBtn');
-  const mobShortBtn = document.getElementById('mobIdUnivShortBtn');
-  if (mobAllBtn)   mobAllBtn.classList.toggle('active', mode === 'all');
-  if (mobShortBtn) mobShortBtn.classList.toggle('active', mode === 'shortlist');
-
-  if (typeof updateDataStatusBar === 'function') updateDataStatusBar();
-}
-
-
-
-
-
-
-
 // ─────────────────────────────────────────────────────────────────────────────
 // INDEXED DB  — persistent OHLC storage across sessions
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3386,13 +3332,7 @@ const _loadedOHLC = {};   // sym → ohlc array (in-memory, fast)
 function getAllLoadedSymbols() {
   // Filter to active universe — nifty50 (54) or fo (152 F&O stocks)
   const universe = new Set(getActiveUniverse());
-  let syms = Object.keys(_loadedOHLC).filter(s => universe.has(s));
-  // Intraday Momentum shortlist filter — Overnight Gap always uses the full universe
-  if (_strategy === 'intraday' && _intradayUniverse === 'shortlist') {
-    const shortlist = new Set(INTRADAY_SHORTLIST_STOCKS);
-    syms = syms.filter(s => shortlist.has(s));
-  }
-  return syms;
+  return Object.keys(_loadedOHLC).filter(s => universe.has(s));
 }
 
 function updateDataStatusBar() {
@@ -4985,14 +4925,18 @@ function setStrategy(s) {
     <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);text-align:center;padding:16px 0;">
       Click ▶ Scan to find gap signals across all loaded symbols
     </div>`;
+  // Clear the stale "Done. X trades..." label immediately — it belongs to the previous strategy
+  setProgress(0, '');
   // If data loaded, silently rerun backtest and show results expanded
   if (getAllLoadedSymbols().length > 0) {
     document.getElementById('results').style.display = 'none';
     runBacktestSilent().then(() => {
-      if (!allTrades.length) return;
+      if (!allTrades.length) { setProgress(0, ''); return; }
       buildResults([]);
       document.getElementById('results').style.display = 'block';
       document.getElementById('emptyState').style.display = 'none';
+      const tradedSyms = new Set(allTrades.map(t => t.sym)).size;
+      setProgress(100, `Done. ${allTrades.length} trades across ${tradedSyms} symbols.`);
       [
         { body: 'summaryBody', chevron: 'summaryChevron' },
         { body: 'equityBody',  chevron: 'equityChevron'  },
@@ -9081,16 +9025,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSymDril
 
 updateDataStatusBar();
 loadSavedDefaults();
-
-// Init Intraday Momentum stock-universe toggle: set counts + restore saved mode
-(function initIntradayUniverseToggle() {
-  const n = INTRADAY_SHORTLIST_STOCKS.length;
-  const c1 = document.getElementById('idUnivShortCount');
-  const c2 = document.getElementById('mobIdUnivShortCount');
-  if (c1) c1.textContent = n;
-  if (c2) c2.textContent = n;
-  setIntradayUniverse(_intradayUniverse); // syncs button active states to saved localStorage value
-})();
 </script>
 <div id="symDrillModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);overflow-y:auto;padding:16px 12px;">
   <div style="max-width:900px;margin:0 auto;background:var(--surface);border-radius:16px;box-shadow:0 8px 48px rgba(0,0,0,0.2);overflow:hidden;">
@@ -9524,13 +9458,6 @@ loadSavedDefaults();
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Max/day</div><div class="mob-settings-sub">Signals per day (0=∞)</div></div>
         <div class="mob-settings-control"><input class="mob-settings-input" id="mobIdMaxDay" type="number" value="1" step="1" min="0" placeholder="0=∞"></div>
-      </div>
-      <div class="mob-settings-row" style="border:none;padding-top:0;flex-direction:column;align-items:stretch;gap:6px;">
-        <div><div class="mob-settings-label">Stock Universe</div><div class="mob-settings-sub">Backtest + Live Scanner</div></div>
-        <div class="mob-dir-toggle" style="width:100%;">
-          <button id="mobIdUnivAllBtn" onclick="setIntradayUniverse('all')" class="active" style="flex:1;">All F&O (210)</button>
-          <button id="mobIdUnivShortBtn" onclick="setIntradayUniverse('shortlist')" style="flex:1;">Shortlisted (<span id="mobIdUnivShortCount">–</span>)</button>
-        </div>
       </div>
     </div>
 
