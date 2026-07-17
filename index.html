@@ -3933,6 +3933,21 @@ async function runBreezeFetch() {
       if (finalFailedSyms.length > 0) {
         console.warn('[Breeze fetch] Failed symbols:', finalFailedSyms);
       }
+
+      // Auto-chain: load fetched data straight into the app — no manual ☁️ tap needed
+      if (!cancelled && finalOk > 0) {
+        banner.firstChild.textContent = `✅ ${finalOk} fetched — loading into app…`;
+        try {
+          await loadFromCloud();
+          banner.firstChild.textContent = finalFailed > 0
+            ? `✅ Loaded ${finalOk} symbols · ⚠ ${finalFailed} fetch failures (see console)`
+            : `✅ Loaded ${finalOk} symbols — ready to scan`;
+        } catch (e) {
+          console.error('[Breeze fetch] auto-load failed:', e);
+          banner.firstChild.textContent = `⚠️ Fetched ${finalOk} but auto-load failed — tap ☁️ manually`;
+        }
+      }
+
       setTimeout(() => banner.remove(), 8000);
     } else {
       throw new Error(fetchJson.error || 'Fetch job failed to start');
