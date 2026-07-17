@@ -1297,6 +1297,110 @@
   .mtf-badge.conflict     { background: var(--gold-bg); color: var(--gold); border: 1px solid var(--gold); }
   .mtf-badge.neutral      { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
 
+  /* ── Watchlist / Trigger Tracker ─────────────────────────────────────── */
+  .wl-form-grid {
+    display: grid;
+    grid-template-columns: 110px 90px 130px 110px 110px 110px 1fr auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 14px;
+  }
+  .wl-form-grid label {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text3);
+    margin-bottom: 3px;
+  }
+  .wl-form-grid input, .wl-form-grid select {
+    width: 100%;
+    padding: 7px 9px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    box-sizing: border-box;
+  }
+  .wl-form-grid input:focus, .wl-form-grid select:focus { border-color: var(--accent); }
+
+  .wl-card {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    margin-bottom: 8px;
+  }
+  .wl-card.wl-triggered { border-left: 3px solid var(--bull); }
+  .wl-card.wl-invalid   { border-left: 3px solid var(--bear); opacity: 0.75; }
+  .wl-card.wl-watching  { border-left: 3px solid var(--gold); }
+  .wl-card.wl-dropped, .wl-card.wl-traded { border-left: 3px solid var(--border2); opacity: 0.55; }
+
+  .wl-top-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .wl-sym { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; }
+  .wl-dir { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; margin-left: 6px; }
+  .wl-dir.long  { color: var(--bull); }
+  .wl-dir.short { color: var(--bear); }
+
+  .wl-status-badge {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 10px;
+    padding: 3px 9px; border-radius: 12px; white-space: nowrap;
+  }
+  .wl-status-badge.triggered { background: var(--bull-bg); color: var(--bull); }
+  .wl-status-badge.invalid   { background: var(--bear-bg); color: var(--bear); }
+  .wl-status-badge.watching  { background: var(--gold-bg); color: var(--gold); }
+  .wl-status-badge.traded    { background: var(--surface2); color: var(--text2); }
+  .wl-status-badge.dropped   { background: var(--surface2); color: var(--text3); }
+  .wl-status-badge.nodata    { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+
+  .wl-levels-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .wl-level-label {
+    font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase;
+    letter-spacing: 0.4px; color: var(--text3); margin-bottom: 2px;
+  }
+  .wl-level-val { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600; color: var(--text); }
+  .wl-level-val.current { color: var(--accent); }
+
+  .wl-notes {
+    font-family: 'DM Sans', sans-serif; font-size: 11px; color: var(--text2);
+    margin-top: 8px; line-height: 1.4;
+  }
+  .wl-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .wl-action-btn {
+    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600;
+    padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text2); cursor: pointer;
+  }
+  .wl-action-btn:hover { background: var(--border); }
+  .wl-action-btn.danger:hover { background: var(--bear-bg); color: var(--bear); border-color: var(--bear); }
+
+  .mob-wl-form-row { display: flex; gap: 6px; margin-bottom: 6px; }
+  .mob-wl-form-row input, .mob-wl-form-row select {
+    flex: 1; min-width: 0;
+    padding: 8px 9px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    box-sizing: border-box;
+  }
+
   /* scanner header cols */
   .signal-cards-header {
     display: grid;
@@ -2695,6 +2799,100 @@
     </div>
   </div>
 
+  <!-- WATCHLIST / TRIGGER TRACKER -->
+  <div class="collapsible-section mobile-section" id="msWatchlist" style="margin-bottom:16px;">
+    <div class="section-header" onclick="toggleSection('watchlistBody','watchlistChevron')">
+      <span class="section-chevron" id="watchlistChevron">▼</span>
+      <span class="section-title">📋 Watchlist · Trigger Tracker</span>
+    </div>
+    <div id="watchlistBody" style="padding:16px 20px;">
+      <div class="wl-form-grid">
+        <div>
+          <label>Symbol</label>
+          <input type="text" id="WlSym" placeholder="e.g. IDFCFIRSTB" style="text-transform:uppercase;">
+        </div>
+        <div>
+          <label>Direction</label>
+          <select id="WlDir">
+            <option value="LONG">Long</option>
+            <option value="SHORT">Short</option>
+          </select>
+        </div>
+        <div>
+          <label>Trigger Condition</label>
+          <select id="WlCond">
+            <option value="close_above">Close above</option>
+            <option value="close_below">Close below</option>
+          </select>
+        </div>
+        <div>
+          <label>Trigger Price</label>
+          <input type="number" id="WlTrigger" placeholder="0.00" step="0.01">
+        </div>
+        <div>
+          <label>Invalidation (opt.)</label>
+          <input type="number" id="WlInvalid" placeholder="0.00" step="0.01">
+        </div>
+        <div>
+          <label>Target (opt.)</label>
+          <input type="number" id="WlTarget" placeholder="0.00" step="0.01">
+        </div>
+        <div>
+          <label>Notes (opt.)</label>
+          <input type="text" id="WlNotes" placeholder="Thesis / setup notes">
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="addWatchlistItem('')" style="padding:7px 16px;font-size:12px;white-space:nowrap;">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Filters + Export/Import toolbar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+        padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <select id="WlFilterStatus" onchange="setWlFilterStatus(this.value)"
+            style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
+            <option value="all" selected>All statuses</option>
+            <option value="active">Active (Watching + Triggered)</option>
+            <option value="watching">Watching only</option>
+            <option value="triggered">Triggered only</option>
+            <option value="invalidated">Invalidated only</option>
+            <option value="traded">Traded only</option>
+            <option value="dropped">Dropped only</option>
+          </select>
+          <select id="WlFilterDir" onchange="setWlFilterDir(this.value)"
+            style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
+            <option value="all" selected>Long + Short</option>
+            <option value="LONG">▲ Long only</option>
+            <option value="SHORT">▼ Short only</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button onclick="exportWatchlist()" title="Downloads a .json file and copies it to your clipboard"
+            style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;
+              background:var(--surface2);color:var(--text2);cursor:pointer;">⬇ Export</button>
+          <button onclick="document.getElementById('WlImportFile').click()"
+            style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;
+              background:var(--surface2);color:var(--text2);cursor:pointer;">⬆ Import File</button>
+          <input type="file" id="WlImportFile" accept=".json,application/json" style="display:none;" onchange="importWatchlistFile(this)">
+          <button onclick="toggleSection('WlPasteBody','WlPasteChevron')"
+            style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;
+              background:var(--surface2);color:var(--text2);cursor:pointer;">
+            <span id="WlPasteChevron">📋</span> Paste Import</button>
+        </div>
+      </div>
+      <div id="WlPasteBody" class="section-body-hidden" style="margin-bottom:12px;">
+        <textarea id="WlImportPaste" placeholder="Paste exported watchlist JSON here (from the other device's Export ⬇ button)…"
+          style="width:100%;min-height:80px;padding:9px;border:1px solid var(--border);border-radius:7px;
+            font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>
+        <button class="btn btn-primary" onclick="importWatchlistFromPaste('')" style="margin-top:6px;padding:6px 14px;font-size:12px;">Import Pasted Data</button>
+      </div>
+
+      <div id="watchlistCountNote" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-bottom:8px;"></div>
+      <div id="watchlistCards"></div>
+    </div>
+  </div>
+
   <!-- EOD SCANNER -->
   <div id="scannerSection" class="mobile-section" style="display:none;margin-bottom:16px;">
     <div class="control-panel" style="padding:0;overflow:hidden;border-left:4px solid var(--accent);">
@@ -3392,6 +3590,13 @@ function updateDataStatusBar() {
     document.getElementById('scanDate').value = maxDate;
     refreshScannerGate();
   }
+
+  // Keep the Watchlist in sync with whatever data was just loaded (Breeze fetch,
+  // cloud load, CSV load) — this is the single choke point every load path
+  // already calls, so hooking here means the tracker never shows stale prices
+  // without the user having to navigate away and back.
+  if (typeof renderWatchlist === 'function') renderWatchlist();
+  if (typeof renderMobWatchlist === 'function') renderMobWatchlist();
 }
 
 // Show/hide scanner section based on whether a matching backtest has been run
@@ -4282,10 +4487,387 @@ function mtfBadgeHTML(mtf) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WATCHLIST / TRIGGER-LEVEL TRACKER
+// Lets the user log a thesis per stock (entry trigger, invalidation, target)
+// and see it auto-checked against the latest loaded daily close — no manual
+// re-checking of levels every session. Persisted to localStorage, same
+// pattern as the rest of TradeEdge's settings.
+// ─────────────────────────────────────────────────────────────────────────────
+const TE_WATCHLIST_KEY = 'TE_WATCHLIST';
+
+function _loadWatchlist() {
+  try {
+    const raw = localStorage.getItem(TE_WATCHLIST_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function _saveWatchlist(list) {
+  localStorage.setItem(TE_WATCHLIST_KEY, JSON.stringify(list));
+}
+
+// Computes live status for one watchlist item against the latest loaded
+// daily candle for its symbol. Returns null if the symbol isn't loaded.
+function _watchlistStatus(item) {
+  const ohlc = _loadedOHLC[item.sym];
+  if (!ohlc || !ohlc.length) return null;
+  const latest = ohlc[ohlc.length - 1];
+  const currentPrice = latest.adjClose || latest.close;
+
+  const triggerHit = item.triggerCond === 'close_above'
+    ? currentPrice >= item.triggerPrice
+    : currentPrice <= item.triggerPrice;
+
+  let invalidHit = false;
+  if (item.invalidPrice !== null && item.invalidPrice !== '' && !isNaN(item.invalidPrice)) {
+    invalidHit = item.direction === 'LONG'
+      ? currentPrice <= item.invalidPrice
+      : currentPrice >= item.invalidPrice;
+  }
+
+  const pctToTrigger = item.triggerPrice > 0
+    ? ((currentPrice - item.triggerPrice) / item.triggerPrice) * 100
+    : 0;
+
+  return { currentPrice, latestDate: latest.date, triggerHit, invalidHit, pctToTrigger };
+}
+
+function _watchlistNextId() {
+  return 'wl_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+}
+
+// Reads the add-item form (desktop or mobile — same field IDs, prefixed) and
+// appends a new entry. `prefix` is '' for desktop, 'mob' for mobile inputs.
+function addWatchlistItem(prefix = '') {
+  const g = id => document.getElementById(prefix + id);
+  const sym = (g('WlSym').value || '').trim().toUpperCase();
+  const direction = g('WlDir').value;
+  const triggerCond = g('WlCond').value;
+  const triggerPrice = parseFloat(g('WlTrigger').value);
+  const invalidRaw = g('WlInvalid').value;
+  const targetRaw  = g('WlTarget').value;
+  const notes = (g('WlNotes').value || '').trim();
+
+  if (!sym) { alert('Please enter a symbol.'); return; }
+  if (isNaN(triggerPrice) || triggerPrice <= 0) { alert('Please enter a valid trigger price.'); return; }
+
+  const item = {
+    id: _watchlistNextId(),
+    sym, direction, triggerCond, triggerPrice,
+    invalidPrice: invalidRaw !== '' ? parseFloat(invalidRaw) : null,
+    targetPrice:  targetRaw  !== '' ? parseFloat(targetRaw)  : null,
+    notes,
+    status: 'watching',
+    createdDate: new Date().toISOString().slice(0, 10),
+    triggeredDate: null,
+  };
+
+  const list = _loadWatchlist();
+  list.push(item);
+  _saveWatchlist(list);
+
+  // Clear the form
+  g('WlSym').value = ''; g('WlTrigger').value = '';
+  g('WlInvalid').value = ''; g('WlTarget').value = ''; g('WlNotes').value = '';
+
+  renderWatchlist();
+  if (typeof renderMobWatchlist === 'function') renderMobWatchlist();
+  showToast(`${sym} added to watchlist ✓`);
+}
+
+function removeWatchlistItem(id) {
+  if (!confirm('Remove this stock from the watchlist? This cannot be undone.')) return;
+  const list = _loadWatchlist().filter(i => i.id !== id);
+  _saveWatchlist(list);
+  renderWatchlist();
+  if (typeof renderMobWatchlist === 'function') renderMobWatchlist();
+}
+
+function setWatchlistItemStatus(id, status) {
+  const list = _loadWatchlist();
+  const item = list.find(i => i.id === id);
+  if (!item) return;
+  item.status = status;
+  if (status === 'triggered' && !item.triggeredDate) {
+    item.triggeredDate = new Date().toISOString().slice(0, 10);
+  }
+  _saveWatchlist(list);
+  renderWatchlist();
+  if (typeof renderMobWatchlist === 'function') renderMobWatchlist();
+}
+
+// One-time seed of Raja's current 11 tracked setups (as of Jul 17, 2026).
+// Only runs if the watchlist is completely empty — never overwrites real data
+// on subsequent loads/edits. The trigger model here is a single close_above/
+// close_below condition, which doesn't perfectly capture "wait for a rejection
+// candle at a zone" or "wait for a pullback then bounce" nuance — that context
+// is preserved in each item's notes field instead.
+function _seedWatchlistIfEmpty() {
+  if (_loadWatchlist().length > 0) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const mk = (sym, direction, triggerCond, triggerPrice, invalidPrice, targetPrice, notes) => ({
+    id: _watchlistNextId(), sym, direction, triggerCond, triggerPrice,
+    invalidPrice, targetPrice, notes, status: 'watching',
+    createdDate: today, triggeredDate: null,
+  });
+
+  const seed = [
+    mk('IDFCFIRSTB', 'SHORT', 'close_above', 81.50, 84.12, 75.50,
+      'Weekly descending trendline + daily channel top + monthly CPR R1 confluence at 81.50-84.12. Wait for a rejection candle/volume spike within the zone before shorting — a touch alone is not the entry. Clean break above 84 invalidates. Further targets 76.83, then long-term 40 zone.'),
+    mk('POLYCAB', 'LONG', 'close_above', 9276, 8088, 10700,
+      'Original 8,700 retest plan is stale — price rallied straight to ~10,700 then pulled back. Wait for a volume-backed bounce off the support stack: 9,276 / 8,938 / 8,600 / 8,088. Break below 8,088 kills the thesis.'),
+    mk('NATIONALUM', 'LONG', 'close_above', 358, 340, 430,
+      'Breakout above 358 CONFIRMED (Jul 14/15). Old 358 level is now support. Watching for a pullback/retest on lighter volume holding above ~358 before adding, rather than chasing. LME aluminium backdrop has been soft — extra caution on follow-through.'),
+    mk('CIPLA', 'SHORT', 'close_above', 1458, 1500, 1380,
+      'Daily channel top + weekly descending channel midline + swing-high confluence at 1,458-1,480. Wait for rejection candle or 1H trendline breakdown within the zone. Clean break above 1,500 with volume invalidates. Targets 1,380-1,400 first, then 1,300-1,320, stretch 1,200.'),
+    mk('AUROPHARMA', 'LONG', 'close_below', 1520, 1500, null,
+      'Cup-and-handle breakout to fresh all-time highs (~1,630) with no overhead resistance above. Wait for a shallow pullback holding above 1,500-1,520 (old high, now support) on lower volume — this trigger flags when price has pulled back INTO the zone, not a buy signal on its own. Break below 1,500 with volume invalidates.'),
+    mk('CHENNPETRO', 'LONG', 'close_above', 1100, 1050, 1257,
+      "Raja's own cup-and-handle analysis: breakout above 1,080-1,100 in May, rallied to ~1,257, retested, then surged again — now near the 52-week high (~1,249), essentially at the original 1,257 target. Q4 profit +203% YoY, 54/share dividend. Thesis largely played out; watch for a fresh setup rather than chasing further."),
+    mk('COALINDIA', 'LONG', 'close_above', 420, 420, 484,
+      "Multi-year uptrend, corrected into 340-400 range, broke back above, rallied to ~480s, now pulling back toward the weekly rising trendline (~420 zone). Wait for a reversal candle or strong volume bounce right at 420 before entering — don't buy the level blindly. Break below 420 with volume shifts focus to the 380-400 shelf."),
+    mk('BRITANNIA', 'SHORT', 'close_above', 5450, 5600, 5200,
+      "Multi-timeframe descending trendline confluence (Weekly/Daily/1H all agree) at 5,450-5,600. Fundamental tailwind: Q4 FY26 margin compression, SELL rating, FMCG sector weak on Iran-linked input costs. Wait for rejection or failure to close above the zone. Break above 5,600 with volume invalidates. Targets 5,200-5,250 first, then 5,100, stretch 4,700-4,750."),
+    mk('COCHINSHIP', 'SHORT', 'close_below', 1430, 1520, 1300,
+      'Multi-year weekly descending trendline from the 2024 peak (~3,000) still capping price. Govt OFS (5.04% stake) added real supply — support broke below 1,430-1,445 and even the 1,400 OFS floor. Thesis has largely played out (currently ~1,390). Bounce back above 1,520 would suggest a shakeout rather than a real reversal.'),
+    mk('BHARATFORG', 'SHORT', 'close_below', 2080, 2200, null,
+      'Multi-year monthly/weekly rising channel tested at highs (~2,133-2,200); buying-climax volume signature suggested distribution. First short already booked (+3,400, entered 2,142, covered 2,135.20). Tracking for a fresh re-entry signal — a break below the daily rising trendline support (~2,080) with volume — rather than chasing the move already missed.'),
+    mk('UPL', 'LONG', 'close_below', 610, 580, 800,
+      "Multi-year weekly uptrend since 2016. Broke the daily descending trendline (in place since the ~800 high) decisively on strong volume, +4.78% in a day. 1H RSI was genuinely overbought (73) on the breakout day — not a chase-now signal. Wait for a pullback to the broken daily trendline, now support (~600-610 zone), on lighter volume before entering. HSBC Buy rating, target 880."),
+  ];
+
+  _saveWatchlist(seed);
+}
+_seedWatchlistIfEmpty();
+
+// ── Filters ──────────────────────────────────────────────────────────────
+// Shared filter state between desktop and mobile renders.
+let _wlFilterStatus = 'all'; // 'all' (default) | 'active' (watching+triggered) | 'watching' | 'triggered' | 'invalidated' | 'traded' | 'dropped'
+let _wlFilterDir    = 'all';    // 'all' | 'LONG' | 'SHORT'
+
+// Computes the *effective* status class for an item — the same live,
+// price-derived classification the card badge displays ('traded' | 'dropped' |
+// 'nodata' | 'invalid' | 'triggered' | 'watching'). Both the card renderer and
+// the filter use this single source of truth, so "filter by Triggered" always
+// matches exactly what's showing as Triggered on screen — item.status alone
+// only ever holds 'watching'/'traded'/'dropped'; it's never auto-set to
+// 'triggered', so filtering on the raw field would silently show nothing.
+function _watchlistEffectiveStatus(item) {
+  if (item.status === 'traded')  return 'traded';
+  if (item.status === 'dropped') return 'dropped';
+  const st = _watchlistStatus(item);
+  if (!st) return 'nodata';
+  if (st.invalidHit) return 'invalid';
+  if (st.triggerHit) return 'triggered';
+  return 'watching';
+}
+
+function _wlApplyFilters(list) {
+  return list.filter(item => {
+    if (_wlFilterDir !== 'all' && item.direction !== _wlFilterDir) return false;
+    if (_wlFilterStatus === 'all') return true;
+    const eff = _watchlistEffectiveStatus(item);
+    if (_wlFilterStatus === 'active') return eff === 'watching' || eff === 'triggered';
+    if (_wlFilterStatus === 'invalidated') return eff === 'invalid';
+    return eff === _wlFilterStatus;
+  });
+}
+
+function setWlFilterStatus(val, prefix = '') {
+  _wlFilterStatus = val;
+  renderWatchlist();
+  if (typeof renderMobWatchlist === 'function') renderMobWatchlist();
+}
+function setWlFilterDir(val, prefix = '') {
+  _wlFilterDir = val;
+  renderWatchlist();
+  if (typeof renderMobWatchlist === 'function') renderMobWatchlist();
+}
+
+// ── Export / Import ──────────────────────────────────────────────────────
+// Exports the full watchlist (ignores active filters — always exports everything)
+// as a downloadable .json file, and also copies the same JSON to the clipboard
+// so it can be pasted directly (Notes, WhatsApp-to-self, etc.) on the other device
+// without needing a file-share flow — useful for mobile ⇄ Mac.
+function exportWatchlist() {
+  const list = _loadWatchlist();
+  if (!list.length) { alert('Watchlist is empty — nothing to export.'); return; }
+  const json = JSON.stringify(list, null, 2);
+
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tradeedge_watchlist_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(json)
+      .then(() => showToast(`Watchlist exported — file downloaded + copied to clipboard (${list.length} stocks)`, 3500))
+      .catch(() => showToast(`Watchlist file downloaded (${list.length} stocks)`, 3000));
+  } else {
+    showToast(`Watchlist file downloaded (${list.length} stocks)`, 3000);
+  }
+}
+
+// Validates that a parsed object looks like a watchlist array before trusting it.
+function _isValidWatchlistArray(arr) {
+  return Array.isArray(arr) && arr.every(i =>
+    i && typeof i.sym === 'string' &&
+    (i.direction === 'LONG' || i.direction === 'SHORT') &&
+    (i.triggerCond === 'close_above' || i.triggerCond === 'close_below') &&
+    typeof i.triggerPrice === 'number'
+  );
+}
+
+// Merges or replaces the current watchlist with an imported array.
+// De-dupes on symbol when merging (imported entry wins if the same symbol exists).
+function _applyImportedWatchlist(imported, mode) {
+  if (!_isValidWatchlistArray(imported)) {
+    alert('That doesn\'t look like a valid TradeEdge watchlist export. Import cancelled.');
+    return false;
+  }
+  // Re-key IDs so imported items never collide with existing local ones.
+  imported.forEach(i => { i.id = _watchlistNextId(); });
+
+  let finalList;
+  if (mode === 'replace') {
+    finalList = imported;
+  } else {
+    const existing = _loadWatchlist();
+    const importedSyms = new Set(imported.map(i => i.sym));
+    finalList = existing.filter(i => !importedSyms.has(i.sym)).concat(imported);
+  }
+  _saveWatchlist(finalList);
+  renderWatchlist();
+  if (typeof renderMobWatchlist === 'function') renderMobWatchlist();
+  showToast(`Watchlist ${mode === 'replace' ? 'replaced' : 'merged'} — ${finalList.length} stocks now tracked`, 3500);
+  return true;
+}
+
+// File-based import (desktop file picker or mobile "choose file" from Drive/Files app).
+function importWatchlistFile(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    let parsed;
+    try { parsed = JSON.parse(e.target.result); }
+    catch { alert('Could not read that file as JSON.'); inputEl.value = ''; return; }
+    const mode = _loadWatchlist().length > 0
+      ? (confirm(`You already have ${_loadWatchlist().length} stocks tracked.\n\nOK = Merge with imported (imported wins on symbol clashes)\nCancel = Replace everything with the imported file`) ? 'merge' : 'replace')
+      : 'replace';
+    _applyImportedWatchlist(parsed, mode);
+    inputEl.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// Paste-based import — for quickly moving data between devices via clipboard
+// without a file-share flow (paste JSON copied from Export on the other device).
+function importWatchlistFromPaste(prefix = '') {
+  const ta = document.getElementById(prefix + 'WlImportPaste');
+  if (!ta || !ta.value.trim()) { alert('Paste the exported watchlist JSON into the box first.'); return; }
+  let parsed;
+  try { parsed = JSON.parse(ta.value.trim()); }
+  catch { alert('That doesn\'t look like valid JSON.'); return; }
+  const mode = _loadWatchlist().length > 0
+    ? (confirm(`You already have ${_loadWatchlist().length} stocks tracked.\n\nOK = Merge with pasted data (pasted wins on symbol clashes)\nCancel = Replace everything with the pasted data`) ? 'merge' : 'replace')
+    : 'replace';
+  if (_applyImportedWatchlist(parsed, mode)) ta.value = '';
+}
+
+// Builds the status badge + level markup shared by desktop and mobile cards.
+// Returns { badgeHTML, statusCls, currentPriceHTML, dateNote }.
+function _watchlistCardParts(item) {
+  const st = _watchlistStatus(item);
+  const statusCls = _watchlistEffectiveStatus(item);
+  const badgeLabel = statusCls === 'traded'  ? '✓ Traded'
+    : statusCls === 'dropped'   ? '⊘ Dropped'
+    : statusCls === 'nodata'    ? 'No data loaded'
+    : statusCls === 'invalid'   ? '✕ Invalidated'
+    : statusCls === 'triggered' ? '✓ Triggered'
+    : `Watching · ${st.pctToTrigger >= 0 ? '+' : ''}${st.pctToTrigger.toFixed(1)}% to go`;
+
+  const currentPriceHTML = st ? `₹${fmtStockPrice(st.currentPrice)}` : '—';
+  const dateNote = st ? st.latestDate : '';
+  return { badgeLabel, statusCls, currentPriceHTML, dateNote };
+}
+
+function renderWatchlist() {
+  const container = document.getElementById('watchlistCards');
+  if (!container) return; // section not yet in DOM (e.g. older cached page)
+  const countNote = document.getElementById('watchlistCountNote');
+  const fullList = _loadWatchlist();
+  const list = _wlApplyFilters(fullList);
+
+  if (!fullList.length) {
+    if (countNote) countNote.textContent = '';
+    container.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">
+      No stocks on your watchlist yet — add one above.</div>`;
+    return;
+  }
+  if (countNote) countNote.textContent = `Showing ${list.length} of ${fullList.length}`;
+  if (!list.length) {
+    container.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);text-align:center;padding:20px 0;">
+      No stocks match the current filter. <a href="javascript:void(0)" onclick="setWlFilterStatus('all');setWlFilterDir('all');" style="color:var(--accent);">Clear filters</a></div>`;
+    return;
+  }
+
+  // Active items first (watching/triggered), then traded/dropped at the bottom
+  const sorted = [...list].sort((a, b) => {
+    const rank = s => (s === 'watching' || s === 'triggered') ? 0 : 1;
+    return rank(a.status) - rank(b.status);
+  });
+
+  container.innerHTML = sorted.map(item => {
+    const { badgeLabel, statusCls, currentPriceHTML, dateNote } = _watchlistCardParts(item);
+    const isBull = item.direction === 'LONG';
+    return `
+      <div class="wl-card wl-${statusCls}">
+        <div class="wl-top-row">
+          <div>
+            <span class="wl-sym">${item.sym}</span>
+            <span class="wl-dir ${isBull ? 'long' : 'short'}">${isBull ? '▲ LONG' : '▼ SHORT'}</span>
+          </div>
+          <span class="wl-status-badge ${statusCls}">${badgeLabel}</span>
+        </div>
+        <div class="wl-levels-row">
+          <div>
+            <div class="wl-level-label">Trigger</div>
+            <div class="wl-level-val">${item.triggerCond === 'close_above' ? '≥' : '≤'} ₹${fmtStockPrice(item.triggerPrice)}</div>
+          </div>
+          <div>
+            <div class="wl-level-label">Invalidation</div>
+            <div class="wl-level-val" style="color:${item.invalidPrice !== null ? 'var(--bear)' : 'var(--text3)'};">${item.invalidPrice !== null ? '₹' + fmtStockPrice(item.invalidPrice) : '—'}</div>
+          </div>
+          <div>
+            <div class="wl-level-label">Target</div>
+            <div class="wl-level-val" style="color:${item.targetPrice !== null ? 'var(--bull)' : 'var(--text3)'};">${item.targetPrice !== null ? '₹' + fmtStockPrice(item.targetPrice) : '—'}</div>
+          </div>
+          <div>
+            <div class="wl-level-label">Current${dateNote ? ' (' + dateNote + ')' : ''}</div>
+            <div class="wl-level-val current">${currentPriceHTML}</div>
+          </div>
+        </div>
+        ${item.notes ? `<div class="wl-notes">${item.notes.replace(/</g,'&lt;')}</div>` : ''}
+        <div class="wl-actions">
+          ${item.status !== 'traded'  ? `<button class="wl-action-btn" onclick="setWatchlistItemStatus('${item.id}','traded')">Mark Traded</button>` : ''}
+          ${item.status !== 'dropped' ? `<button class="wl-action-btn" onclick="setWatchlistItemStatus('${item.id}','dropped')">Drop</button>` : ''}
+          ${item.status !== 'watching' ? `<button class="wl-action-btn" onclick="setWatchlistItemStatus('${item.id}','watching')">Reactivate</button>` : ''}
+          <button class="wl-action-btn danger" onclick="removeWatchlistItem('${item.id}')">Delete</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BACKTEST LOGIC
 // ─────────────────────────────────────────────────────────────────────────────
 function backtest(ohlc, symId, params, debug = false) {
   const trades = [];
+
   for (let i = 0; i < ohlc.length - 1; i++) {
     const today     = ohlc[i];
     const yesterday = i > 0 ? ohlc[i-1] : null;
@@ -9178,6 +9760,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSymDril
 
 updateDataStatusBar();
 loadSavedDefaults();
+renderWatchlist();
 </script>
 <div id="symDrillModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);overflow-y:auto;padding:16px 12px;">
   <div style="max-width:900px;margin:0 auto;background:var(--surface);border-radius:16px;box-shadow:0 8px 48px rgba(0,0,0,0.2);overflow:hidden;">
@@ -9477,11 +10060,77 @@ loadSavedDefaults();
     <div id="mobTradesSubTabBar"></div>
   </div>
 
+  <!-- Watchlist Tab content — sibling of mobScannerContent / mobTradesTab -->
+  <div id="mobWatchlistTab" style="display:none;flex-direction:column;min-height:0;flex:1;">
+    <div style="padding:10px 12px;border-bottom:1px solid var(--border);">
+      <div class="mob-wl-form-row">
+        <input type="text" id="mobWlSym" placeholder="Symbol" style="text-transform:uppercase;">
+        <select id="mobWlDir"><option value="LONG">Long</option><option value="SHORT">Short</option></select>
+      </div>
+      <div class="mob-wl-form-row">
+        <select id="mobWlCond"><option value="close_above">Close above</option><option value="close_below">Close below</option></select>
+        <input type="number" id="mobWlTrigger" placeholder="Trigger ₹" step="0.01">
+      </div>
+      <div class="mob-wl-form-row">
+        <input type="number" id="mobWlInvalid" placeholder="Invalidation ₹ (opt.)" step="0.01">
+        <input type="number" id="mobWlTarget" placeholder="Target ₹ (opt.)" step="0.01">
+      </div>
+      <div class="mob-wl-form-row">
+        <input type="text" id="mobWlNotes" placeholder="Notes (opt.)" style="flex:1;">
+        <button class="btn btn-primary" onclick="addWatchlistItem('mob')" style="padding:8px 14px;font-size:12px;white-space:nowrap;">+ Add</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div style="display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);">
+      <select id="mobWlFilterStatus" onchange="setWlFilterStatus(this.value)"
+        style="flex:1;min-width:0;padding:7px 6px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
+        <option value="all" selected>All statuses</option>
+        <option value="active">Active</option>
+        <option value="watching">Watching</option>
+        <option value="triggered">Triggered</option>
+        <option value="invalidated">Invalidated</option>
+        <option value="traded">Traded</option>
+        <option value="dropped">Dropped</option>
+      </select>
+      <select id="mobWlFilterDir" onchange="setWlFilterDir(this.value)"
+        style="flex:1;min-width:0;padding:7px 6px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
+        <option value="all" selected>Long + Short</option>
+        <option value="LONG">▲ Long</option>
+        <option value="SHORT">▼ Short</option>
+      </select>
+    </div>
+
+    <!-- Export / Import -->
+    <div style="display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);">
+      <button onclick="exportWatchlist()" style="flex:1;padding:7px 6px;border:1px solid var(--border);border-radius:7px;
+        font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);">⬇ Export</button>
+      <button onclick="document.getElementById('mobWlImportFile').click()" style="flex:1;padding:7px 6px;border:1px solid var(--border);border-radius:7px;
+        font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);">⬆ Import File</button>
+      <input type="file" id="mobWlImportFile" accept=".json,application/json" style="display:none;" onchange="importWatchlistFile(this)">
+      <button onclick="toggleSection('mobWlPasteBody','mobWlPasteChevron')" style="flex:1;padding:7px 6px;border:1px solid var(--border);border-radius:7px;
+        font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);">📋 Paste</button>
+    </div>
+    <div id="mobWlPasteBody" class="section-body-hidden" style="padding:8px 12px;border-bottom:1px solid var(--border);">
+      <textarea id="mobWlImportPaste" placeholder="Paste exported watchlist JSON here…"
+        style="width:100%;min-height:70px;padding:8px;border:1px solid var(--border);border-radius:7px;
+          font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>
+      <button class="btn btn-primary" onclick="importWatchlistFromPaste('mob')" style="margin-top:6px;width:100%;padding:8px;font-size:12px;">Import Pasted Data</button>
+    </div>
+
+    <div id="mobWatchlistCountNote" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);padding:8px 12px 0;"></div>
+    <div id="mobWatchlistInner" style="flex:1;overflow-y:auto;min-height:0;padding:10px 12px 80px;-webkit-overflow-scrolling:touch;"></div>
+  </div>
+
   <!-- Bottom tab bar -->
   <div id="mobTabBar">
     <button class="mob-tab-btn active" id="mobTabScannerBtn" onclick="mobSwitchTab('scanner')">
       <span class="mob-tab-icon">📡</span>
       Scanner
+    </button>
+    <button class="mob-tab-btn" id="mobTabWatchlistBtn" onclick="mobSwitchTab('watchlist')">
+      <span class="mob-tab-icon">📋</span>
+      Watchlist
     </button>
     <button class="mob-tab-btn" id="mobTabTradesBtn" onclick="mobSwitchTab('trades')">
       <span class="mob-tab-icon">🏆</span>
@@ -10005,6 +10654,82 @@ async function runMobileScanner() {
   spinner.classList.remove('show');
 }
 
+// Mobile watchlist card list — mirrors renderWatchlist() but with mobile-sized
+// touch targets. Shares _watchlistCardParts()/status logic with desktop.
+function renderMobWatchlist() {
+  const container = document.getElementById('mobWatchlistInner');
+  if (!container) return;
+  const fullList = _loadWatchlist();
+  const list = _wlApplyFilters(fullList);
+  const mobCountNote = document.getElementById('mobWatchlistCountNote');
+
+  if (!fullList.length) {
+    if (mobCountNote) mobCountNote.textContent = '';
+    container.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:40px 24px;color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;text-align:center;gap:10px;">
+      <div style="font-size:36px;opacity:0.35;">📋</div>
+      <div>No stocks on your watchlist yet</div>
+      <div style="font-size:10px;">Add one using the form above</div>
+    </div>`;
+    return;
+  }
+  if (mobCountNote) mobCountNote.textContent = `Showing ${list.length} of ${fullList.length}`;
+  if (!list.length) {
+    container.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:40px 24px;color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;text-align:center;gap:10px;">
+      <div style="font-size:36px;opacity:0.35;">🔍</div>
+      <div>No stocks match the current filter</div>
+      <button class="wl-action-btn" onclick="setWlFilterStatus('all');setWlFilterDir('all');document.getElementById('mobWlFilterStatus').value='all';document.getElementById('mobWlFilterDir').value='all';">Clear filters</button>
+    </div>`;
+    return;
+  }
+
+  const sorted = [...list].sort((a, b) => {
+    const rank = s => (s === 'watching' || s === 'triggered') ? 0 : 1;
+    return rank(a.status) - rank(b.status);
+  });
+
+  container.innerHTML = sorted.map(item => {
+    const { badgeLabel, statusCls, currentPriceHTML, dateNote } = _watchlistCardParts(item);
+    const isBull = item.direction === 'LONG';
+    return `
+      <div class="wl-card wl-${statusCls}" style="margin-bottom:10px;">
+        <div class="wl-top-row">
+          <div>
+            <span class="wl-sym">${item.sym}</span>
+            <span class="wl-dir ${isBull ? 'long' : 'short'}">${isBull ? '▲ LONG' : '▼ SHORT'}</span>
+          </div>
+          <span class="wl-status-badge ${statusCls}">${badgeLabel}</span>
+        </div>
+        <div class="wl-levels-row">
+          <div>
+            <div class="wl-level-label">Trigger</div>
+            <div class="wl-level-val">${item.triggerCond === 'close_above' ? '≥' : '≤'} ₹${fmtStockPrice(item.triggerPrice)}</div>
+          </div>
+          <div>
+            <div class="wl-level-label">Invalid</div>
+            <div class="wl-level-val" style="color:${item.invalidPrice !== null ? 'var(--bear)' : 'var(--text3)'};">${item.invalidPrice !== null ? '₹' + fmtStockPrice(item.invalidPrice) : '—'}</div>
+          </div>
+          <div>
+            <div class="wl-level-label">Target</div>
+            <div class="wl-level-val" style="color:${item.targetPrice !== null ? 'var(--bull)' : 'var(--text3)'};">${item.targetPrice !== null ? '₹' + fmtStockPrice(item.targetPrice) : '—'}</div>
+          </div>
+          <div>
+            <div class="wl-level-label">Now${dateNote ? ' ' + dateNote.slice(5) : ''}</div>
+            <div class="wl-level-val current">${currentPriceHTML}</div>
+          </div>
+        </div>
+        ${item.notes ? `<div class="wl-notes">${item.notes.replace(/</g,'&lt;')}</div>` : ''}
+        <div class="wl-actions">
+          ${item.status !== 'traded'  ? `<button class="wl-action-btn" onclick="setWatchlistItemStatus('${item.id}','traded')">Mark Traded</button>` : ''}
+          ${item.status !== 'dropped' ? `<button class="wl-action-btn" onclick="setWatchlistItemStatus('${item.id}','dropped')">Drop</button>` : ''}
+          ${item.status !== 'watching' ? `<button class="wl-action-btn" onclick="setWatchlistItemStatus('${item.id}','watching')">Reactivate</button>` : ''}
+          <button class="wl-action-btn danger" onclick="removeWatchlistItem('${item.id}')">Delete</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
 function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
   const container = document.getElementById('mobResultsInner');
   const syms = getAllLoadedSymbols();
@@ -10309,18 +11034,26 @@ let _lastScanDate      = null; // scan date of the last scanner run — Stats us
 // Called when user taps the Trades bottom tab
 async function mobSwitchTab(tab) {
   _mobActiveTab = tab;
-  const isScanner = tab === 'scanner';
+  const isScanner   = tab === 'scanner';
+  const isWatchlist = tab === 'watchlist';
+  const isTrades    = tab === 'trades';
 
-  // Show/hide scanner wrapper
   const scanContent = document.getElementById('mobScannerContent');
   if (scanContent) scanContent.style.display = isScanner ? 'flex' : 'none';
   document.getElementById('mobResults').classList.toggle('mob-tab-active', isScanner);
-  document.getElementById('mobTradesTab').classList.toggle('mob-tab-active', !isScanner);
+
+  const wlTab = document.getElementById('mobWatchlistTab');
+  if (wlTab) wlTab.style.display = isWatchlist ? 'flex' : 'none';
+
+  document.getElementById('mobTradesTab').classList.toggle('mob-tab-active', isTrades);
   document.getElementById('mobTabScannerBtn').classList.toggle('active', isScanner);
-  document.getElementById('mobTabTradesBtn').classList.toggle('active', !isScanner);
+  document.getElementById('mobTabWatchlistBtn').classList.toggle('active', isWatchlist);
+  document.getElementById('mobTabTradesBtn').classList.toggle('active', isTrades);
   document.getElementById('mobScanBar').style.display = isScanner ? '' : 'none';
 
-  if (!isScanner) {
+  if (isWatchlist) {
+    renderMobWatchlist();
+  } else if (isTrades) {
     await _ensureMobTradesData();
     if (_mobCalView === 'monthly') mobRenderMonthlyView();
   }
