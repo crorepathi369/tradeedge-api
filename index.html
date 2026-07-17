@@ -1280,6 +1280,23 @@
   .sc-wr-bar-fill.bear { background: var(--bear); }
   .sc-wr-bar-fill.mid  { background: var(--gold); }
 
+  /* MTF (Weekly+Daily) alignment badge — hover/tap for the breakdown */
+  .mtf-badge {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-top: 4px;
+    letter-spacing: 0.3px;
+    cursor: help;
+  }
+  .mtf-badge.aligned-bull { background: var(--bull-bg); color: var(--bull); border: 1px solid var(--bull); }
+  .mtf-badge.aligned-bear { background: var(--bear-bg); color: var(--bear); border: 1px solid var(--bear); }
+  .mtf-badge.conflict     { background: var(--gold-bg); color: var(--gold); border: 1px solid var(--gold); }
+  .mtf-badge.neutral      { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+
   /* scanner header cols */
   .signal-cards-header {
     display: grid;
@@ -3491,7 +3508,7 @@ function showToast(msg, duration = 2500) {
       + 'background:#1a1814;color:#fff;font-family:\'DM Mono\',monospace;font-size:12px;'
       + 'padding:10px 18px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.3);'
       + 'z-index:2000;opacity:0;transition:opacity 0.2s,transform 0.2s;pointer-events:none;'
-      + 'max-width:90vw;text-align:center;';
+      + 'max-width:90vw;text-align:center;white-space:pre-line;line-height:1.5;';
     document.body.appendChild(t);
   }
   t.textContent = msg;
@@ -4130,6 +4147,138 @@ function computeSignalOutcome(sig, futureCandles, params) {
       : pnlPct > 0 ? 'WIN' : 'LOSS';
     return { exit: +exit.toFixed(2), exitNote, slHit, outcome, pnlPct: +pnlPct.toFixed(2) };
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MULTI-TIMEFRAME (WEEKLY + DAILY) ALIGNMENT SCORE
+// Uses only the existing daily OHLC series already loaded per symbol — no new
+// data source required. Weekly candles are derived by resampling daily closes
+// into Mon–Sun buckets. Never looks ahead of `idx` (same discipline as backtest).
+// ─────────────────────────────────────────────────────────────────────────────
+function _sma(vals, period) {
+  if (vals.length < period) return null;
+  const slice = vals.slice(vals.length - period);
+  return slice.reduce((a, b) => a + b, 0) / period;
+}
+
+function _ema(vals, period) {
+  if (vals.length < period) return null;
+  const k = 2 / (period + 1);
+  let ema = vals.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < vals.length; i++) ema = vals[i] * k + ema * (1 - k);
+  return ema;
+}
+
+// MACD(12,26,9) histogram — last value only. Degrades to null gracefully
+// when there isn't enough history rather than throwing.
+// NOTE: computed on log(price), not raw price. Raw-price MACD isn't scale-
+// invariant — over a long, steady % trend the absolute EMA gap shrinks as
+// price shrinks even though the % trend hasn't changed, which can flip the
+// histogram sign on nothing but drift. Log-price MACD reflects the actual
+// rate-of-change of the % trend instead, which is what we actually want here.
+function _macdHistogram(vals) {
+  if (vals.length < 35) return null;
+  const logVals = vals.map(v => Math.log(v));
+  const macdLine = [];
+  for (let i = 25; i < logVals.length; i++) {
+    const slice = logVals.slice(0, i + 1);
+    const ema12 = _ema(slice, 12);
+    const ema26 = _ema(slice, 26);
+    if (ema12 === null || ema26 === null) continue;
+    macdLine.push(ema12 - ema26);
+  }
+  if (macdLine.length < 9) return null;
+  const signal = _ema(macdLine, 9);
+  if (signal === null) return null;
+  return macdLine[macdLine.length - 1] - signal;
+}
+
+// Resample daily {date, close} candles into weekly closes (Mon–Sun buckets),
+// oldest → newest. Last daily close seen in a week becomes that week's close.
+function _toWeeklyCloses(dailyCandles) {
+  const weekMap = new Map();
+  dailyCandles.forEach(c => {
+    const d = new Date(c.date + 'T00:00:00');
+    const day = d.getDay(); // 0=Sun..6=Sat
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMon);
+    weekMap.set(monday.toISOString().slice(0, 10), c.close);
+  });
+  return Array.from(weekMap.entries()).sort((a, b) => a[0] < b[0] ? -1 : 1).map(e => e[1]);
+}
+
+// Score one timeframe's closing series: structure (MA20 vs MA50), position
+// (price vs MA20), momentum (MACD histogram sign) → -3..+3, bucketed to a label.
+function _timeframeScore(closes) {
+  if (closes.length < 20) return { label: 'Neutral', score: 0, reason: 'insufficient history' };
+  const last = closes[closes.length - 1];
+  const ma20 = _sma(closes, 20);
+  const ma50 = _sma(closes, 50);
+  let score = 0;
+  const parts = [];
+  if (ma20 !== null && ma50 !== null) {
+    if (ma20 > ma50)      { score += 1; parts.push('MA20>MA50'); }
+    else if (ma20 < ma50) { score -= 1; parts.push('MA20<MA50'); }
+    else                   { parts.push('MA20=MA50'); }
+  }
+  if (ma20 !== null) {
+    if (last > ma20)      { score += 1; parts.push('price>MA20'); }
+    else if (last < ma20) { score -= 1; parts.push('price<MA20'); }
+    else                   { parts.push('price=MA20'); }
+  }
+  const hist = _macdHistogram(closes);
+  if (hist !== null) {
+    // Small epsilon floor — a near-zero histogram (flat/converged momentum)
+    // shouldn't flip the score on floating-point noise or a perfectly steady,
+    // unaccelerating trend where the histogram naturally settles near zero.
+    const MACD_EPS = 1e-4;
+    if (hist > MACD_EPS)       { score += 1; parts.push('MACD+'); }
+    else if (hist < -MACD_EPS) { score -= 1; parts.push('MACD-'); }
+    else                        { parts.push('MACD flat'); }
+  }
+  const label = score >= 2 ? 'Bullish' : score <= -2 ? 'Bearish' : 'Neutral';
+  return { label, score, reason: parts.join(', ') || 'n/a' };
+}
+
+// Main entry point — Weekly + Daily alignment as of index `idx` in `ohlc`.
+// Returns null when there isn't enough history to say anything meaningful yet.
+function computeMTFAlignment(ohlc, idx) {
+  const upTo = ohlc.slice(0, idx + 1);
+  if (upTo.length < 20) return null;
+
+  const dailyCloses  = upTo.map(c => c.adjClose || c.close);
+  const weeklyCloses = _toWeeklyCloses(upTo);
+
+  const daily  = _timeframeScore(dailyCloses);
+  const weekly = _timeframeScore(weeklyCloses);
+
+  let combined, cls;
+  if (weekly.label === 'Bullish' && daily.label === 'Bullish')      { combined = 'Aligned Bullish'; cls = 'aligned-bull'; }
+  else if (weekly.label === 'Bearish' && daily.label === 'Bearish') { combined = 'Aligned Bearish'; cls = 'aligned-bear'; }
+  else if (weekly.label === 'Neutral' || daily.label === 'Neutral') { combined = 'Transitional';    cls = 'neutral'; }
+  else                                                               { combined = 'Conflicted';      cls = 'conflict'; }
+
+  return { weekly, daily, combined, cls };
+}
+
+// Renders the compact MTF badge used on both desktop and mobile signal cards.
+// Tappable on its own — stops the parent card's click (which opens the trade
+// drill-down) so tapping the badge shows the Weekly/Daily breakdown instead.
+// Desktop users also get the native title-tooltip on hover as a bonus.
+function mtfBadgeHTML(mtf) {
+  if (!mtf) return '';
+  const label = mtf.combined === 'Aligned Bullish' ? 'W+D ▲'
+    : mtf.combined === 'Aligned Bearish' ? 'W+D ▼'
+    : mtf.combined === 'Conflicted' ? 'W≠D ⚠'
+    : 'W/D —';
+  const detail = `${mtf.combined}\n\nWeekly: ${mtf.weekly.label} (${mtf.weekly.reason})\nDaily: ${mtf.daily.label} (${mtf.daily.reason})`;
+  const titleAttr = (detail + `\n\nAligned = both agree · Conflicted = disagree, review manually · Transitional = one/both unclear`)
+    .replace(/"/g, '&quot;');
+  // Escape for safe embedding inside a single-quoted onclick JS string literal.
+  const detailJs = detail.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+  return `<span class="mtf-badge ${mtf.cls}" title="${titleAttr}"
+    onclick="event.stopPropagation(); showToast('${detailJs}', 4500);">${label}</span>`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5585,6 +5734,7 @@ async function runScanner() {
 
     const _prevRef2 = yesterday.adjClose || yesterday.close;
     const d1MovePct = ((_prevRef2 > 0) ? ((today.close - _prevRef2) / _prevRef2) * 100 : 0);
+    const mtf = computeMTFAlignment(ohlc, idx);
 
     const signal = {
       sym, gapPct: +gapPct.toFixed(2),
@@ -5593,7 +5743,7 @@ async function runScanner() {
       slLevel:  +slLevel.toFixed(2),
       tpLevel:  tpLevel ? +tpLevel.toFixed(2) : null,
       gapDir, histWR, wilsonPct, histWins, histExpectancy, histAvgPnl,
-      histCount: histTotal,
+      histCount: histTotal, mtf,
       prevClose: +(yesterday.adjClose || yesterday.close).toFixed(2),
       d1Open:    +today.open.toFixed(2),
       d1High:    +today.high.toFixed(2),
@@ -5722,6 +5872,7 @@ function runScannerIntraday(scanDate, syms) {
     const outcome = d2candle
       ? computeSignalOutcome({ side, entry: actualEntry, strategy: 'intraday' }, ohlc.slice(idx + 1), idOutcomeParams)
       : null;
+    const mtf = computeMTFAlignment(ohlc, idx);
 
     const signal = {
       sym, gapPct: +d1MovePct.toFixed(2),
@@ -5729,7 +5880,7 @@ function runScannerIntraday(scanDate, syms) {
       slLevel:   +slLevel.toFixed(2),
       tpLevel:   +tpLevel.toFixed(2),
       gapDir: side === 'LONG' ? 'UP' : 'DOWN',
-      histWR, wilsonPct, histWins, histExpectancy, histAvgPnl, histCount: histTotal,
+      histWR, wilsonPct, histWins, histExpectancy, histAvgPnl, histCount: histTotal, mtf,
       prevClose: +prev.close.toFixed(2),
       skipPct: idParams.idSkipPct,
       entryType,
@@ -5971,6 +6122,7 @@ function renderScannerIntraday(scanDate, longs, shorts, params) {
             ${(s.entryType || params.idEntryType || 'd2_open') === 'd1_close'
               ? `<span style="font-size:9px;color:#7c5cfc;font-weight:600;">✦ D1 Close entry</span>`
               : skipNote}
+            ${mtfBadgeHTML(s.mtf)}
           </div>
           <div class="sc-field">
             <span class="sc-label">Entry (${(s.entryType || params.idEntryType || 'd2_open') === 'd1_close' ? 'D1 Close' : 'D2 Open'})</span>
@@ -6169,6 +6321,7 @@ function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, 
             <div class="sc-sym">${s.sym}</div>
             <div class="sc-gap ${isBull ? 'bull' : 'bear'}" title="Overnight Gap (D1 Open vs D0 Close)">${isBull ? '▲ +' : '▼ '}${s.gapPct}% <span style="font-size:9px;opacity:0.7;">gap</span></div>
             ${s.d1MovePct !== undefined ? `<div style="font-size:10px;color:${s.d1MovePct >= 0 ? 'var(--bull)' : 'var(--bear)'};font-weight:600;" title="D1 Move (D1 Close vs D0 Close)">${s.d1MovePct >= 0 ? '▲ +' : '▼ '}${s.d1MovePct}% <span style="opacity:0.75;">D1 move</span></div>` : ''}
+            ${mtfBadgeHTML(s.mtf)}
           </div>
           <div class="sc-field">
             <span class="sc-label">Entry (D2 Open)</span>
@@ -9912,9 +10065,10 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         }
       }
       const outcomeMob = d2mob ? computeSignalOutcome({side, entry: actualEntryMob, strategy:'intraday'}, ohlc.slice(idx+1), params) : null;
+      const mtfMob = computeMTFAlignment(ohlc, idx);
       const sig = { sym, movePct: +movePct.toFixed(2), entry: +entry.toFixed(2),
         slLevel: +slLevel.toFixed(2), tpLevel: +tpLevel.toFixed(2),
-        histWR, wilson, histWins: hw, histExpectancy, histAvgPnl, histCount: ht.length, side,
+        histWR, wilson, histWins: hw, histExpectancy, histAvgPnl, histCount: ht.length, side, mtf: mtfMob,
         d2date: d2mob ? d2mob.date : null, outcome: outcomeMob,
         _passesFilter: !(hasBacktest && ((wrThreshold > 0 && wilson < wrThreshold) || (pnlThreshold !== 0 && histAvgPnl < pnlThreshold))) };
       if (side === 'LONG') longs.push(sig); else shorts.push(sig);
@@ -9957,9 +10111,10 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
       const d2mobON = ohlc[idx+1] || null;
       const outcomeON = d2mobON ? computeSignalOutcome({side, entry: today.close, strategy:'overnight'}, ohlc.slice(idx+1), params) : null;
       const _d1MovePctMob = prevRef > 0 ? ((today.close - prevRef) / prevRef) * 100 : 0;
+      const mtfMobON = computeMTFAlignment(ohlc, idx);
       const sig = { sym, movePct: +gapPct.toFixed(2), d1MovePct: +_d1MovePctMob.toFixed(2), entry: +today.close.toFixed(2),
         slLevel: +slLevel.toFixed(2), tpLevel: tpDisplay,
-        histWR, wilson, histWins: hw, histExpectancy, histAvgPnl, histCount: ht.length, side,
+        histWR, wilson, histWins: hw, histExpectancy, histAvgPnl, histCount: ht.length, side, mtf: mtfMobON,
         d1Open: +today.open.toFixed(2), d1High: +today.high.toFixed(2), d1Low: +today.low.toFixed(2),
         prevClose: +(yesterday.adjClose || yesterday.close).toFixed(2),
         d2date: d2mobON ? d2mobON.date : null, outcome: outcomeON,
@@ -10066,6 +10221,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
           <div class="mob-dir-badge ${isBull?'long':'short'}">${isBull?'▲ LONG':'▼ SHORT'}</div>
           <div class="mob-move ${isBull?'bull':'bear'}" title="Overnight Gap">${isBull?'+':''}${s.movePct}% <span style="font-size:9px;opacity:0.7;">gap</span></div>
           ${s.d1MovePct !== undefined ? `<div style="font-size:10px;color:${s.d1MovePct >= 0 ? 'var(--bull)' : 'var(--bear)'};font-weight:600;">${s.d1MovePct >= 0 ? '+' : ''}${s.d1MovePct}% <span style="opacity:0.75;font-size:9px;">D1 move</span></div>` : ''}
+          ${mtfBadgeHTML(s.mtf)}
         </div>
         <div class="mob-card-levels">
           <div class="mob-level">
