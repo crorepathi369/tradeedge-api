@@ -2806,6 +2806,13 @@
       <span class="section-title">📋 Watchlist · Trigger Tracker</span>
     </div>
     <div id="watchlistBody" style="padding:16px 20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:10px;"
+        onclick="toggleSection('WlFormBody','WlFormChevron')">
+        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+          <span id="WlFormChevron" class="section-chevron collapsed">▼</span> Add New Stock
+        </span>
+      </div>
+      <div id="WlFormBody" class="section-body-hidden">
       <div class="wl-form-grid">
         <div>
           <label>Symbol</label>
@@ -2844,6 +2851,7 @@
         <div>
           <button class="btn btn-primary" onclick="addWatchlistItem('')" style="padding:7px 16px;font-size:12px;white-space:nowrap;">+ Add</button>
         </div>
+      </div>
       </div>
 
       <!-- Filters + Export/Import toolbar -->
@@ -4573,6 +4581,16 @@ function addWatchlistItem(prefix = '') {
   renderWatchlist();
   if (typeof renderMobWatchlist === 'function') renderMobWatchlist();
   showToast(`${sym} added to watchlist ✓`);
+  _collapseWatchlistForm(prefix);
+}
+
+// Collapses the add-entry form back down after a successful add, so the card
+// list gets the screen space back. Safe no-op if the elements aren't present.
+function _collapseWatchlistForm(prefix) {
+  const body    = document.getElementById(prefix + 'WlFormBody');
+  const chevron = document.getElementById(prefix + 'WlFormChevron');
+  if (body)    body.classList.add('section-body-hidden');
+  if (chevron) chevron.classList.add('collapsed');
 }
 
 function removeWatchlistItem(id) {
@@ -10062,7 +10080,13 @@ renderWatchlist();
 
   <!-- Watchlist Tab content — sibling of mobScannerContent / mobTradesTab -->
   <div id="mobWatchlistTab" style="display:none;flex-direction:column;min-height:0;flex:1;">
-    <div style="padding:10px 12px;border-bottom:1px solid var(--border);">
+    <div style="padding:10px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border-bottom:1px solid var(--border);"
+      onclick="toggleSection('mobWlFormBody','mobWlFormChevron')">
+      <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+        <span id="mobWlFormChevron" class="section-chevron collapsed">▼</span> Add New Stock
+      </span>
+    </div>
+    <div id="mobWlFormBody" class="section-body-hidden" style="padding:10px 12px;border-bottom:1px solid var(--border);">
       <div class="mob-wl-form-row">
         <input type="text" id="mobWlSym" placeholder="Symbol" style="text-transform:uppercase;">
         <select id="mobWlDir"><option value="LONG">Long</option><option value="SHORT">Short</option></select>
