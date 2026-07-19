@@ -2699,11 +2699,11 @@
       <div class="controls-grid" style="grid-template-columns: 130px 130px 90px 90px 90px 80px 90px 80px;">
         <div class="control-group"><label>From Date</label><input type="date" id="rvFromDate"></div>
         <div class="control-group"><label>To Date</label><input type="date" id="rvToDate"></div>
-        <div class="control-group"><label title="Trigger fires when price closes this % away from the rolling peak/trough (Long: pullback from a recent high. Short: rally from a recent low).">Move %</label><input type="number" id="rvDropPct" value="5" step="0.5" min="1" max="30" title="Minimum decline (Long) / rally (Short) from the rolling peak/trough to qualify as a trigger"></div>
-        <div class="control-group"><label title="How many trailing days define the 'recent peak/trough' the Move % is measured against.">Lookback Days</label><input type="number" id="rvLookbackDays" value="10" step="1" min="3" max="60" title="Rolling window (days) used to find the recent peak (Long) / trough (Short)"></div>
-        <div class="control-group"><label title="How many days after the trigger day to wait for the first reversal (up-day for Long, down-day for Short) close before giving up on this setup.">Confirm Days</label><input type="number" id="rvConfirmDays" value="2" step="1" min="1" max="5" title="Days to wait for a confirming up/down-day close after the trigger day"></div>
-        <div class="control-group"><label>TP %</label><input type="number" id="rvTpPct" value="5" step="0.5" min="0.5" max="30" title="Take profit % from entry"></div>
-        <div class="control-group"><label>Hold Days</label><input type="number" id="rvHoldDays" value="15" step="1" min="1" max="60" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
+        <div class="control-group"><label title="Trigger fires when price closes this % away from the rolling peak/trough (Long: pullback from a recent high. Short: rally from a recent low).">Move %</label><input type="number" id="rvDropPct" value="6" step="0.5" min="1" max="30" title="Minimum decline (Long) / rally (Short) from the rolling peak/trough to qualify as a trigger"></div>
+        <div class="control-group"><label title="How many trailing days define the 'recent peak/trough' the Move % is measured against.">Lookback Days</label><input type="number" id="rvLookbackDays" value="15" step="1" min="3" max="60" title="Rolling window (days) used to find the recent peak (Long) / trough (Short)"></div>
+        <div class="control-group"><label title="How many days after the trigger day to wait for the first reversal (up-day for Long, down-day for Short) close before giving up on this setup.">Confirm Days</label><input type="number" id="rvConfirmDays" value="3" step="1" min="1" max="5" title="Days to wait for a confirming up/down-day close after the trigger day"></div>
+        <div class="control-group"><label>TP %</label><input type="number" id="rvTpPct" value="8" step="0.5" min="0.5" max="30" title="Take profit % from entry"></div>
+        <div class="control-group"><label>Hold Days</label><input type="number" id="rvHoldDays" value="20" step="1" min="1" max="60" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
         <div class="control-group"><label title="Weekly swing-pivot width — a weekly bar needs this many weeks lower/higher on each side to count as a swing high/low.">Pivot Weeks</label><input type="number" id="rvPivotBars" value="2" step="1" min="1" max="6" title="Weeks on each side required to confirm a weekly swing high/low"></div>
       </div>
       <div style="margin-top:8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">
@@ -5877,7 +5877,7 @@ function _wrPnlDefaultsFor(s) {
     if (s === 'overnight') {
       const raw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
       const d = raw ? { ...OVERNIGHT_DEFAULTS, ...JSON.parse(raw) } : OVERNIGHT_DEFAULTS;
-      return { wr: d.wrThreshold, pnl: d.pnlThreshold };
+      return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
     }
     if (s === 'intraday') {
       const entryType = document.getElementById('idEntryType')?.value || 'd2_open';
@@ -5885,14 +5885,14 @@ function _wrPnlDefaultsFor(s) {
       const base = entryType === 'd1_close' ? INTRADAY_DEFAULTS_D1_CLOSE : INTRADAY_DEFAULTS_D2_OPEN;
       const raw  = localStorage.getItem(key);
       const d    = raw ? { ...base, ...JSON.parse(raw) } : base;
-      return { wr: d.wrThreshold, pnl: d.pnlThreshold };
+      return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
     }
     const raw = localStorage.getItem('TE_REVERSAL_DEFAULTS');
     const d = raw ? { ...REVERSAL_DEFAULTS, ...JSON.parse(raw) } : REVERSAL_DEFAULTS;
-    return { wr: d.wrThreshold, pnl: d.pnlThreshold };
+    return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
   } catch(e) {
     console.warn('[_wrPnlDefaultsFor] parse error', e);
-    return { wr: null, pnl: null };
+    return { wr: null, pnl: null, maxDay: null };
   }
 }
 
@@ -5902,9 +5902,10 @@ function setStrategy(s) {
   document.getElementById('stReversalBtn').classList.toggle('active', s === 'reversal');
   if (s === _strategy) return; // no change, no need to clear
   _strategy = s;
-  const { wr: wrDefault, pnl: pnlDefault } = _wrPnlDefaultsFor(s);
+  const { wr: wrDefault, pnl: pnlDefault, maxDay: maxDayDefault } = _wrPnlDefaultsFor(s);
   if (wrDefault  != null) document.getElementById('scanWrThreshold').value  = wrDefault;
   if (pnlDefault != null) document.getElementById('scanPnlThreshold').value = pnlDefault;
+  if (maxDayDefault != null) document.getElementById('maxSignalsDay').value = maxDayDefault;
   document.getElementById('overnightParams').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('intradayParams').style.display  = s === 'intraday'  ? '' : 'none';
   document.getElementById('reversalParams').style.display  = s === 'reversal'  ? '' : 'none';
@@ -6075,8 +6076,8 @@ const INTRADAY_DEFAULTS_D1_CLOSE = {
 // Convenience alias — always points to D2 Open defaults (used by legacy callers)
 const INTRADAY_DEFAULTS = INTRADAY_DEFAULTS_D2_OPEN;
 const REVERSAL_DEFAULTS = {
-  rvLookbackDays: 10, rvDropPct: 5, rvConfirmDays: 2, rvTpPct: 5, rvHoldDays: 15, rvPivotBars: 2,
-  maxSignalsDay: 1, wrThreshold: 60, pnlThreshold: 2, capitalPerTrade: 1000000,
+  rvLookbackDays: 15, rvDropPct: 6, rvConfirmDays: 3, rvTpPct: 8, rvHoldDays: 20, rvPivotBars: 2,
+  maxSignalsDay: 5, wrThreshold: 60, pnlThreshold: 2, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
 };
 
@@ -6248,12 +6249,13 @@ function loadSavedDefaults() {
   }
 
   // The three blocks above all write to the same shared scanWrThreshold/
-  // scanPnlThreshold inputs, so whichever ran last would otherwise win
-  // regardless of which strategy is actually active on load — re-sync to
+  // scanPnlThreshold/maxSignalsDay inputs, so whichever ran last would otherwise
+  // win regardless of which strategy is actually active on load — re-sync to
   // the real active strategy (_strategy defaults to 'overnight').
-  const { wr: activeWr, pnl: activePnl } = _wrPnlDefaultsFor(_strategy);
+  const { wr: activeWr, pnl: activePnl, maxDay: activeMaxDay } = _wrPnlDefaultsFor(_strategy);
   if (activeWr  != null) document.getElementById('scanWrThreshold').value  = activeWr;
   if (activePnl != null) document.getElementById('scanPnlThreshold').value = activePnl;
+  if (activeMaxDay != null) document.getElementById('maxSignalsDay').value = activeMaxDay;
 }
 
 // ── Save current params as user defaults ──────────────────────────────────────
