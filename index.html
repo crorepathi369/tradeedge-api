@@ -5272,8 +5272,17 @@ function backtestReversal(ohlc, symId, params, debug = false) {
   const swings     = _weeklySwingPoints(weeklyBars, params.rvPivotBars);
 
   let lastLongRefIdx = -1, lastShortRefIdx = -1;
+  // Enforces one open (or pending-confirmation) position per symbol at a time.
+  // Without this, a fresh trigger from a *different* peak/trough can fire while an
+  // earlier trade in the same symbol is still open — Hold Days can run several
+  // weeks, so overlapping/pyramided positions in the same stock were common.
+  // Set to at least the confirmation window on every trigger (confirmed or not),
+  // and extended to the trade's actual exit index once a trade is confirmed.
+  let busyUntilIdx = -1;
 
   for (let i = params.rvLookbackDays; i < ohlc.length - 1; i++) {
+    if (i <= busyUntilIdx) continue;
+
     const today = ohlc[i];
     const trend = weeklyTrendAsOf(swings, today.date);
     if (!trend) continue;
@@ -5283,12 +5292,13 @@ function backtestReversal(ohlc, symId, params, debug = false) {
       if (trig && trig.refIdx !== lastLongRefIdx) {
         lastLongRefIdx = trig.refIdx; // suppress re-trigger from the same peak
         const confirmIdx = _reversalConfirmIdx(ohlc, i, 'LONG', params.rvConfirmDays);
+        busyUntilIdx = i + params.rvConfirmDays;
         if (confirmIdx !== -1 && confirmIdx + 1 < ohlc.length) {
           const entryIdx = confirmIdx + 1;
           const entry = ohlc[entryIdx].open;
           if (entry > trig.sl) {
             const trade = _simulateReversalExit(ohlc, entryIdx, entry, trig.sl, 'LONG', params, symId, today.date, trig.movePct);
-            if (trade) trades.push(trade);
+            if (trade) { trades.push(trade); busyUntilIdx = trade._exitIdx; }
             if (debug) console.log(symId, today.date, `LONG reversal: drop ${trig.movePct.toFixed(2)}% sl=${trig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
           }
         }
@@ -5298,12 +5308,13 @@ function backtestReversal(ohlc, symId, params, debug = false) {
       if (trig && trig.refIdx !== lastShortRefIdx) {
         lastShortRefIdx = trig.refIdx; // suppress re-trigger from the same trough
         const confirmIdx = _reversalConfirmIdx(ohlc, i, 'SHORT', params.rvConfirmDays);
+        busyUntilIdx = i + params.rvConfirmDays;
         if (confirmIdx !== -1 && confirmIdx + 1 < ohlc.length) {
           const entryIdx = confirmIdx + 1;
           const entry = ohlc[entryIdx].open;
           if (entry < trig.sl) {
             const trade = _simulateReversalExit(ohlc, entryIdx, entry, trig.sl, 'SHORT', params, symId, today.date, trig.movePct);
-            if (trade) trades.push(trade);
+            if (trade) { trades.push(trade); busyUntilIdx = trade._exitIdx; }
             if (debug) console.log(symId, today.date, `SHORT reversal: rise ${trig.movePct.toFixed(2)}% sl=${trig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
           }
         }
@@ -5369,6 +5380,7 @@ function _simulateReversalExit(ohlc, entryIdx, entry, sl, side, params, symId, t
     slHit,
     outcome,
     pnlPct:   +pnlPct.toFixed(2),
+    _exitIdx: exitIdx, // internal — lets backtestReversal() block re-entry until this trade closes
   };
 }
 
@@ -6460,7 +6472,7 @@ function saveMobDefaults() {
     };
     localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
     _showSaveToast('Overnight Gap defaults saved ✓');
-  } else {
+  } else if (_mobStrategy === 'intraday') {
     const entryType = document.getElementById('mobIdEntryType')?.value || 'd2_open';
     const saved = {
       idMaxMove:     +document.getElementById('mobIdMaxMove').value,
@@ -6476,6 +6488,23 @@ function saveMobDefaults() {
     const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
     localStorage.setItem(key, JSON.stringify(saved));
     _showSaveToast('Intraday Momentum defaults saved ✓');
+  } else if (_mobStrategy === 'reversal') {
+    const saved = {
+      rvLookbackDays: +document.getElementById('mobRvLookbackDays').value,
+      rvDropPct:      +document.getElementById('mobRvDropPct').value,
+      rvConfirmDays:  +document.getElementById('mobRvConfirmDays').value,
+      rvTpPct:        +document.getElementById('mobRvTpPct').value,
+      rvHoldDays:     +document.getElementById('mobRvHoldDays').value,
+      rvPivotBars:    +document.getElementById('mobRvPivotBars').value,
+      maxSignalsDay:  +document.getElementById('mobRvMaxDay').value,
+      wrThreshold:    +document.getElementById('mobWrInput')?.value  || 60,
+      pnlThreshold:   +document.getElementById('mobPnlInput')?.value || 2,
+      capitalPerTrade: capital,
+      rankingMode:    document.getElementById('rankingMode')?.value || 'expectancy',
+      direction:      _mobDir || 'both',
+    };
+    localStorage.setItem('TE_REVERSAL_DEFAULTS', JSON.stringify(saved));
+    _showSaveToast('Reversal defaults saved ✓');
   }
 }
 
@@ -6502,7 +6531,7 @@ function resetMobDefaults() {
     document.getElementById('mobSlPctRow').style.display    = '';
     document.getElementById('mobTpPctRow').style.display    = 'none';
     document.getElementById('mobHoldDaysRow').style.display = 'none';
-  } else {
+  } else if (_mobStrategy === 'intraday') {
     const entryType = document.getElementById('mobIdEntryType')?.value || 'd2_open';
     const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
     const savedRaw = localStorage.getItem(key);
@@ -6518,6 +6547,18 @@ function resetMobDefaults() {
     if (pnlEl) pnlEl.value = d.pnlThreshold || 0.5;
     _lastAppliedEntryType = null;
     updateIntradayStratDesc();
+  } else if (_mobStrategy === 'reversal') {
+    const savedRaw = localStorage.getItem('TE_REVERSAL_DEFAULTS');
+    const d = savedRaw ? { ...REVERSAL_DEFAULTS, ...JSON.parse(savedRaw) } : REVERSAL_DEFAULTS;
+    document.getElementById('mobRvLookbackDays').value = d.rvLookbackDays;
+    document.getElementById('mobRvDropPct').value      = d.rvDropPct;
+    document.getElementById('mobRvConfirmDays').value  = d.rvConfirmDays;
+    document.getElementById('mobRvTpPct').value        = d.rvTpPct;
+    document.getElementById('mobRvHoldDays').value     = d.rvHoldDays;
+    document.getElementById('mobRvPivotBars').value    = d.rvPivotBars;
+    document.getElementById('mobRvMaxDay').value       = d.maxSignalsDay;
+    if (wrEl)  wrEl.value  = d.wrThreshold  || 60;
+    if (pnlEl) pnlEl.value = d.pnlThreshold || 2;
   }
 }
 
@@ -9232,8 +9273,8 @@ async function _loadFromDirectoryHandle(handle) {
     idbErr = e;
     console.error('[IDB] Save failed after CSV load:', e);
   }
-  _mobTradeCache = { overnight: null, intraday: null };
-  _mobAllTradesCache = { overnight: null, intraday: null };
+  _mobTradeCache = { overnight: null, intraday: null, reversal: null };
+  _mobAllTradesCache = { overnight: null, intraday: null, reversal: null };
   allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
   bar.style.width = '100%';
   updateDataStatusBar();
@@ -9350,8 +9391,8 @@ async function _handleCsvFiles(e) {
     console.error('[IDB] Save failed after CSV files load:', e);
   }
   // Invalidate Stats trade cache — new data loaded
-  _mobTradeCache = { overnight: null, intraday: null };
-  _mobAllTradesCache = { overnight: null, intraday: null };
+  _mobTradeCache = { overnight: null, intraday: null, reversal: null };
+  _mobAllTradesCache = { overnight: null, intraday: null, reversal: null };
   allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
   bar.style.width = '100%';
   updateDataStatusBar();
@@ -10653,7 +10694,7 @@ renderWatchlist();
       <div id="mobStratToggle">
         <button class="mob-strat-btn active" id="mobStOvernightBtn" onclick="mobSetStrategy('overnight')">🌙 Overnight Gap</button>
         <button class="mob-strat-btn" id="mobStIntradayBtn" onclick="mobSetStrategy('intraday')">⚡ Intraday Momentum</button>
-        <button class="mob-strat-btn" id="mobStReversalBtn" onclick="activateMobReversalTab()">↩️ Reversal</button>
+        <button class="mob-strat-btn" id="mobStReversalBtn" onclick="mobSetStrategy('reversal')">↩️ Reversal</button>
       </div>
       <div style="flex:1;"></div>
       <!-- Cache status pill — moved here to free up Row 2 for date picker -->
@@ -10943,6 +10984,49 @@ renderWatchlist();
       </div>
     </div>
 
+    <div class="mob-settings-group" id="mobReversalSettings" style="display:none;">
+      <div class="mob-settings-group-title">Reversal</div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">From Date</div><div class="mob-settings-sub">Backtest start</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvFromDate" type="date" style="width:130px;"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">To Date</div><div class="mob-settings-sub">Backtest end</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvToDate" type="date" style="width:130px;"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Move %</div><div class="mob-settings-sub">Pullback (Long) / rally (Short) trigger</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvDropPct" type="number" value="6" step="0.5" min="1" max="30"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Lookback Days</div><div class="mob-settings-sub">Window for recent peak/trough</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvLookbackDays" type="number" value="15" step="1" min="3" max="60"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Confirm Days</div><div class="mob-settings-sub">Days to wait for reversal close</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvConfirmDays" type="number" value="3" step="1" min="1" max="5"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">TP %</div><div class="mob-settings-sub">From entry</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvTpPct" type="number" value="8" step="0.5" min="0.5" max="30"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Hold Days</div><div class="mob-settings-sub">Max days to wait for TP/SL</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvHoldDays" type="number" value="20" step="1" min="1" max="60"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Pivot Weeks</div><div class="mob-settings-sub">Weekly swing-pivot width</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvPivotBars" type="number" value="2" step="1" min="1" max="6"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Max/day</div><div class="mob-settings-sub">Signals per day (0=∞)</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvMaxDay" type="number" value="5" step="1" min="0" placeholder="0=∞"></div>
+      </div>
+      <div style="padding:6px 2px 2px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">
+        SL is structural, not a %: the trigger day's low (Long) or high (Short).
+      </div>
+    </div>
+
     <!-- Direction -->
 
     <!-- Capital per trade — shared by both strategies -->
@@ -11099,20 +11183,24 @@ function updateMobDataBadge() {
     const toON   = document.getElementById('mobToDate');
     const fromID = document.getElementById('mobIdFromDate');
     const toID   = document.getElementById('mobIdToDate');
+    const fromRV = document.getElementById('mobRvFromDate');
+    const toRV   = document.getElementById('mobRvToDate');
     if (fromON) { fromON.value = document.getElementById('fromDate').value || fromVal; }
     if (toON)   { toON.value   = document.getElementById('toDate').value   || maxDate; }
     if (fromID) { fromID.value = document.getElementById('idFromDate').value || fromVal; }
     if (toID)   { toID.value   = document.getElementById('idToDate').value   || maxDate; }
+    if (fromRV) { fromRV.value = document.getElementById('rvFromDate').value || fromVal; }
+    if (toRV)   { toRV.value   = document.getElementById('rvToDate').value   || maxDate; }
   }
 }
 
 // Cache scan results HTML per strategy — preserved across strategy switches
-const _mobScanCache = { overnight: null, intraday: null };
+const _mobScanCache = { overnight: null, intraday: null, reversal: null };
 
 function mobSetStrategy(s) {
   document.getElementById('mobStOvernightBtn').classList.toggle('active', s === 'overnight');
   document.getElementById('mobStIntradayBtn').classList.toggle('active', s === 'intraday');
-  document.getElementById('mobStReversalBtn').classList.remove('active');
+  document.getElementById('mobStReversalBtn').classList.toggle('active', s === 'reversal');
   if (s === _mobStrategy) return;
 
   // Save current results before switching
@@ -11121,11 +11209,19 @@ function mobSetStrategy(s) {
 
   _mobStrategy = s;
   setStrategy(s); // sync core _strategy + clears _allTradesForWR
+  // setStrategy() just synced scanWrThreshold/scanPnlThreshold to this strategy's
+  // own defaults (or saved overrides) — mirror into the separate mobile inputs,
+  // which otherwise never got the same per-strategy sync.
+  const mobWrEl  = document.getElementById('mobWrInput');
+  const mobPnlEl = document.getElementById('mobPnlInput');
+  if (mobWrEl)  mobWrEl.value  = document.getElementById('scanWrThreshold').value;
+  if (mobPnlEl) mobPnlEl.value = document.getElementById('scanPnlThreshold').value;
   _mobAtMonth = null; _mobAtSymFilter = ""; // reset on strategy switch
 
   document.getElementById('mobOvernightSettings').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('mobIntradaySettings').style.display  = s === 'intraday'  ? '' : 'none';
-  // Intraday defaults to Short — direction locked
+  document.getElementById('mobReversalSettings').style.display  = s === 'reversal'  ? '' : 'none';
+  // Intraday defaults to Short — direction locked. Overnight + Reversal: both, unlocked.
   if (s === 'intraday') { mobSetDir('short'); _lockDirection(true); }
   else { mobSetDir('both'); _lockDirection(false); }
   // Set correct ranking default for each strategy
@@ -11133,15 +11229,20 @@ function mobSetStrategy(s) {
 
   // Update strategy description in scan bar
   const desc = document.getElementById('mobStratDesc');
-  if (desc) desc.textContent = s === 'intraday'
-    ? 'D1 momentum · D2 open entry'
-    : 'Gap continuation · D1 close entry';
+  if (desc) {
+    desc.textContent = s === 'intraday' ? 'D1 momentum · D2 open entry'
+      : s === 'reversal' ? 'Weekly HH/HL pullback · Enter next open · Structural SL'
+      : 'Gap continuation · D1 close entry';
+  }
   // Update strategy note at bottom
   const title = document.getElementById('mobStratNoteTitle');
   const text  = document.getElementById('mobStratNoteText');
   if (s === 'intraday') {
     if (title) title.textContent = '⚡ Intraday Momentum';
     if (text)  text.textContent  = 'Identifies stocks with a strong directional move on Day 1 that carry momentum into Day 2. Enter at Day 2 open. If the stop loss is not triggered intraday, the trade is closed at Day 2 end-of-day — no overnight exposure. Strategy performs best on the short side.';
+  } else if (s === 'reversal') {
+    if (title) title.textContent = '↩️ Reversal';
+    if (text)  text.textContent  = "Finds stocks pulling back against a weekly uptrend (or rallying against a weekly downtrend), using real swing-pivot HH/HL detection — not a moving-average proxy. Waits for the first day price turns back in the trend's favour before entering at the next session's open. Stop loss is structural (the trigger day's low for Long, high for Short); target is a fixed % from entry.";
   } else {
     if (title) title.textContent = '🌙 Overnight Gap';
     if (text)  text.textContent  = "Identifies stocks that gap in one direction and continue that momentum through the next trading day. A gap-up with a green close signals long; a gap-down with a red close signals short. Enter at the prior day's close, exit at the following day's close.";
@@ -11160,15 +11261,6 @@ function mobSetStrategy(s) {
     _mobAtMonth = null; // reset to latest month
     buildMobTradesTab();
   }
-}
-
-// Reversal tab on mobile — deliberately left as a visual-only placeholder.
-// The desktop Reversal strategy is fully wired (setStrategy('reversal')); mobile
-// backtest/scanner support is deferred until desktop testing is done.
-function activateMobReversalTab() {
-  document.getElementById('mobStOvernightBtn').classList.remove('active');
-  document.getElementById('mobStIntradayBtn').classList.remove('active');
-  document.getElementById('mobStReversalBtn').classList.add('active');
 }
 
 function mobSetDir(d) {
@@ -11194,6 +11286,8 @@ function closeMobSettings() {
   s('toDate',     g('mobToDate'));
   s('idFromDate', g('mobIdFromDate'));
   s('idToDate',   g('mobIdToDate'));
+  s('rvFromDate', g('mobRvFromDate'));
+  s('rvToDate',   g('mobRvToDate'));
 
   if (_mobStrategy === 'overnight') {
     s('minGap',          g('mobMinGap'));
@@ -11207,7 +11301,7 @@ function closeMobSettings() {
     s('capitalPerTrade', g('mobCapital'));
     s('scanWrThreshold', g('mobWrInput'));
     s('scanPnlThreshold',g('mobPnlInput'));
-  } else {
+  } else if (_mobStrategy === 'intraday') {
     s('idMinMove',       g('mobIdMinMove'));
     s('idMaxMove',       g('mobIdMaxMove'));
     s('idSkipPct',       g('mobIdSkipPct'));
@@ -11217,6 +11311,17 @@ function closeMobSettings() {
     s('idMaxOnGap',      g('mobIdMaxOnGap'));
     s('idEntryType',     g('mobIdEntryType'));
     s('maxSignalsDay',   g('mobIdMaxDay'));
+    s('capitalPerTrade', g('mobCapital'));
+    s('scanWrThreshold', g('mobWrInput'));
+    s('scanPnlThreshold',g('mobPnlInput'));
+  } else if (_mobStrategy === 'reversal') {
+    s('rvLookbackDays',  g('mobRvLookbackDays'));
+    s('rvDropPct',       g('mobRvDropPct'));
+    s('rvConfirmDays',   g('mobRvConfirmDays'));
+    s('rvTpPct',         g('mobRvTpPct'));
+    s('rvHoldDays',      g('mobRvHoldDays'));
+    s('rvPivotBars',     g('mobRvPivotBars'));
+    s('maxSignalsDay',   g('mobRvMaxDay'));
     s('capitalPerTrade', g('mobCapital'));
     s('scanWrThreshold', g('mobWrInput'));
     s('scanPnlThreshold',g('mobPnlInput'));
@@ -11280,7 +11385,7 @@ async function runMobileScanner() {
     document.getElementById('fromDate').value = document.getElementById('mobFromDate').value;
     document.getElementById('toDate').value   = document.getElementById('mobToDate').value;
     _strategy   = 'overnight';
-  } else {
+  } else if (mobStrategy === 'intraday') {
     document.getElementById('idMinMove').value  = document.getElementById('mobIdMinMove').value;
     document.getElementById('idMaxMove').value  = document.getElementById('mobIdMaxMove').value;
     document.getElementById('idSkipPct').value  = document.getElementById('mobIdSkipPct').value;
@@ -11293,6 +11398,18 @@ async function runMobileScanner() {
     document.getElementById('idFromDate').value = document.getElementById('mobIdFromDate').value;
     document.getElementById('idToDate').value   = document.getElementById('mobIdToDate').value;
     _strategy = 'intraday';
+  } else if (mobStrategy === 'reversal') {
+    document.getElementById('rvLookbackDays').value = document.getElementById('mobRvLookbackDays').value;
+    document.getElementById('rvDropPct').value      = document.getElementById('mobRvDropPct').value;
+    document.getElementById('rvConfirmDays').value  = document.getElementById('mobRvConfirmDays').value;
+    document.getElementById('rvTpPct').value        = document.getElementById('mobRvTpPct').value;
+    document.getElementById('rvHoldDays').value     = document.getElementById('mobRvHoldDays').value;
+    document.getElementById('rvPivotBars').value    = document.getElementById('mobRvPivotBars').value;
+    const mobCapRv = document.getElementById('mobCapital'); if (mobCapRv) document.getElementById('capitalPerTrade').value = mobCapRv.value;
+    document.getElementById('maxSignalsDay').value = document.getElementById('mobRvMaxDay').value;
+    document.getElementById('rvFromDate').value = document.getElementById('mobRvFromDate').value;
+    document.getElementById('rvToDate').value   = document.getElementById('mobRvToDate').value;
+    _strategy = 'reversal';
   }
   _direction = _mobDir;
 
@@ -11427,8 +11544,8 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
 
   // Re-run scanner logic to get longs/shorts arrays
   // Mobile direction is _mobDir, not _direction — override after reading
-  const params = _strategy === 'intraday'
-    ? { ...readIntradayParams(), direction: _mobDir }
+  const params = _strategy === 'intraday' ? { ...readIntradayParams(), direction: _mobDir }
+    : _strategy === 'reversal' ? { ...readReversalParams(), direction: _mobDir }
     : readOvernightParams();
 
   const longs = [], shorts = [];
@@ -11439,7 +11556,37 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
     const idx = ohlc.findIndex(c => c.date === scanDate);
     if (idx < 1) return;
 
-    if (_strategy === 'intraday') {
+    if (_strategy === 'reversal') {
+      if (ohlc.length < params.rvLookbackDays + 5) return;
+      // Causal: only weeks up to scanDate feed the trend check.
+      const weeklyBarsMob = _toWeeklyOHLC(ohlc.slice(0, idx + 1));
+      const swingsMob     = _weeklySwingPoints(weeklyBarsMob, params.rvPivotBars);
+      const sigMob = _detectReversalAtDate(ohlc, idx, swingsMob, params);
+      if (!sigMob) return;
+
+      if (_mobDir === 'long'  && sigMob.side !== 'LONG')  return;
+      if (_mobDir === 'short' && sigMob.side !== 'SHORT') return;
+
+      const tpPctMob   = params.rvTpPct / 100;
+      const tpLevelMob = sigMob.side === 'LONG'
+        ? sigMob.confirmClose * (1 + tpPctMob)
+        : sigMob.confirmClose * (1 - tpPctMob);
+
+      const wrSrcRv    = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
+      const htRv       = wrSrcRv.filter(t => t.sym === sym && t.side === sigMob.side && t.outcome !== 'SKIP');
+      const hwRv       = htRv.filter(t => t.outcome === 'WIN').length;
+      const histWRRv   = htRv.length >= 5 ? Math.round(hwRv/htRv.length*100) : null;
+      const wilsonRv   = htRv.length > 0 ? Math.round((hwRv+1)/(htRv.length+2)*100) : 50;
+      const { expectancy: histExpectancyRv } = _scoreFromTrades(htRv);
+      const histAvgPnlRv = htRv.length > 0 ? htRv.reduce((s,t) => s + t.pnlPct, 0) / htRv.length : 0;
+
+      const sig = { sym, movePct: +sigMob.movePct.toFixed(2), entry: +sigMob.confirmClose.toFixed(2),
+        slLevel: +sigMob.sl.toFixed(2), tpLevel: +tpLevelMob.toFixed(2), triggerDate: sigMob.triggerDate,
+        histWR: histWRRv, wilson: wilsonRv, histWins: hwRv, histExpectancy: histExpectancyRv,
+        histAvgPnl: histAvgPnlRv, histCount: htRv.length, side: sigMob.side,
+        _passesFilter: !(hasBacktest && ((wrThreshold > 0 && wilsonRv < wrThreshold) || (pnlThreshold !== 0 && histAvgPnlRv < pnlThreshold))) };
+      if (sigMob.side === 'LONG') longs.push(sig); else shorts.push(sig);
+    } else if (_strategy === 'intraday') {
       const d1 = ohlc[idx], prev = ohlc[idx-1];
       // Use adjClose for signal detection — matches backtest engine (div/split-corrected)
       const d1CloseAdj   = d1.adjClose  || d1.close;
@@ -11541,7 +11688,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
   // Sort using active ranking mode (Wilson or Expectancy)
   longs.sort(_signalSortFn); shorts.sort(_signalSortFn);
 
-  const maxDayId = _strategy === 'intraday' ? 'mobIdMaxDay' : 'mobMaxDay';
+  const maxDayId = _strategy === 'intraday' ? 'mobIdMaxDay' : _strategy === 'reversal' ? 'mobRvMaxDay' : 'mobMaxDay';
   const maxTotal = +document.getElementById(maxDayId).value || 0;
   let longsOut, shortsOut;
   if (maxTotal > 0) {
@@ -11634,7 +11781,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         </div>
         <div class="mob-card-sub">
           <div class="mob-dir-badge ${isBull?'long':'short'}">${isBull?'▲ LONG':'▼ SHORT'}</div>
-          <div class="mob-move ${isBull?'bull':'bear'}" title="Overnight Gap">${isBull?'+':''}${s.movePct}% <span style="font-size:9px;opacity:0.7;">gap</span></div>
+          <div class="mob-move ${isBull?'bull':'bear'}" title="${_strategy==='reversal' ? (isBull?'Pullback from rolling peak':'Rally from rolling trough') : 'Overnight Gap'}">${isBull?'+':''}${s.movePct}% <span style="font-size:9px;opacity:0.7;">${_strategy==='reversal' ? (isBull?'pullback':'rally') : 'gap'}</span></div>
           ${s.d1MovePct !== undefined ? `<div style="font-size:10px;color:${s.d1MovePct >= 0 ? 'var(--bull)' : 'var(--bear)'};font-weight:600;">${s.d1MovePct >= 0 ? '+' : ''}${s.d1MovePct}% <span style="opacity:0.75;font-size:9px;">D1 move</span></div>` : ''}
           ${mtfBadgeHTML(s.mtf)}
         </div>
@@ -11704,7 +11851,7 @@ updateDataStatusBar = function() {
 // ── Walk-Forward stub — TradeEdge does not use WF ────────────────────────────
 // _ensureMobTradesData (from TradeEasy Stats JS) checks _wfCaches before backtesting
 // Stubbing as empty so it always falls through to the silent backtest path
-const _wfCaches = { overnight: null, intraday: null };
+const _wfCaches = { overnight: null, intraday: null, reversal: null };
 function _wfCacheValid() { return false; }
 function _wfGetSignals() { return null; }
 
@@ -11716,8 +11863,8 @@ let _mobActiveTab = 'scanner';
 
 let _mobTradesSubTab   = 'summary';   // 'summary' | 'daywise' | 'stockwise' | 'monthly' | 'insights'
 let _mobTradesStratTab = 'overnight'; // default to Gap tab
-let _mobTradeCache     = { overnight: null, intraday: null }; // null = not yet run
-let _mobAllTradesCache = { overnight: null, intraday: null }; // uncapped — for All Trades tab
+let _mobTradeCache     = { overnight: null, intraday: null, reversal: null }; // null = not yet run
+let _mobAllTradesCache = { overnight: null, intraday: null, reversal: null }; // uncapped — for All Trades tab
 let _mobTradesBuilding = false;
 let _lastScanDate      = null; // scan date of the last scanner run — Stats uses same date cap
 
@@ -11762,6 +11909,17 @@ async function _runMobTradeBacktest(strat) {
   _direction = strat === 'intraday' ? 'short' : 'both';
   document.getElementById('rankingMode').value = strat === 'intraday' ? 'wilson' : 'expectancy';
 
+  // scanWrThreshold/scanPnlThreshold are a single shared input pair reflecting
+  // whichever strategy tab is currently on-screen — not necessarily `strat` here,
+  // since this function runs all 3 strategies back-to-back when the Stats tab
+  // builds its trade cache from cold. Pull this strategy's own persisted
+  // default/override directly rather than trusting whatever's currently displayed.
+  {
+    const { wr: btWr, pnl: btPnl } = _wrPnlDefaultsFor(strat);
+    if (btWr  != null) document.getElementById('scanWrThreshold').value  = btWr;
+    if (btPnl != null) document.getElementById('scanPnlThreshold').value = btPnl;
+  }
+
   // ── Sync all strategy params from mobile inputs → desktop inputs ───────────
   // This ensures runBacktestSilent uses the correct current params, not stale values
   if (strat === 'intraday') {
@@ -11776,6 +11934,19 @@ async function _runMobTradeBacktest(strat) {
     if (mobSl)   document.getElementById('idSlPct').value     = mobSl.value;
     if (mobSkip) { document.getElementById('idSkipPct').value = mobSkip.value;
       const vis = document.getElementById('idSkipPctVis'); if (vis) vis.value = mobSkip.value; }
+  } else if (strat === 'reversal') {
+    const mobLb = document.getElementById('mobRvLookbackDays');
+    const mobDp = document.getElementById('mobRvDropPct');
+    const mobCd = document.getElementById('mobRvConfirmDays');
+    const mobTp = document.getElementById('mobRvTpPct');
+    const mobHd = document.getElementById('mobRvHoldDays');
+    const mobPb = document.getElementById('mobRvPivotBars');
+    if (mobLb) document.getElementById('rvLookbackDays').value = mobLb.value;
+    if (mobDp) document.getElementById('rvDropPct').value      = mobDp.value;
+    if (mobCd) document.getElementById('rvConfirmDays').value  = mobCd.value;
+    if (mobTp) document.getElementById('rvTpPct').value        = mobTp.value;
+    if (mobHd) document.getElementById('rvHoldDays').value     = mobHd.value;
+    if (mobPb) document.getElementById('rvPivotBars').value    = mobPb.value;
   } else {
     const mobMin  = document.getElementById('mobMinGap');
     const mobMax  = document.getElementById('mobMaxGap');
@@ -11786,17 +11957,22 @@ async function _runMobTradeBacktest(strat) {
   }
 
   // Date range: use user's selected dates from mobile settings
-  const mobFrom = document.getElementById(strat === 'intraday' ? 'mobIdFromDate' : 'mobFromDate')?.value
-                || document.getElementById(strat === 'intraday' ? 'idFromDate' : 'fromDate')?.value
+  const mobDateIds = strat === 'intraday' ? ['mobIdFromDate','mobIdToDate','idFromDate','idToDate']
+    : strat === 'reversal' ? ['mobRvFromDate','mobRvToDate','rvFromDate','rvToDate']
+    : ['mobFromDate','mobToDate','fromDate','toDate'];
+  const mobFrom = document.getElementById(mobDateIds[0])?.value
+                || document.getElementById(mobDateIds[2])?.value
                 || _currentFYStart();
-  const mobTo   = document.getElementById(strat === 'intraday' ? 'mobIdToDate' : 'mobToDate')?.value
-                || document.getElementById(strat === 'intraday' ? 'idToDate' : 'toDate')?.value
+  const mobTo   = document.getElementById(mobDateIds[1])?.value
+                || document.getElementById(mobDateIds[3])?.value
                 || new Date().toISOString().slice(0,10);
 
   document.getElementById('fromDate').value   = mobFrom;
   document.getElementById('toDate').value     = mobTo;
   document.getElementById('idFromDate').value = mobFrom;
   document.getElementById('idToDate').value   = mobTo;
+  document.getElementById('rvFromDate').value = mobFrom;
+  document.getElementById('rvToDate').value   = mobTo;
 
   await runBacktestSilent();
   _mobTradeCache[strat]     = [...allTrades];          // capped — for all other tabs
@@ -11806,6 +11982,9 @@ async function _runMobTradeBacktest(strat) {
   _strategy  = prevStrategy;
   _direction = prevDirection;
   document.getElementById('rankingMode').value = prevStrategy === 'intraday' ? 'wilson' : 'expectancy';
+  const { wr: prevWr, pnl: prevPnl } = _wrPnlDefaultsFor(prevStrategy);
+  if (prevWr  != null) document.getElementById('scanWrThreshold').value  = prevWr;
+  if (prevPnl != null) document.getElementById('scanPnlThreshold').value = prevPnl;
 }
 
 // Creates/shows a fixed overlay on the trades tab for progress display
@@ -11884,28 +12063,35 @@ async function _ensureMobTradesData() {
 
     const onTrades = buildTradesFromWFCache('overnight');
     const idTrades = buildTradesFromWFCache('intraday');
+    const rvTrades = buildTradesFromWFCache('reversal');
 
-    if (onTrades !== null || idTrades !== null) {
+    if (onTrades !== null || idTrades !== null || rvTrades !== null) {
       _mobBuildOverlay('Building from Walk-Forward cache…', 10, '⚡ No look-ahead bias');
       await new Promise(r => setTimeout(r, 0));
       if (onTrades !== null) { _mobTradeCache['overnight'] = onTrades; _mobAllTradesCache['overnight'] = onTrades; }
       if (idTrades !== null) { _mobTradeCache['intraday']  = idTrades; _mobAllTradesCache['intraday']  = idTrades; }
+      if (rvTrades !== null) { _mobTradeCache['reversal']  = rvTrades; _mobAllTradesCache['reversal']  = rvTrades; }
 
       // For any strategy without WF cache, run silent backtest as fallback
       // Use full loaded range — Stats tab should show all trades, not capped to last scan date
       const scanCap = null;
       if (onTrades === null) {
-        _mobBuildOverlay('Running Gap backtest…', 40, '(no WF cache for Gap)');
+        _mobBuildOverlay('Running Gap backtest…', 30, '(no WF cache for Gap)');
         await new Promise(r => setTimeout(r, 0));
         await _runMobTradeBacktest('overnight');
       }
       if (idTrades === null) {
-        _mobBuildOverlay('Running Momentum backtest…', 70, '(no WF cache for Momentum)');
+        _mobBuildOverlay('Running Momentum backtest…', 55, '(no WF cache for Momentum)');
         await new Promise(r => setTimeout(r, 0));
         await _runMobTradeBacktest('intraday');
       }
+      if (rvTrades === null) {
+        _mobBuildOverlay('Running Reversal backtest…', 80, '(no WF cache for Reversal)');
+        await new Promise(r => setTimeout(r, 0));
+        await _runMobTradeBacktest('reversal');
+      }
 
-      const total = (_mobTradeCache.overnight||[]).length + (_mobTradeCache.intraday||[]).length;
+      const total = (_mobTradeCache.overnight||[]).length + (_mobTradeCache.intraday||[]).length + (_mobTradeCache.reversal||[]).length;
       _mobBuildOverlay('Done ✓', 100, `${total} trades loaded`);
       await new Promise(r => setTimeout(r, 250));
       _mobHideBuildOverlay();
@@ -11914,8 +12100,8 @@ async function _ensureMobTradesData() {
     }
 
     // ── No WF cache — fall back to silent backtest ────────────────────────────
-    _mobTradeCache = { overnight: null, intraday: null };
-  _mobAllTradesCache = { overnight: null, intraday: null };
+    _mobTradeCache = { overnight: null, intraday: null, reversal: null };
+  _mobAllTradesCache = { overnight: null, intraday: null, reversal: null };
     allTrades = [];
     _allTradesForWR = [];
     _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
@@ -11923,15 +12109,20 @@ async function _ensureMobTradesData() {
     // For Stats tab: use full loaded range (no scan date cap) so all trades appear
     const scanCap = null;
 
-    // Run backtest for both strategies fresh
+    // Run backtest for all three strategies fresh
     _mobBuildOverlay('Running Gap backtest…', 5, '📈 1 Apr 2025 → latest data');
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 50)));
+    await new Promise(r => setTimeout(r, 0));
     await _runMobTradeBacktest('overnight');
-    _mobBuildOverlay('Gap done ✓', 50, '⚡ Starting Momentum…');
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 50)));
-    _mobBuildOverlay('Running Momentum backtest…', 55, '⚡ 1 Apr 2025 → latest data');
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 50)));
+    _mobBuildOverlay('Gap done ✓', 35, '⚡ Starting Momentum…');
+    await new Promise(r => setTimeout(r, 0));
+    _mobBuildOverlay('Running Momentum backtest…', 40, '⚡ 1 Apr 2025 → latest data');
+    await new Promise(r => setTimeout(r, 0));
     await _runMobTradeBacktest('intraday');
+    _mobBuildOverlay('Momentum done ✓', 70, '↩️ Starting Reversal…');
+    await new Promise(r => setTimeout(r, 0));
+    _mobBuildOverlay('Running Reversal backtest…', 75, '↩️ 1 Apr 2025 → latest data');
+    await new Promise(r => setTimeout(r, 0));
+    await _runMobTradeBacktest('reversal');
     _mobBuildOverlay('All done ✓', 100, '');
     await new Promise(r => setTimeout(r, 250));
 
@@ -11968,30 +12159,28 @@ function buildMobTradesTab() {
   const trades = _mobTradeCache[_mobTradesStratTab];
 
   // Strategy selector tabs — rendered into the fixed header (outside scroll container)
-  const gapActive = _mobTradesStratTab === 'overnight';
+  const stratColors = { overnight: 'var(--accent)', intraday: '#7c5cfc', reversal: '#2b8a6e' };
+  const stratLabels = { overnight: '📈 Gap', intraday: '⚡ Momentum', reversal: '↩️ Reversal' };
   if (hdr) {
     hdr.innerHTML = `
       <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px;">
-        <button onclick="mobSwitchTradesStratTab('overnight')"
-          style="flex:1;padding:8px 4px;border:none;font-family:'Syne',sans-serif;font-weight:700;
-            font-size:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;
-            background:${gapActive?'var(--accent)':'var(--surface2)'};color:${gapActive?'#fff':'var(--text2)'};">
-          📈 Gap
-        </button>
-        <button onclick="mobSwitchTradesStratTab('intraday')"
-          style="flex:1;padding:8px 4px;border:none;font-family:'Syne',sans-serif;font-weight:700;
-            font-size:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;
-            border-left:1px solid var(--border);
-            background:${!gapActive?'#7c5cfc':'var(--surface2)'};color:${!gapActive?'#fff':'var(--text2)'};">
-          ⚡ Momentum
-        </button>
+        ${['overnight','intraday','reversal'].map((strat, i) => {
+          const active = _mobTradesStratTab === strat;
+          return `<button onclick="mobSwitchTradesStratTab('${strat}')"
+            style="flex:1;padding:8px 4px;border:none;font-family:'Syne',sans-serif;font-weight:700;
+              font-size:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+              ${i > 0 ? 'border-left:1px solid var(--border);' : ''}
+              background:${active ? stratColors[strat] : 'var(--surface2)'};color:${active ? '#fff' : 'var(--text2)'};">
+            ${stratLabels[strat]}
+          </button>`;
+        }).join('')}
       </div>`;
   }
 
   let html = '';
 
   if (!trades || trades.length === 0) {
-    const label = gapActive ? 'Gap' : 'Momentum';
+    const label = _mobTradesStratTab === 'overnight' ? 'Gap' : _mobTradesStratTab === 'intraday' ? 'Momentum' : 'Reversal';
     inner.innerHTML = `<div style="text-align:center;padding:32px 16px;font-family:'DM Mono',monospace;
       font-size:12px;color:var(--text3);">No ${label} trades in backtest range</div>`;
     if (empty) empty.style.display = 'none';
@@ -12433,10 +12622,10 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
   let trades   = (_mobAllTradesCache[strat] || _allTradesForWR || []).slice();
 
   // Intraday Momentum = SHORT only (gap down stocks only — strategy design)
-  // Gap strategy respects the user's direction setting
+  // Gap + Reversal both respect the user's direction setting
   if (strat === 'intraday') {
     trades = trades.filter(t => t.side === 'SHORT');
-  } else {
+  } else if (strat === 'overnight' || strat === 'reversal') {
     if (_direction === 'long')  trades = trades.filter(t => t.side === 'LONG');
     if (_direction === 'short') trades = trades.filter(t => t.side === 'SHORT');
   }
@@ -13012,8 +13201,8 @@ function _mobRefreshTradesTab() {
     await new Promise(r => setTimeout(r, 900));
     if (overlay) overlay.style.display = 'none';
     // Invalidate trade cache — fresh data
-    _mobTradeCache = { overnight: null, intraday: null };
-  _mobAllTradesCache = { overnight: null, intraday: null };
+    _mobTradeCache = { overnight: null, intraday: null, reversal: null };
+  _mobAllTradesCache = { overnight: null, intraday: null, reversal: null };
     allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
     updateDataStatusBar();
   } catch(e) {
