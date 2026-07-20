@@ -1766,7 +1766,7 @@
       gap: 6px;
     }
     #mobScanBtn:disabled { opacity: 0.6; }
-    #mobSettingsBtn {
+    #mobSettingsBtn, .mob-settings-icon-btn {
       width: 34px; height: 34px;
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -2590,8 +2590,8 @@
             style="padding:5px 16px;font-size:12px;">🌙 Overnight Gap</button>
           <button id="stIntradayBtn" onclick="setStrategy('intraday')" class="dir-btn"
             style="padding:5px 16px;font-size:12px;">⚡ Intraday Momentum</button>
-          <button id="stReversalBtn" onclick="setStrategy('reversal')" class="dir-btn"
-            style="padding:5px 16px;font-size:12px;">↩️ Reversal</button>
+          <button id="stPullbackBtn" onclick="setStrategy('pullback')" class="dir-btn"
+            style="padding:5px 16px;font-size:12px;">↩️ Pullback</button>
         </div>
         <span id="stDesc" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);white-space:nowrap;">
           Gap continuation · Enter D1 close · Exit D2 open/close</span>
@@ -2694,17 +2694,17 @@
       </div>
     </div>
 
-    <!-- REVERSAL PARAMS -->
-    <div id="reversalParams" style="display:none;">
+    <!-- PULLBACK PARAMS -->
+    <div id="pullbackParams" style="display:none;">
       <div class="controls-grid" style="grid-template-columns: 130px 130px 90px 90px 90px 80px 90px 80px;">
-        <div class="control-group"><label>From Date</label><input type="date" id="rvFromDate"></div>
-        <div class="control-group"><label>To Date</label><input type="date" id="rvToDate"></div>
-        <div class="control-group"><label title="Trigger fires when price closes this % away from the rolling peak/trough (Long: pullback from a recent high. Short: rally from a recent low).">Move %</label><input type="number" id="rvDropPct" value="6" step="0.5" min="1" max="30" title="Minimum decline (Long) / rally (Short) from the rolling peak/trough to qualify as a trigger"></div>
-        <div class="control-group"><label title="How many trailing days define the 'recent peak/trough' the Move % is measured against.">Lookback Days</label><input type="number" id="rvLookbackDays" value="15" step="1" min="3" max="60" title="Rolling window (days) used to find the recent peak (Long) / trough (Short)"></div>
-        <div class="control-group"><label title="How many days after the trigger day to wait for the first reversal (up-day for Long, down-day for Short) close before giving up on this setup.">Confirm Days</label><input type="number" id="rvConfirmDays" value="3" step="1" min="1" max="5" title="Days to wait for a confirming up/down-day close after the trigger day"></div>
-        <div class="control-group"><label>TP %</label><input type="number" id="rvTpPct" value="8" step="0.5" min="0.5" max="30" title="Take profit % from entry"></div>
-        <div class="control-group"><label>Hold Days</label><input type="number" id="rvHoldDays" value="20" step="1" min="1" max="60" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
-        <div class="control-group"><label title="Weekly swing-pivot width — a weekly bar needs this many weeks lower/higher on each side to count as a swing high/low.">Pivot Weeks</label><input type="number" id="rvPivotBars" value="2" step="1" min="1" max="6" title="Weeks on each side required to confirm a weekly swing high/low"></div>
+        <div class="control-group"><label>From Date</label><input type="date" id="pbFromDate"></div>
+        <div class="control-group"><label>To Date</label><input type="date" id="pbToDate"></div>
+        <div class="control-group"><label title="Trigger fires when price closes this % away from the rolling peak/trough (Long: pullback from a recent high. Short: rally from a recent low).">Move %</label><input type="number" id="pbDropPct" value="6" step="0.5" min="1" max="30" title="Minimum decline (Long) / rally (Short) from the rolling peak/trough to qualify as a trigger"></div>
+        <div class="control-group"><label title="How many trailing days define the 'recent peak/trough' the Move % is measured against.">Lookback Days</label><input type="number" id="pbLookbackDays" value="15" step="1" min="3" max="60" title="Rolling window (days) used to find the recent peak (Long) / trough (Short)"></div>
+        <div class="control-group"><label title="How many days after the trigger day to wait for the first confirming bounce (up-day for Long, down-day for Short) close before giving up on this setup.">Confirm Days</label><input type="number" id="pbConfirmDays" value="3" step="1" min="1" max="5" title="Days to wait for a confirming up/down-day close after the trigger day"></div>
+        <div class="control-group"><label>TP %</label><input type="number" id="pbTpPct" value="8" step="0.5" min="0.5" max="30" title="Take profit % from entry"></div>
+        <div class="control-group"><label>Hold Days</label><input type="number" id="pbHoldDays" value="5" step="1" min="1" max="60" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
+        <div class="control-group"><label title="Weekly swing-pivot width — a weekly bar needs this many weeks lower/higher on each side to count as a swing high/low.">Pivot Weeks</label><input type="number" id="pbPivotBars" value="2" step="1" min="1" max="6" title="Weeks on each side required to confirm a weekly swing high/low"></div>
       </div>
       <div style="margin-top:8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">
         SL is structural, not a %: the trigger day's low (Long) or high (Short) — shown per-signal in the Live Scanner and Trade Log.
@@ -3013,7 +3013,9 @@
         <div class="tab" onclick="switchTab('calendar',this)">📅 Calendar View</div>
         <div class="tab" onclick="switchTab('symbolSummary',this)">Symbol Summary</div>
         <div class="tab" onclick="switchTab('verdict',this)">Strategy Verdict</div>
+        <div class="tab" onclick="switchTab('insights',this)">💡 Insights</div>
         <div class="tab" id="sweepTab" onclick="switchTab('sweep',this)" style="display:none;">🔬 Param Sweep</div>
+        <div class="tab" id="positionsTab" onclick="switchTab('positions',this)" style="display:none;">📍 Positions</div>
       </div>
 
       <!-- DAY-WISE -->
@@ -3209,11 +3211,29 @@
         <div id="verdictContent"></div>
       </div>
 
+      <!-- INSIGHTS (all strategies) -->
+      <div class="tab-content" id="tab-insights">
+        <div id="insightsContent" style="max-width:520px;margin:0 auto;padding:16px 0;">
+          <div style="text-align:center;padding:40px;color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;">
+            Run a backtest to see trade insights.
+          </div>
+        </div>
+      </div>
+
       <!-- PARAM SWEEP -->
       <div class="tab-content" id="tab-sweep">
         <div id="sweepContent">
           <div style="text-align:center;padding:40px;color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;">
             Run a backtest first, then click 🔬 Param Sweep to view the matrix.
+          </div>
+        </div>
+      </div>
+
+      <!-- POSITIONS (Pullback only) -->
+      <div class="tab-content" id="tab-positions">
+        <div id="positionsContent" style="max-width:520px;margin:0 auto;padding:16px 0;">
+          <div style="text-align:center;padding:40px;color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;">
+            Run a Pullback backtest to see position &amp; holding-period insights.
           </div>
         </div>
       </div>
@@ -4481,7 +4501,7 @@ function _toWeeklyCloses(dailyCandles) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WEEKLY SWING STRUCTURE — used by the Reversal strategy to classify weekly
+// WEEKLY SWING STRUCTURE — used by the Pullback strategy to classify weekly
 // trend as up (HH+HL) / down (LH+LL) via real swing-pivot detection, not just
 // a moving-average proxy.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4550,19 +4570,19 @@ function weeklyTrendAsOf(swings, asOfDate) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REVERSAL SIGNAL PRIMITIVES — shared by backtestReversal() (forward walk over
-// history) and runScannerReversal() (single-date check), so the trigger/confirm
+// PULLBACK SIGNAL PRIMITIVES — shared by backtestPullback() (forward walk over
+// history) and runScannerPullback() (single-date check), so the trigger/confirm
 // rules live in exactly one place.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Checks whether day `t` qualifies as a reversal trigger for `side`: LONG looks
-// for today's close sitting ≥rvDropPct% below the highest close in the trailing
-// rvLookbackDays window; SHORT mirrors it off the lowest close (a rally). Returns
+// Checks whether day `t` qualifies as a pullback trigger for `side`: LONG looks
+// for today's close sitting ≥pbDropPct% below the highest close in the trailing
+// pbLookbackDays window; SHORT mirrors it off the lowest close (a rally). Returns
 // { sl, movePct, refIdx } if the threshold is crossed, else null. `refIdx` is the
 // index of the peak/trough itself — callers use it to avoid re-triggering off the
 // same peak/trough on every subsequent day of a continued decline/rally.
-function _reversalTriggerAt(ohlc, t, side, params) {
-  const winStart = Math.max(0, t - params.rvLookbackDays);
+function _pullbackTriggerAt(ohlc, t, side, params) {
+  const winStart = Math.max(0, t - params.pbLookbackDays);
   let refIdx = winStart, ref = ohlc[winStart].close;
   for (let k = winStart; k < t; k++) {
     const c = ohlc[k].close;
@@ -4572,13 +4592,13 @@ function _reversalTriggerAt(ohlc, t, side, params) {
   const movePct = side === 'LONG'
     ? ((ref - today.close) / ref) * 100
     : ((today.close - ref) / ref) * 100;
-  if (movePct < params.rvDropPct) return null;
+  if (movePct < params.pbDropPct) return null;
   return { sl: side === 'LONG' ? today.low : today.high, movePct, refIdx };
 }
 
 // First day within `confirmDays` of `triggerIdx` whose close confirms the
-// reversal (an up-day for LONG, a down-day for SHORT). Returns its index, or -1.
-function _reversalConfirmIdx(ohlc, triggerIdx, side, confirmDays) {
+// confirming bounce (an up-day for LONG, a down-day for SHORT). Returns its index, or -1.
+function _pullbackConfirmIdx(ohlc, triggerIdx, side, confirmDays) {
   for (let c = triggerIdx + 1; c <= triggerIdx + confirmDays && c < ohlc.length; c++) {
     const confirms = side === 'LONG' ? ohlc[c].close > ohlc[c-1].close : ohlc[c].close < ohlc[c-1].close;
     if (confirms) return c;
@@ -5253,7 +5273,7 @@ function backtest(ohlc, symId, params, debug = false) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REVERSAL BACKTEST ENGINE
+// PULLBACK BACKTEST ENGINE
 // Long:  weekly uptrend (HH/HL) + daily pullback ≥dropPct% off a rolling peak,
 //        confirmed by the first up-day close within confirmDays. SL = trigger-day low.
 // Short: weekly downtrend (LH/LL) + daily rally ≥dropPct% off a rolling trough,
@@ -5262,14 +5282,14 @@ function backtest(ohlc, symId, params, debug = false) {
 //        you can't know a candle is the confirmation candle until it closes).
 // Exit:  structural SL, fixed % TP, or holdDays timeout — whichever comes first.
 // A trigger only fires once per peak/trough (tracked via refIdx) so a multi-day
-// slide without a reversal doesn't spam a fresh signal every single day.
+// slide without a pullback doesn't spam a fresh signal every single day.
 // ─────────────────────────────────────────────────────────────────────────────
-function backtestReversal(ohlc, symId, params, debug = false) {
+function backtestPullback(ohlc, symId, params, debug = false) {
   const trades = [];
-  if (ohlc.length < params.rvLookbackDays + 5) return trades;
+  if (ohlc.length < params.pbLookbackDays + 5) return trades;
 
   const weeklyBars = _toWeeklyOHLC(ohlc);
-  const swings     = _weeklySwingPoints(weeklyBars, params.rvPivotBars);
+  const swings     = _weeklySwingPoints(weeklyBars, params.pbPivotBars);
 
   let lastLongRefIdx = -1, lastShortRefIdx = -1;
   // Enforces one open (or pending-confirmation) position per symbol at a time.
@@ -5280,7 +5300,7 @@ function backtestReversal(ohlc, symId, params, debug = false) {
   // and extended to the trade's actual exit index once a trade is confirmed.
   let busyUntilIdx = -1;
 
-  for (let i = params.rvLookbackDays; i < ohlc.length - 1; i++) {
+  for (let i = params.pbLookbackDays; i < ohlc.length - 1; i++) {
     if (i <= busyUntilIdx) continue;
 
     const today = ohlc[i];
@@ -5288,34 +5308,34 @@ function backtestReversal(ohlc, symId, params, debug = false) {
     if (!trend) continue;
 
     if (trend === 'up') {
-      const trig = _reversalTriggerAt(ohlc, i, 'LONG', params);
+      const trig = _pullbackTriggerAt(ohlc, i, 'LONG', params);
       if (trig && trig.refIdx !== lastLongRefIdx) {
         lastLongRefIdx = trig.refIdx; // suppress re-trigger from the same peak
-        const confirmIdx = _reversalConfirmIdx(ohlc, i, 'LONG', params.rvConfirmDays);
-        busyUntilIdx = i + params.rvConfirmDays;
+        const confirmIdx = _pullbackConfirmIdx(ohlc, i, 'LONG', params.pbConfirmDays);
+        busyUntilIdx = i + params.pbConfirmDays;
         if (confirmIdx !== -1 && confirmIdx + 1 < ohlc.length) {
           const entryIdx = confirmIdx + 1;
           const entry = ohlc[entryIdx].open;
           if (entry > trig.sl) {
-            const trade = _simulateReversalExit(ohlc, entryIdx, entry, trig.sl, 'LONG', params, symId, today.date, trig.movePct);
+            const trade = _simulatePullbackExit(ohlc, entryIdx, entry, trig.sl, 'LONG', params, symId, today.date, trig.movePct);
             if (trade) { trades.push(trade); busyUntilIdx = trade._exitIdx; }
-            if (debug) console.log(symId, today.date, `LONG reversal: drop ${trig.movePct.toFixed(2)}% sl=${trig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
+            if (debug) console.log(symId, today.date, `LONG pullback: drop ${trig.movePct.toFixed(2)}% sl=${trig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
           }
         }
       }
     } else if (trend === 'down') {
-      const trig = _reversalTriggerAt(ohlc, i, 'SHORT', params);
+      const trig = _pullbackTriggerAt(ohlc, i, 'SHORT', params);
       if (trig && trig.refIdx !== lastShortRefIdx) {
         lastShortRefIdx = trig.refIdx; // suppress re-trigger from the same trough
-        const confirmIdx = _reversalConfirmIdx(ohlc, i, 'SHORT', params.rvConfirmDays);
-        busyUntilIdx = i + params.rvConfirmDays;
+        const confirmIdx = _pullbackConfirmIdx(ohlc, i, 'SHORT', params.pbConfirmDays);
+        busyUntilIdx = i + params.pbConfirmDays;
         if (confirmIdx !== -1 && confirmIdx + 1 < ohlc.length) {
           const entryIdx = confirmIdx + 1;
           const entry = ohlc[entryIdx].open;
           if (entry < trig.sl) {
-            const trade = _simulateReversalExit(ohlc, entryIdx, entry, trig.sl, 'SHORT', params, symId, today.date, trig.movePct);
+            const trade = _simulatePullbackExit(ohlc, entryIdx, entry, trig.sl, 'SHORT', params, symId, today.date, trig.movePct);
             if (trade) { trades.push(trade); busyUntilIdx = trade._exitIdx; }
-            if (debug) console.log(symId, today.date, `SHORT reversal: rise ${trig.movePct.toFixed(2)}% sl=${trig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
+            if (debug) console.log(symId, today.date, `SHORT pullback: rise ${trig.movePct.toFixed(2)}% sl=${trig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
           }
         }
       }
@@ -5324,41 +5344,55 @@ function backtestReversal(ohlc, symId, params, debug = false) {
   return trades;
 }
 
-// Simulates the exit for a confirmed reversal entry — structural SL / fixed % TP /
+// Simulates the exit for a confirmed pullback entry — structural SL / fixed % TP /
 // holdDays timeout, checked day-by-day via High/Low. Same conservative "SL wins if
 // both hit the same day" rule used by the other engines. Returns null only if the
 // data runs out before any exit condition (including timeout) can be evaluated.
-function _simulateReversalExit(ohlc, entryIdx, entry, sl, side, params, symId, triggerDate, triggerMovePct) {
-  const tpPct = params.rvTpPct / 100;
+function _simulatePullbackExit(ohlc, entryIdx, entry, sl, side, params, symId, triggerDate, triggerMovePct) {
+  const tpPct = params.pbTpPct / 100;
   const tp    = side === 'LONG' ? entry * (1 + tpPct) : entry * (1 - tpPct);
-  const hold  = Math.max(1, params.rvHoldDays || 1);
+  const hold  = Math.max(1, params.pbHoldDays || 1);
   const entryDate = ohlc[entryIdx].date;
 
-  let exitPrice, outcome, exitNote, slHit = false, exitIdx = entryIdx;
+  let exitPrice, outcome, exitNote, exitReason, slHit = false, exitIdx = entryIdx, daysHeld = 0;
 
   for (let h = 0; h < hold && (entryIdx + h) < ohlc.length; h++) {
     const idx = entryIdx + h;
     const c   = ohlc[idx];
-    const isLastDay = (h === hold - 1) || (idx + 1 >= ohlc.length);
+    // Two different reasons a position closes out on its last simulated day:
+    // holdExpired = genuinely reached the Hold Days limit; dataExhausted =
+    // we simply ran out of loaded price history before that — the position
+    // is still technically open as of the latest available date, not closed.
+    const holdExpired   = (h === hold - 1);
+    const dataExhausted = !holdExpired && (idx + 1 >= ohlc.length);
+    const isLastDay     = holdExpired || dataExhausted;
 
     const tpHit      = side === 'LONG' ? c.high >= tp : c.low <= tp;
     const slHitIntra = side === 'LONG' ? c.low <= sl  : c.high >= sl;
 
     if (slHitIntra) {
-      exitPrice = sl; exitNote = h === 0 ? 'SL hit on entry day' : `SL hit, held ${h+1} days`; slHit = true; outcome = 'SL'; exitIdx = idx; break;
+      exitPrice = sl; exitNote = h === 0 ? 'SL hit on entry day' : `SL hit, held ${h+1} days`;
+      slHit = true; outcome = 'SL'; exitReason = 'SL'; exitIdx = idx; daysHeld = h + 1; break;
     } else if (tpHit) {
-      exitPrice = tp; exitNote = h === 0 ? `TP hit on entry day (${params.rvTpPct}%)` : `TP hit, held ${h+1} days (${params.rvTpPct}%)`; outcome = 'WIN'; exitIdx = idx; break;
-    } else if (isLastDay) {
+      exitPrice = tp; exitNote = h === 0 ? `TP hit on entry day (${params.pbTpPct}%)` : `TP hit, held ${h+1} days (${params.pbTpPct}%)`;
+      outcome = 'WIN'; exitReason = 'TP'; exitIdx = idx; daysHeld = h + 1; break;
+    } else if (dataExhausted) {
+      // Still open — data just ends here. Not a resolved WIN/LOSS/SL; kept
+      // separate so it never pollutes historical win-rate/expectancy stats.
+      exitPrice = c.close;
+      exitNote  = `Still open — held ${h+1} day${h===0?'':'s'} so far (data ends here)`;
+      outcome = 'OPEN'; exitReason = 'OPEN'; exitIdx = idx; daysHeld = h + 1;
+    } else if (isLastDay) { // holdExpired
       exitPrice = c.close;
       exitNote  = h === 0 ? 'Entry day close (hold expired)' : `Close after ${h+1} days (hold expired)`;
       const diff = (exitPrice - entry) / entry;
       outcome = Math.abs(diff) < 0.00001 ? 'FLAT'
         : side === 'LONG' ? (exitPrice > entry ? 'WIN' : 'LOSS')
         : (exitPrice < entry ? 'WIN' : 'LOSS');
-      exitIdx = idx;
+      exitReason = 'TIMEOUT'; exitIdx = idx; daysHeld = h + 1;
     }
   }
-  if (exitPrice === undefined) return null; // ran out of data entirely
+  if (exitPrice === undefined) return null; // no bars at all from entry — shouldn't normally happen
 
   const pnlPct = side === 'LONG'
     ? ((exitPrice - entry) / entry) * 100
@@ -5377,10 +5411,13 @@ function _simulateReversalExit(ohlc, entryIdx, entry, sl, side, params, symId, t
     nextOpen: +entry.toFixed(2), // entry IS the next-session open
     exit:     +exitPrice.toFixed(2),
     exitNote,
+    exitReason,      // 'SL' | 'TP' | 'TIMEOUT' | 'OPEN'
+    stillOpen: outcome === 'OPEN',
+    daysHeld,        // trading days actually held, incl. entry day
     slHit,
-    outcome,
+    outcome,         // 'WIN' | 'LOSS' | 'FLAT' | 'SL' | 'OPEN'
     pnlPct:   +pnlPct.toFixed(2),
-    _exitIdx: exitIdx, // internal — lets backtestReversal() block re-entry until this trade closes
+    _exitIdx: exitIdx, // internal — lets backtestPullback() block re-entry until this trade closes
   };
 }
 
@@ -5546,19 +5583,39 @@ async function runBacktestSilent() {
   const params      = readCurrentParams();
   const { from, to } = readBacktestDates();
 
+  // Pullback's weekly swing structure (weeklyTrendAsOf) needs 2 confirmed
+  // swing highs AND 2 confirmed swing lows before it can classify a trend —
+  // each swing needs `pivotBars` weeks confirmed on both sides. Feeding it
+  // only 1 day of buffer before `from` (fine for Gap/Momentum, which just
+  // need the prior day's close) means it has to "warm up" for months inside
+  // the visible range before generating a single valid signal. Since results
+  // are filtered to [from, to] below regardless, it's safe to hand Pullback
+  // all available prior history instead, so trend classification is already
+  // valid right at `from`.
+  const sliceForBacktest = (ohlcFull) => {
+    if (_strategy === 'pullback') return ohlcFull.filter(c => c.date <= to);
+    const firstIdx = ohlcFull.findIndex(c => c.date >= from);
+    const startIdx = Math.max(0, firstIdx - 1);
+    return ohlcFull.slice(startIdx).filter(c => c.date <= to);
+  };
+
   let localTrades = [];
+  let openPositionsThisRun = [];
   for (let i = 0; i < syms.length; i++) {
     const sym = syms[i];
     if (i % 20 === 0) await new Promise(r => setTimeout(r, 0)); // keep UI responsive
     let ohlcFull = _loadedOHLC[sym];
     _loadedOHLC[sym] = ohlcFull = ohlcFull.filter(c => isValidTradingDay(c.date));
-    const firstIdx = ohlcFull.findIndex(c => c.date >= from);
-    const startIdx = Math.max(0, firstIdx - 1);
-    const ohlc = ohlcFull.slice(startIdx).filter(c => c.date <= to);
+    const ohlc = sliceForBacktest(ohlcFull);
     if (ohlc.length < 5) continue;
     const trades = engine(ohlc, sym, params);
-    localTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'SKIP'));
+    const inRange = trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'SKIP');
+    // OPEN = still-live position as of the latest loaded date, not a resolved
+    // WIN/LOSS/SL — keep it out of historical stats, track separately.
+    localTrades.push(...inRange.filter(t => t.outcome !== 'OPEN'));
+    if (_strategy === 'pullback') openPositionsThisRun.push(...inRange.filter(t => t.outcome === 'OPEN'));
   }
+  if (_strategy === 'pullback') _pullbackOpenPositions = openPositionsThisRun;
 
   if (!isIntraday) {
     if (_direction === 'long')  localTrades = localTrades.filter(t => t.side === 'LONG');
@@ -5571,49 +5628,57 @@ async function runBacktestSilent() {
   for (const sym of syms) {
     const ohlcFull = _loadedOHLC[sym];
     if (!ohlcFull) continue;
-    const firstIdx = ohlcFull.findIndex(c => c.date >= from);
-    const startIdx = Math.max(0, firstIdx - 1);
-    const ohlc = ohlcFull.slice(startIdx).filter(c => c.date <= to);
+    const ohlc = sliceForBacktest(ohlcFull);
     if (ohlc.length < 5) continue;
     const trades = engine(ohlc, sym, wrParams);
-    wrTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
+    wrTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'OPEN'));
   }
 
   const maxN = +document.getElementById('maxSignalsDay').value || 0;
+  // WR/PnL quality filter — computed unconditionally (not just when maxN>0)
+  // so it can also be applied to open positions below, the same way it's
+  // already applied to resolved trades. Without this, a currently-open
+  // position could sit in Insights even though it would never have passed
+  // the Scanner's own Adj WR/Net PnL bar.
+  const statMap = {};
+  wrTrades.forEach(t => {
+    const key = t.sym+'_'+t.side;
+    if (!statMap[key]) statMap[key] = [];
+    statMap[key].push(t);
+  });
+  const scoreOf = (sym, side) => {
+    const { wilson, expectancy } = _scoreFromTrades(statMap[sym+'_'+side] || []);
+    return _getRankingMode() === 'expectancy' ? expectancy : wilson;
+  };
+  const wrThresh  = +document.getElementById('scanWrThreshold').value || 0;
+  const pnlThresh = +document.getElementById('scanPnlThreshold').value || 0;
+  const wilsonOf = (sym, side) => {
+    const trades = statMap[sym+'_'+side] || [];
+    const total = trades.length;
+    const wins  = trades.filter(t => t.outcome === 'WIN').length;
+    return total > 0 ? Math.round((wins + 1) / (total + 2) * 100) : 50;
+  };
+  const avgPnlOf = (sym, side) => {
+    const trades = statMap[sym+'_'+side] || [];
+    return trades.length > 0 ? trades.reduce((s,t) => s + t.pnlPct, 0) / trades.length : 0;
+  };
+  const passesWrPnl = (sym, side) =>
+    (wrThresh  <= 0 || wilsonOf(sym, side) >= wrThresh) &&
+    (pnlThresh === 0 || avgPnlOf(sym, side) >= pnlThresh);
+
+  if (_strategy === 'pullback') {
+    _pullbackOpenPositions = _pullbackOpenPositions.filter(t => passesWrPnl(t.sym, t.side));
+  }
+
   if (maxN > 0) {
-    const statMap = {};
-    wrTrades.forEach(t => {
-      const key = t.sym+'_'+t.side;
-      if (!statMap[key]) statMap[key] = [];
-      statMap[key].push(t);
-    });
-    const scoreOf = (sym, side) => {
-      const { wilson, expectancy } = _scoreFromTrades(statMap[sym+'_'+side] || []);
-      return _getRankingMode() === 'expectancy' ? expectancy : wilson;
-    };
-    const wrThresh  = +document.getElementById('scanWrThreshold').value || 0;
-    const pnlThresh = +document.getElementById('scanPnlThreshold').value || 0;
-    const wilsonOf = (sym, side) => {
-      const trades = statMap[sym+'_'+side] || [];
-      const total = trades.length;
-      const wins  = trades.filter(t => t.outcome === 'WIN').length;
-      return total > 0 ? Math.round((wins + 1) / (total + 2) * 100) : 50;
-    };
-    const avgPnlOf = (sym, side) => {
-      const trades = statMap[sym+'_'+side] || [];
-      return trades.length > 0 ? trades.reduce((s,t) => s + t.pnlPct, 0) / trades.length : 0;
-    };
     const byDay = {};
     // Group by tradeDate (actual entry day), not signalDate — for Overnight/Intraday
     // those are always the same trading day apart so this changes nothing, but for
-    // Reversal the confirmation window means different signal days can resolve to
+    // Pullback: the confirmation window means different signal days can resolve to
     // the same entry day, and the cap needs to catch that.
     localTrades.forEach(t => { (byDay[t.tradeDate]=byDay[t.tradeDate]||[]).push(t); });
     localTrades = Object.values(byDay).flatMap(day => {
-      let candidates = day.filter(t =>
-        (wrThresh  <= 0 || wilsonOf(t.sym, t.side) >= wrThresh) &&
-        (pnlThresh === 0 || avgPnlOf(t.sym, t.side) >= pnlThresh)
-      );
+      let candidates = day.filter(t => passesWrPnl(t.sym, t.side));
       return candidates.sort((a,b) => {
         const sd = scoreOf(b.sym,b.side) - scoreOf(a.sym,a.side);
         return Math.abs(sd) > 0.0001 ? sd : Math.abs(b.gapPct)-Math.abs(a.gapPct);
@@ -5743,7 +5808,7 @@ async function runBacktest() {
     };
     const byDay = {};
     // Group by tradeDate (actual entry day), not signalDate — see runBacktestSilent()
-    // for why this matters once signal day and entry day can differ (Reversal).
+    // for why this matters once signal day and entry day can differ (Pullback).
     localTrades.forEach(t => { (byDay[t.tradeDate] = byDay[t.tradeDate] || []).push(t); });
     localTrades = Object.values(byDay).flatMap(dayTrades => {
       // Filter by WR + PnL threshold — same as scanner
@@ -5899,8 +5964,8 @@ function _wrPnlDefaultsFor(s) {
       const d    = raw ? { ...base, ...JSON.parse(raw) } : base;
       return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
     }
-    const raw = localStorage.getItem('TE_REVERSAL_DEFAULTS');
-    const d = raw ? { ...REVERSAL_DEFAULTS, ...JSON.parse(raw) } : REVERSAL_DEFAULTS;
+    const raw = localStorage.getItem('TE_PULLBACK_DEFAULTS');
+    const d = raw ? { ...PULLBACK_DEFAULTS, ...JSON.parse(raw) } : PULLBACK_DEFAULTS;
     return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
   } catch(e) {
     console.warn('[_wrPnlDefaultsFor] parse error', e);
@@ -5911,7 +5976,7 @@ function _wrPnlDefaultsFor(s) {
 function setStrategy(s) {
   document.getElementById('stOvernightBtn').classList.toggle('active', s === 'overnight');
   document.getElementById('stIntradayBtn').classList.toggle('active', s === 'intraday');
-  document.getElementById('stReversalBtn').classList.toggle('active', s === 'reversal');
+  document.getElementById('stPullbackBtn').classList.toggle('active', s === 'pullback');
   if (s === _strategy) return; // no change, no need to clear
   _strategy = s;
   const { wr: wrDefault, pnl: pnlDefault, maxDay: maxDayDefault } = _wrPnlDefaultsFor(s);
@@ -5920,7 +5985,7 @@ function setStrategy(s) {
   if (maxDayDefault != null) document.getElementById('maxSignalsDay').value = maxDayDefault;
   document.getElementById('overnightParams').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('intradayParams').style.display  = s === 'intraday'  ? '' : 'none';
-  document.getElementById('reversalParams').style.display  = s === 'reversal'  ? '' : 'none';
+  document.getElementById('pullbackParams').style.display  = s === 'pullback'  ? '' : 'none';
   const idDesc = document.getElementById('idStratDesc');
   const onDesc = document.getElementById('onStratDesc');
   if (idDesc) idDesc.style.display = s === 'intraday'  ? '' : 'none';
@@ -5936,7 +6001,7 @@ function setStrategy(s) {
   if (sd) {
     sd.textContent = s === 'overnight' ? 'Scan any date for signals · Uses current backtest parameters'
       : s === 'intraday' ? 'Scan any date for signals · Uses current intraday parameters'
-      : 'Scan any date for confirmed reversals · Uses current reversal parameters';
+      : 'Scan any date for confirmed pullbacks · Uses current pullback parameters';
   }
   // Sync date pickers from Overnight's — same convention already used for Intraday
   if (s !== 'overnight') {
@@ -5955,7 +6020,7 @@ function setStrategy(s) {
     // Sync description to current entry type selection
     updateIntradayStratDesc();
   } else {
-    // Overnight + Reversal: both direction, unlocked
+    // Overnight + Pullback: both direction, unlocked
     setDirection('both');
     _lockDirection(false);
     // Default ranking: Expectancy
@@ -5964,7 +6029,7 @@ function setStrategy(s) {
   // Update config header badge
   const badge = document.getElementById('activeStratBadge');
   if (badge) {
-    badge.textContent = s === 'overnight' ? '🌙 Overnight Gap' : s === 'intraday' ? '⚡ Intraday Momentum' : '↩️ Reversal';
+    badge.textContent = s === 'overnight' ? '🌙 Overnight Gap' : s === 'intraday' ? '⚡ Intraday Momentum' : '↩️ Pullback';
     badge.style.background = s === 'overnight' ? 'var(--accent)' : s === 'intraday' ? '#7c5cfc' : '#2b8a6e';
   }
   allTrades = [];
@@ -6087,9 +6152,9 @@ const INTRADAY_DEFAULTS_D1_CLOSE = {
 };
 // Convenience alias — always points to D2 Open defaults (used by legacy callers)
 const INTRADAY_DEFAULTS = INTRADAY_DEFAULTS_D2_OPEN;
-const REVERSAL_DEFAULTS = {
-  rvLookbackDays: 15, rvDropPct: 6, rvConfirmDays: 3, rvTpPct: 8, rvHoldDays: 20, rvPivotBars: 2,
-  maxSignalsDay: 5, wrThreshold: 60, pnlThreshold: 2, capitalPerTrade: 1000000,
+const PULLBACK_DEFAULTS = {
+  pbLookbackDays: 15, pbDropPct: 6, pbConfirmDays: 3, pbTpPct: 8, pbHoldDays: 5, pbPivotBars: 2,
+  maxSignalsDay: 3, wrThreshold: 60, pnlThreshold: 2, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
 };
 
@@ -6155,14 +6220,14 @@ function readIntradayParams() {
   };
 }
 
-function readReversalParams() {
+function readPullbackParams() {
   return {
-    rvLookbackDays: +document.getElementById('rvLookbackDays').value || 10,
-    rvDropPct:      +document.getElementById('rvDropPct').value      || 5,
-    rvConfirmDays:  +document.getElementById('rvConfirmDays').value  || 2,
-    rvTpPct:        +document.getElementById('rvTpPct').value        || 5,
-    rvHoldDays:     +document.getElementById('rvHoldDays').value     || 15,
-    rvPivotBars:    +document.getElementById('rvPivotBars').value    || 2,
+    pbLookbackDays: +document.getElementById('pbLookbackDays').value || 10,
+    pbDropPct:      +document.getElementById('pbDropPct').value      || 5,
+    pbConfirmDays:  +document.getElementById('pbConfirmDays').value  || 2,
+    pbTpPct:        +document.getElementById('pbTpPct').value        || 5,
+    pbHoldDays:     +document.getElementById('pbHoldDays').value     || 15,
+    pbPivotBars:    +document.getElementById('pbPivotBars').value    || 2,
     direction:       _direction,
   };
 }
@@ -6172,9 +6237,9 @@ function readReversalParams() {
 // (instead of a binary ternary) is what keeps a 3rd strategy from silently
 // falling through to the wrong branch, the same bug class we hit once already
 // with the tab-button active-class logic.
-const STRATEGY_ENGINES = { overnight: (...a) => backtest(...a), intraday: (...a) => backtestIntraday(...a), reversal: (...a) => backtestReversal(...a) };
-const STRATEGY_DATE_IDS = { overnight: { from: 'fromDate', to: 'toDate' }, intraday: { from: 'idFromDate', to: 'idToDate' }, reversal: { from: 'rvFromDate', to: 'rvToDate' } };
-const STRATEGY_PARAM_READERS = { overnight: readOvernightParams, intraday: readIntradayParams, reversal: readReversalParams };
+const STRATEGY_ENGINES = { overnight: (...a) => backtest(...a), intraday: (...a) => backtestIntraday(...a), pullback: (...a) => backtestPullback(...a) };
+const STRATEGY_DATE_IDS = { overnight: { from: 'fromDate', to: 'toDate' }, intraday: { from: 'idFromDate', to: 'idToDate' }, pullback: { from: 'pbFromDate', to: 'pbToDate' } };
+const STRATEGY_PARAM_READERS = { overnight: readOvernightParams, intraday: readIntradayParams, pullback: readPullbackParams };
 
 function readBacktestDates() {
   const ids = STRATEGY_DATE_IDS[_strategy] || STRATEGY_DATE_IDS.overnight;
@@ -6241,23 +6306,23 @@ function loadSavedDefaults() {
     } catch(e) { console.warn('[loadSavedDefaults] intraday parse error', e); }
   }
 
-  // Reversal — apply saved if exists
-  const rvRaw = localStorage.getItem('TE_REVERSAL_DEFAULTS');
-  if (rvRaw) {
+  // Pullback — apply saved if exists
+  const pbRaw = localStorage.getItem('TE_PULLBACK_DEFAULTS');
+  if (pbRaw) {
     try {
-      const d = { ...REVERSAL_DEFAULTS, ...JSON.parse(rvRaw) };
-      document.getElementById('rvLookbackDays').value = d.rvLookbackDays;
-      document.getElementById('rvDropPct').value      = d.rvDropPct;
-      document.getElementById('rvConfirmDays').value  = d.rvConfirmDays;
-      document.getElementById('rvTpPct').value        = d.rvTpPct;
-      document.getElementById('rvHoldDays').value     = d.rvHoldDays;
-      document.getElementById('rvPivotBars').value    = d.rvPivotBars;
+      const d = { ...PULLBACK_DEFAULTS, ...JSON.parse(pbRaw) };
+      document.getElementById('pbLookbackDays').value = d.pbLookbackDays;
+      document.getElementById('pbDropPct').value      = d.pbDropPct;
+      document.getElementById('pbConfirmDays').value  = d.pbConfirmDays;
+      document.getElementById('pbTpPct').value        = d.pbTpPct;
+      document.getElementById('pbHoldDays').value     = d.pbHoldDays;
+      document.getElementById('pbPivotBars').value    = d.pbPivotBars;
       document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
       if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
       if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
       if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
       if (d.rankingMode)    document.getElementById('rankingMode').value      = d.rankingMode;
-    } catch(e) { console.warn('[loadSavedDefaults] reversal parse error', e); }
+    } catch(e) { console.warn('[loadSavedDefaults] pullback parse error', e); }
   }
 
   // The three blocks above all write to the same shared scanWrThreshold/
@@ -6318,14 +6383,14 @@ function saveStrategyDefaults() {
     const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
     localStorage.setItem(key, JSON.stringify(saved));
     _showSaveToast('Intraday Momentum defaults saved ✓');
-  } else if (_strategy === 'reversal') {
+  } else if (_strategy === 'pullback') {
     const saved = {
-      rvLookbackDays: +document.getElementById('rvLookbackDays').value,
-      rvDropPct:      +document.getElementById('rvDropPct').value,
-      rvConfirmDays:  +document.getElementById('rvConfirmDays').value,
-      rvTpPct:        +document.getElementById('rvTpPct').value,
-      rvHoldDays:     +document.getElementById('rvHoldDays').value,
-      rvPivotBars:    +document.getElementById('rvPivotBars').value,
+      pbLookbackDays: +document.getElementById('pbLookbackDays').value,
+      pbDropPct:      +document.getElementById('pbDropPct').value,
+      pbConfirmDays:  +document.getElementById('pbConfirmDays').value,
+      pbTpPct:        +document.getElementById('pbTpPct').value,
+      pbHoldDays:     +document.getElementById('pbHoldDays').value,
+      pbPivotBars:    +document.getElementById('pbPivotBars').value,
       maxSignalsDay:  +document.getElementById('maxSignalsDay').value,
       wrThreshold:    +document.getElementById('scanWrThreshold').value,
       pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
@@ -6333,8 +6398,23 @@ function saveStrategyDefaults() {
       rankingMode:     document.getElementById('rankingMode').value,
       direction:       _direction,
     };
-    localStorage.setItem('TE_REVERSAL_DEFAULTS', JSON.stringify(saved));
-    _showSaveToast('Reversal defaults saved ✓');
+    localStorage.setItem('TE_PULLBACK_DEFAULTS', JSON.stringify(saved));
+    _showSaveToast('Pullback defaults saved ✓');
+  }
+
+  // Re-run the backtest for the current strategy so displayed results
+  // reflect the settings just saved, rather than staying stale until the
+  // user manually re-scans or switches strategies.
+  if (getAllLoadedSymbols().length > 0) {
+    runBacktestSilent().then(() => {
+      if (!allTrades.length) return;
+      buildResults([]);
+      document.getElementById('results').style.display = 'block';
+      document.getElementById('emptyState').style.display = 'none';
+      const tradedSyms = new Set(allTrades.map(t => t.sym)).size;
+      setProgress(100, `Done. ${allTrades.length} trades across ${tradedSyms} symbols.`);
+      refreshScannerGate();
+    });
   }
 }
 
@@ -6404,15 +6484,15 @@ function resetStrategyDefaults() {
     _lockDirection(true);
     _lastAppliedEntryType = null;
     updateIntradayStratDesc();
-  } else if (_strategy === 'reversal') {
-    const savedRaw = localStorage.getItem('TE_REVERSAL_DEFAULTS');
-    const d = savedRaw ? { ...REVERSAL_DEFAULTS, ...JSON.parse(savedRaw) } : REVERSAL_DEFAULTS;
-    document.getElementById('rvLookbackDays').value = d.rvLookbackDays;
-    document.getElementById('rvDropPct').value      = d.rvDropPct;
-    document.getElementById('rvConfirmDays').value  = d.rvConfirmDays;
-    document.getElementById('rvTpPct').value        = d.rvTpPct;
-    document.getElementById('rvHoldDays').value     = d.rvHoldDays;
-    document.getElementById('rvPivotBars').value    = d.rvPivotBars;
+  } else if (_strategy === 'pullback') {
+    const savedRaw = localStorage.getItem('TE_PULLBACK_DEFAULTS');
+    const d = savedRaw ? { ...PULLBACK_DEFAULTS, ...JSON.parse(savedRaw) } : PULLBACK_DEFAULTS;
+    document.getElementById('pbLookbackDays').value = d.pbLookbackDays;
+    document.getElementById('pbDropPct').value      = d.pbDropPct;
+    document.getElementById('pbConfirmDays').value  = d.pbConfirmDays;
+    document.getElementById('pbTpPct').value        = d.pbTpPct;
+    document.getElementById('pbHoldDays').value     = d.pbHoldDays;
+    document.getElementById('pbPivotBars').value    = d.pbPivotBars;
     document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
     if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
     if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
@@ -6488,24 +6568,28 @@ function saveMobDefaults() {
     const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
     localStorage.setItem(key, JSON.stringify(saved));
     _showSaveToast('Intraday Momentum defaults saved ✓');
-  } else if (_mobStrategy === 'reversal') {
+  } else if (_mobStrategy === 'pullback') {
     const saved = {
-      rvLookbackDays: +document.getElementById('mobRvLookbackDays').value,
-      rvDropPct:      +document.getElementById('mobRvDropPct').value,
-      rvConfirmDays:  +document.getElementById('mobRvConfirmDays').value,
-      rvTpPct:        +document.getElementById('mobRvTpPct').value,
-      rvHoldDays:     +document.getElementById('mobRvHoldDays').value,
-      rvPivotBars:    +document.getElementById('mobRvPivotBars').value,
-      maxSignalsDay:  +document.getElementById('mobRvMaxDay').value,
+      pbLookbackDays: +document.getElementById('mobPbLookbackDays').value,
+      pbDropPct:      +document.getElementById('mobPbDropPct').value,
+      pbConfirmDays:  +document.getElementById('mobPbConfirmDays').value,
+      pbTpPct:        +document.getElementById('mobPbTpPct').value,
+      pbHoldDays:     +document.getElementById('mobPbHoldDays').value,
+      pbPivotBars:    +document.getElementById('mobPbPivotBars').value,
+      maxSignalsDay:  +document.getElementById('mobPbMaxDay').value,
       wrThreshold:    +document.getElementById('mobWrInput')?.value  || 60,
       pnlThreshold:   +document.getElementById('mobPnlInput')?.value || 2,
       capitalPerTrade: capital,
       rankingMode:    document.getElementById('rankingMode')?.value || 'expectancy',
       direction:      _mobDir || 'both',
     };
-    localStorage.setItem('TE_REVERSAL_DEFAULTS', JSON.stringify(saved));
-    _showSaveToast('Reversal defaults saved ✓');
+    localStorage.setItem('TE_PULLBACK_DEFAULTS', JSON.stringify(saved));
+    _showSaveToast('Pullback defaults saved ✓');
   }
+
+  // Re-run the backtest for the current strategy so Stats/Summary numbers
+  // reflect the settings just saved, rather than staying stale.
+  _rerunMobBacktestAfterSettingsChange();
 }
 
 function resetMobDefaults() {
@@ -6547,16 +6631,16 @@ function resetMobDefaults() {
     if (pnlEl) pnlEl.value = d.pnlThreshold || 0.5;
     _lastAppliedEntryType = null;
     updateIntradayStratDesc();
-  } else if (_mobStrategy === 'reversal') {
-    const savedRaw = localStorage.getItem('TE_REVERSAL_DEFAULTS');
-    const d = savedRaw ? { ...REVERSAL_DEFAULTS, ...JSON.parse(savedRaw) } : REVERSAL_DEFAULTS;
-    document.getElementById('mobRvLookbackDays').value = d.rvLookbackDays;
-    document.getElementById('mobRvDropPct').value      = d.rvDropPct;
-    document.getElementById('mobRvConfirmDays').value  = d.rvConfirmDays;
-    document.getElementById('mobRvTpPct').value        = d.rvTpPct;
-    document.getElementById('mobRvHoldDays').value     = d.rvHoldDays;
-    document.getElementById('mobRvPivotBars').value    = d.rvPivotBars;
-    document.getElementById('mobRvMaxDay').value       = d.maxSignalsDay;
+  } else if (_mobStrategy === 'pullback') {
+    const savedRaw = localStorage.getItem('TE_PULLBACK_DEFAULTS');
+    const d = savedRaw ? { ...PULLBACK_DEFAULTS, ...JSON.parse(savedRaw) } : PULLBACK_DEFAULTS;
+    document.getElementById('mobPbLookbackDays').value = d.pbLookbackDays;
+    document.getElementById('mobPbDropPct').value      = d.pbDropPct;
+    document.getElementById('mobPbConfirmDays').value  = d.pbConfirmDays;
+    document.getElementById('mobPbTpPct').value        = d.pbTpPct;
+    document.getElementById('mobPbHoldDays').value     = d.pbHoldDays;
+    document.getElementById('mobPbPivotBars').value    = d.pbPivotBars;
+    document.getElementById('mobPbMaxDay').value       = d.maxSignalsDay;
     if (wrEl)  wrEl.value  = d.wrThreshold  || 60;
     if (pnlEl) pnlEl.value = d.pnlThreshold || 2;
   }
@@ -6675,8 +6759,8 @@ async function runScanner() {
     runScannerIntraday(scanDate, syms);
     return;
   }
-  if (_strategy === 'reversal') {
-    runScannerReversal(scanDate, syms);
+  if (_strategy === 'pullback') {
+    runScannerPullback(scanDate, syms);
     return;
   }
 
@@ -7273,16 +7357,16 @@ function renderScannerIntraday(scanDate, longs, shorts, params) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REVERSAL SCANNER
-// Flags symbols where `scanDate` is itself the confirmation day for a reversal
+// PULLBACK SCANNER
+// Flags symbols where `scanDate` is itself the confirmation day for a pullback
 // setup — "confirmed today, entry expected at next session's open". Reuses the
-// same _reversalTriggerAt()/weeklyTrendAsOf() primitives as backtestReversal()
+// same _pullbackTriggerAt()/weeklyTrendAsOf() primitives as backtestPullback()
 // so the scanner and backtest can never silently disagree on what's a signal.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Checks whether `idx` (scanDate's index in `ohlc`) is a confirmation day.
 // Returns { side, triggerDate, sl, movePct, confirmClose } or null.
-function _detectReversalAtDate(ohlc, idx, swings, params) {
+function _detectPullbackAtDate(ohlc, idx, swings, params) {
   if (idx < 1) return null;
   const trend = weeklyTrendAsOf(swings, ohlc[idx].date);
   if (!trend) return null;
@@ -7296,21 +7380,21 @@ function _detectReversalAtDate(ohlc, idx, swings, params) {
   // Look backward for the most recent trigger day that hasn't already been
   // confirmed by an earlier day within the window — otherwise today's up/down
   // move would get misattributed to a trigger that already resolved.
-  for (let t = idx - 1; t >= Math.max(1, idx - params.rvConfirmDays); t--) {
+  for (let t = idx - 1; t >= Math.max(1, idx - params.pbConfirmDays); t--) {
     let alreadyConfirmedEarlier = false;
     for (let c = t + 1; c < idx; c++) {
       const isConfirm = side === 'LONG' ? ohlc[c].close > ohlc[c-1].close : ohlc[c].close < ohlc[c-1].close;
       if (isConfirm) { alreadyConfirmedEarlier = true; break; }
     }
     if (alreadyConfirmedEarlier) continue;
-    const trig = _reversalTriggerAt(ohlc, t, side, params);
+    const trig = _pullbackTriggerAt(ohlc, t, side, params);
     if (trig) return { side, triggerDate: ohlc[t].date, sl: trig.sl, movePct: trig.movePct, confirmClose: ohlc[idx].close };
   }
   return null;
 }
 
-function runScannerReversal(scanDate, syms) {
-  const params = readReversalParams();
+function runScannerPullback(scanDate, syms) {
+  const params = readPullbackParams();
   const wrThreshold  = +document.getElementById('scanWrThreshold').value || 0;
   const pnlThreshold = +document.getElementById('scanPnlThreshold').value || 0;
 
@@ -7318,21 +7402,21 @@ function runScannerReversal(scanDate, syms) {
 
   syms.forEach(sym => {
     const ohlc = _loadedOHLC[sym];
-    if (!ohlc || ohlc.length < params.rvLookbackDays + 5) return;
+    if (!ohlc || ohlc.length < params.pbLookbackDays + 5) return;
 
     const idx = ohlc.findIndex(c => c.date === scanDate);
     if (idx < 1) return;
 
     // Causal: only weeks up to scanDate feed the trend check.
     const weeklyBars = _toWeeklyOHLC(ohlc.slice(0, idx + 1));
-    const swings     = _weeklySwingPoints(weeklyBars, params.rvPivotBars);
-    const sig = _detectReversalAtDate(ohlc, idx, swings, params);
+    const swings     = _weeklySwingPoints(weeklyBars, params.pbPivotBars);
+    const sig = _detectPullbackAtDate(ohlc, idx, swings, params);
     if (!sig) return;
 
     if (_direction === 'long'  && sig.side !== 'LONG')  return;
     if (_direction === 'short' && sig.side !== 'SHORT') return;
 
-    const tpPct   = params.rvTpPct / 100;
+    const tpPct   = params.pbTpPct / 100;
     const tpLevel = sig.side === 'LONG'
       ? sig.confirmClose * (1 + tpPct)
       : sig.confirmClose * (1 - tpPct);
@@ -7380,14 +7464,14 @@ function runScannerReversal(scanDate, syms) {
     shortsOut = shorts.filter(s => s._passesFilter);
   }
 
-  renderScannerReversal(scanDate, longsOut, shortsOut, params);
+  renderScannerPullback(scanDate, longsOut, shortsOut, params);
 
   document.getElementById('scanSpinner').classList.remove('show');
   document.getElementById('scanBtnLabel').textContent = '▶ Scan';
   document.getElementById('scanBtn').disabled = false;
 }
 
-function renderScannerReversal(scanDate, longs, shorts, params) {
+function renderScannerPullback(scanDate, longs, shorts, params) {
   const dt      = new Date(scanDate + 'T00:00:00');
   const fmtDate = dt.toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'short', year:'numeric' });
   const total   = longs.length + shorts.length;
@@ -7401,7 +7485,7 @@ function renderScannerReversal(scanDate, longs, shorts, params) {
     document.getElementById('scannerBody').innerHTML = `
       <div class="scanner-empty">
         <div style="font-size:28px;margin-bottom:8px;">🔍</div>
-        No Reversal signals confirmed on ${fmtDate}.<br>
+        No Pullback signals confirmed on ${fmtDate}.<br>
         <span style="font-size:11px;margin-top:4px;display:inline-block;">
           Try a lower Move % threshold or a longer Lookback window.
         </span>
@@ -7447,7 +7531,7 @@ function renderScannerReversal(scanDate, longs, shorts, params) {
             <span class="sc-val sl">₹${s.slLevel.toFixed(2)}</span>
           </div>
           <div class="sc-field">
-            <span class="sc-label">TP (${params.rvTpPct}%)</span>
+            <span class="sc-label">TP (${params.pbTpPct}%)</span>
             <span class="sc-val ${isBull ? 'tp' : 'tp-short'}">~₹${s.tpLevel.toFixed(2)}</span>
           </div>
           <div class="sc-field">
@@ -7490,7 +7574,7 @@ function renderScannerReversal(scanDate, longs, shorts, params) {
   };
 
   const noBacktestNote = !hasBacktest
-    ? `<div class="scanner-no-bt-note">💡 Run <strong>Reversal</strong> backtest first to see historical win rates.</div>`
+    ? `<div class="scanner-no-bt-note">💡 Run <strong>Pullback</strong> backtest first to see historical win rates.</div>`
     : '';
 
   document.getElementById('scannerBody').innerHTML = `
@@ -7506,7 +7590,7 @@ function renderScannerReversal(scanDate, longs, shorts, params) {
         <span class="mini-badge gap-down">▼ ${shorts.length} Short</span>
         <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
           background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--border);">
-          Move ≥${params.rvDropPct}% · TP ${params.rvTpPct}% · Confirm ≤${params.rvConfirmDays}d
+          Move ≥${params.pbDropPct}% · TP ${params.pbTpPct}% · Confirm ≤${params.pbConfirmDays}d
         </span>
       </div>
     </div>
@@ -7914,6 +7998,25 @@ function buildResults(errors) {
   if (sweepTab) sweepTab.style.display = (_strategy === 'intraday' || _strategy === 'overnight') ? '' : 'none';
   if (_strategy === 'intraday') buildIntradaySweep();
   if (_strategy === 'overnight') buildOvernightSweep();
+  // Populate Insights tab (all strategies) — reuses the same builder as mobile.
+  const insightsContent = document.getElementById('insightsContent');
+  if (insightsContent && allTrades.length > 0) {
+    const fmtPctIns   = v => (v>=0?'+':'') + v.toFixed(2) + '%';
+    const fmtPriceIns = v => '₹' + fmtStockPrice(v);
+    insightsContent.innerHTML = _buildMobInsights(allTrades, fmtPctIns, fmtPriceIns, {
+      wins: _tradeStats.nWins, losses: _tradeStats.nLoss, sls: _tradeStats.nSL,
+      wr: _tradeStats.winRate, avgWin: _tradeStats.avgWin, avgLoss: _tradeStats.avgLoss,
+      expectancy: _tradeStats.expectancy,
+    });
+  }
+  // Show/populate Positions tab (Pullback only) — reuses the same computation
+  // and rendering already built for the mobile Insights tab.
+  const positionsTab = document.getElementById('positionsTab');
+  if (positionsTab) positionsTab.style.display = _strategy === 'pullback' ? '' : 'none';
+  if (_strategy === 'pullback') {
+    const positionsContent = document.getElementById('positionsContent');
+    if (positionsContent) positionsContent.innerHTML = _buildPullbackPositionInsights(allTrades);
+  }
   // Initialise day-wise date range pickers to match backtest params
   const from = _strategy === 'intraday'
     ? document.getElementById('idFromDate').value
@@ -8219,11 +8322,11 @@ function buildDayCards() {
   // Overnight/Intraday: group by SIGNAL DATE (Day1 — the day you see the gap and
   // enter at close); tradeDate (Day2) is the very next trading day either way, so
   // grouping by either key produces the same buckets.
-  // Reversal: the confirmation window means tradeDate can land several days after
+  // Pullback: the confirmation window means tradeDate can land several days after
   // signalDate, so two different signal days can resolve to the same entry day —
   // group by tradeDate instead, otherwise this view can show more signals under one
   // header than Max/day actually allows to enter on any single day.
-  const groupKey = _strategy === 'reversal' ? 'tradeDate' : 'signalDate';
+  const groupKey = _strategy === 'pullback' ? 'tradeDate' : 'signalDate';
   allTrades.forEach(t => {
     const key = t[groupKey];
     if (!byDay[key]) byDay[key] = { date: key, longs: [], shorts: [] };
@@ -8280,13 +8383,13 @@ function renderDayCards(days, showCumulative = true) {
     const shortCount  = day.shorts.length;
     const dayId = 'day_' + idx;
 
-    // Reversal groups by tradeDate (see buildDayCards), so day.date already IS the
+    // Pullback groups by tradeDate (see buildDayCards), so day.date already IS the
     // trade date — show the signal date instead of repeating it. Overnight/Intraday
     // still group by signalDate, so keep pointing forward to the trade date.
-    const isReversalGrouping = _strategy === 'reversal';
-    const otherDay = allDayTrades[0]?.[isReversalGrouping ? 'signalDate' : 'tradeDate'];
+    const isPullbackGrouping = _strategy === 'pullback';
+    const otherDay = allDayTrades[0]?.[isPullbackGrouping ? 'signalDate' : 'tradeDate'];
     const otherDt  = otherDay ? new Date(otherDay+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
-    const otherLabel = isReversalGrouping ? `← Signal ${otherDt}` : `→ Trade ${otherDt}`;
+    const otherLabel = isPullbackGrouping ? `← Signal ${otherDt}` : `→ Trade ${otherDt}`;
 
     const dirParts = [];
     if (longCount)  dirParts.push(`<span class="mini-badge gap-up">▲ ${longCount} Long</span>`);
@@ -8353,9 +8456,9 @@ function renderUnifiedTable(trades) {
       <th style="padding-left:20px;">Dir</th>
       <th>Symbol</th>
       <th>Gap%</th>
-      <th>Entry<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'reversal' ? 'Next Open' : 'D2 Open'}</span></th>
-      <th>SL / TP<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'reversal' ? 'structural / fixed %' : 'levels'}</span></th>
-      <th>Exit<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'reversal' ? 'SL / TP / timeout' : 'D2 Close / SL / TP'}</span></th>
+      <th>Entry<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'pullback' ? 'Next Open' : 'D2 Open'}</span></th>
+      <th>SL / TP<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'pullback' ? 'structural / fixed %' : 'levels'}</span></th>
+      <th>Exit<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'pullback' ? 'SL / TP / timeout' : 'D2 Close / SL / TP'}</span></th>
       <th>PnL%</th>
       <th>₹ PnL<br><span style="font-weight:400;font-size:9px;color:var(--text3);">₹${fmtRupee(capital)}/trade</span></th>
       <th style="padding-right:20px;">Result</th>
@@ -8373,7 +8476,7 @@ function renderUnifiedTable(trades) {
       <td style="color:${t.side==='LONG'?'var(--bull)':'var(--bear)'};">${t.side==='LONG'?'+':''}${t.gapPct}%</td>
       <td>₹${t.entry.toFixed(2)}</td>
       <td style="color:${t.slHit?'var(--bear)':'var(--text2)'};font-weight:${t.slHit?'600':'400'};">
-        ${_strategy === 'reversal'
+        ${_strategy === 'pullback'
           ? `<span style="color:var(--bear);">SL ₹${t.sl.toFixed(2)}</span>${t.slHit?' ⚡':''}<br><span style="color:var(--bull);">TP ₹${t.tp.toFixed(2)}</span>`
           : `₹${t.nextOpen.toFixed(2)}${t.slHit?' ⚡':''}`}
       </td>
@@ -8504,14 +8607,14 @@ function renderSymbolFlatView(trades, matchedSyms) {
       <div class="day-body expanded">
         <table class="trade-table" style="width:100%;">
           <thead><tr>
-            <th style="padding-left:20px;">Signal Date<br><span style="font-weight:400;font-size:9px;">${_strategy === 'reversal' ? 'Trigger day' : 'D1 — Signal day'}</span></th>
-            <th>Trade Date<br><span style="font-weight:400;font-size:9px;">${_strategy === 'reversal' ? 'Entry day' : 'D2 — Outcome'}</span></th>
+            <th style="padding-left:20px;">Signal Date<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'Trigger day' : 'D1 — Signal day'}</span></th>
+            <th>Trade Date<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'Entry day' : 'D2 — Outcome'}</span></th>
             ${multiSym ? '<th>Symbol</th>' : ''}
             <th>Dir</th>
             <th>Gap%</th>
-            <th>Entry<br><span style="font-weight:400;font-size:9px;">${_strategy === 'reversal' ? 'Next Open' : 'D2 Open'}</span></th>
-            <th>SL / TP<br><span style="font-weight:400;font-size:9px;">${_strategy === 'reversal' ? 'structural / fixed %' : 'levels'}</span></th>
-            <th>Exit<br><span style="font-weight:400;font-size:9px;">${_strategy === 'reversal' ? 'SL / TP / timeout' : 'D2 Close / SL / TP'}</span></th>
+            <th>Entry<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'Next Open' : 'D2 Open'}</span></th>
+            <th>SL / TP<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'structural / fixed %' : 'levels'}</span></th>
+            <th>Exit<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'SL / TP / timeout' : 'D2 Close / SL / TP'}</span></th>
             <th>PnL%</th>
             <th style="padding-right:20px;">Result</th>
           </tr></thead>
@@ -8528,7 +8631,7 @@ function renderSymbolFlatView(trades, matchedSyms) {
               <td style="color:${t.side==='LONG'?'var(--bull)':'var(--bear)'};">${t.side==='LONG'?'+':''}${t.gapPct}%</td>
               <td>₹${t.entry.toFixed(2)}</td>
               <td style="color:${t.slHit?'var(--bear)':'var(--text2)'};font-weight:${t.slHit?'600':'400'};">
-                ${_strategy === 'reversal'
+                ${_strategy === 'pullback'
                   ? `<span style="color:var(--bear);">SL ₹${t.sl.toFixed(2)}</span>${t.slHit?' ⚡':''}<br><span style="color:var(--bull);">TP ₹${t.tp.toFixed(2)}</span>`
                   : `₹${t.nextOpen.toFixed(2)}${t.slHit?' ⚡':''}`}
               </td>
@@ -9273,8 +9376,8 @@ async function _loadFromDirectoryHandle(handle) {
     idbErr = e;
     console.error('[IDB] Save failed after CSV load:', e);
   }
-  _mobTradeCache = { overnight: null, intraday: null, reversal: null };
-  _mobAllTradesCache = { overnight: null, intraday: null, reversal: null };
+  _mobTradeCache = { overnight: null, intraday: null, pullback: null };
+  _mobAllTradesCache = { overnight: null, intraday: null, pullback: null };
   allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
   bar.style.width = '100%';
   updateDataStatusBar();
@@ -9391,8 +9494,8 @@ async function _handleCsvFiles(e) {
     console.error('[IDB] Save failed after CSV files load:', e);
   }
   // Invalidate Stats trade cache — new data loaded
-  _mobTradeCache = { overnight: null, intraday: null, reversal: null };
-  _mobAllTradesCache = { overnight: null, intraday: null, reversal: null };
+  _mobTradeCache = { overnight: null, intraday: null, pullback: null };
+  _mobAllTradesCache = { overnight: null, intraday: null, pullback: null };
   allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
   bar.style.width = '100%';
   updateDataStatusBar();
@@ -10117,6 +10220,10 @@ let _drillGapChart    = null;
 // buildVerdict, buildEquityCurve, buildSymbolTable.
 // ─────────────────────────────────────────────────────────────────────────────
 let _tradeStats = null;
+// Pullback-only: positions still open as of the latest loaded date from the
+// most recent backtest run (data ran out before Hold Days/TP/SL resolved).
+// Kept separate from allTrades so they never pollute win-rate/expectancy.
+let _pullbackOpenPositions = [];
 
 function computeTradeStats(trades) {
   // Exclude SKIP trades — they never executed, shouldn't affect stats
@@ -10423,7 +10530,7 @@ function openSymDrill(sym, tradesSource, sideFilter) {
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">Dir</th>
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">Gap%</th>
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">Entry</th>
-      <th style="position:sticky;top:0;background:var(--text);color:#fff;">${_strategy === 'reversal' ? 'SL / TP' : 'D2 Open'}</th>
+      <th style="position:sticky;top:0;background:var(--text);color:#fff;">${_strategy === 'pullback' ? 'SL / TP' : 'D2 Open'}</th>
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">Exit</th>
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">PnL%</th>
       <th style="padding:8px 12px;position:sticky;top:0;background:var(--text);color:#fff;">Result</th>
@@ -10435,7 +10542,7 @@ function openSymDrill(sym, tradesSource, sideFilter) {
       <td style="color:${t.side==='LONG'?'var(--bull)':'var(--bear)'};font-family:'DM Mono',monospace;font-size:12px;">${t.gapPct>0?'+':''}${t.gapPct}%</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;">₹${t.entry.toFixed(2)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;color:${t.slHit?'var(--bear)':'var(--text2)'};">
-        ${_strategy === 'reversal'
+        ${_strategy === 'pullback'
           ? `<span style="color:var(--bear);">₹${t.sl.toFixed(2)}</span>${t.slHit?' ⚡':''} / <span style="color:var(--bull);">₹${t.tp.toFixed(2)}</span>`
           : `₹${t.nextOpen.toFixed(2)}${t.slHit?' ⚡':''}`}
       </td>
@@ -10664,6 +10771,19 @@ renderWatchlist();
 <!-- Settings backdrop -->
 <div id="mobSettingsBackdrop" onclick="closeMobSettings()"></div>
 
+<!-- Monthly tab day-detail modal (mobile) — shows trades closed on a tapped day -->
+<div id="mobMonthDayModal" style="display:none;position:fixed;inset:0;z-index:1300;background:rgba(0,0,0,0.45);
+  align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeMobMonthDay()">
+  <div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-height:80vh;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;">
+    <div style="display:flex;justify-content:flex-end;padding:8px 10px 0;">
+      <button onclick="closeMobMonthDay()" style="background:none;border:none;font-size:18px;color:var(--text2);
+        cursor:pointer;padding:6px 10px;">✕</button>
+    </div>
+    <div id="mobMonthDayBody"></div>
+  </div>
+</div>
+
 <!-- Mobile App Shell -->
 <div id="mobileShell" style="display:none;">
 
@@ -10692,9 +10812,9 @@ renderWatchlist();
   <div id="mobScanBar">    <!-- Row 1: Strategy toggle + cache pill -->
     <div style="display:flex;align-items:center;padding:8px 12px 6px;border-bottom:1px solid var(--border);gap:8px;">
       <div id="mobStratToggle">
-        <button class="mob-strat-btn active" id="mobStOvernightBtn" onclick="mobSetStrategy('overnight')">🌙 Overnight Gap</button>
-        <button class="mob-strat-btn" id="mobStIntradayBtn" onclick="mobSetStrategy('intraday')">⚡ Intraday Momentum</button>
-        <button class="mob-strat-btn" id="mobStReversalBtn" onclick="mobSetStrategy('reversal')">↩️ Reversal</button>
+        <button class="mob-strat-btn active" id="mobStOvernightBtn" onclick="mobSetStrategy('overnight')">🌙 Gap</button>
+        <button class="mob-strat-btn" id="mobStIntradayBtn" onclick="mobSetStrategy('intraday')">⚡ Momentum</button>
+        <button class="mob-strat-btn" id="mobStPullbackBtn" onclick="mobSetStrategy('pullback')">↩️ Pullback</button>
       </div>
       <div style="flex:1;"></div>
       <!-- Cache status pill — moved here to free up Row 2 for date picker -->
@@ -10761,7 +10881,11 @@ renderWatchlist();
 
   <!-- Stats Tab content — sibling of mobScannerContent inside mobileShell flex -->
   <div id="mobTradesTab">
-    <div id="mobTradesTabHdr"></div>
+    <div style="display:flex;align-items:stretch;gap:8px;padding:8px 12px 0;">
+      <div id="mobTradesTabHdr" style="flex:1;min-width:0;"></div>
+      <button class="mob-settings-icon-btn" onclick="mobSetStrategy(_mobTradesStratTab); openMobSettings();" title="Scanner settings"
+        style="width:auto;height:auto;padding:0 16px;font-size:26px;flex-shrink:0;">⚙</button>
+    </div>
     <div id="mobTradesInner" style="flex:1;overflow-y:auto;min-height:0;padding:10px 12px 80px;-webkit-overflow-scrolling:touch;">
       <div id="mobTradesEmpty" style="display:flex;flex-direction:column;align-items:center;
         justify-content:center;padding:40px 24px;color:var(--text3);font-family:'DM Mono',monospace;
@@ -10867,7 +10991,7 @@ renderWatchlist();
 <!-- Settings slide-up panel -->
 <div id="mobSettingsPanel">
   <div id="mobSettingsPanelHdr">
-    <div class="mob-panel-title">Scanner Settings</div>
+    <div class="mob-panel-title" id="mobSettingsPanelTitle">Scanner Settings</div>
     <button onclick="closeMobSettings()">✕</button>
   </div>
   <div id="mobSettingsPanelBody">
@@ -10984,43 +11108,43 @@ renderWatchlist();
       </div>
     </div>
 
-    <div class="mob-settings-group" id="mobReversalSettings" style="display:none;">
-      <div class="mob-settings-group-title">Reversal</div>
+    <div class="mob-settings-group" id="mobPullbackSettings" style="display:none;">
+      <div class="mob-settings-group-title">Pullback</div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">From Date</div><div class="mob-settings-sub">Backtest start</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvFromDate" type="date" style="width:130px;"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbFromDate" type="date" style="width:130px;"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">To Date</div><div class="mob-settings-sub">Backtest end</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvToDate" type="date" style="width:130px;"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbToDate" type="date" style="width:130px;"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Move %</div><div class="mob-settings-sub">Pullback (Long) / rally (Short) trigger</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvDropPct" type="number" value="6" step="0.5" min="1" max="30"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbDropPct" type="number" value="6" step="0.5" min="1" max="30"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Lookback Days</div><div class="mob-settings-sub">Window for recent peak/trough</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvLookbackDays" type="number" value="15" step="1" min="3" max="60"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbLookbackDays" type="number" value="15" step="1" min="3" max="60"></div>
       </div>
       <div class="mob-settings-row">
-        <div><div class="mob-settings-label">Confirm Days</div><div class="mob-settings-sub">Days to wait for reversal close</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvConfirmDays" type="number" value="3" step="1" min="1" max="5"></div>
+        <div><div class="mob-settings-label">Confirm Days</div><div class="mob-settings-sub">Days to wait for confirming close</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbConfirmDays" type="number" value="3" step="1" min="1" max="5"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">TP %</div><div class="mob-settings-sub">From entry</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvTpPct" type="number" value="8" step="0.5" min="0.5" max="30"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbTpPct" type="number" value="8" step="0.5" min="0.5" max="30"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Hold Days</div><div class="mob-settings-sub">Max days to wait for TP/SL</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvHoldDays" type="number" value="20" step="1" min="1" max="60"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbHoldDays" type="number" value="5" step="1" min="1" max="60"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Pivot Weeks</div><div class="mob-settings-sub">Weekly swing-pivot width</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvPivotBars" type="number" value="2" step="1" min="1" max="6"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbPivotBars" type="number" value="2" step="1" min="1" max="6"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Max/day</div><div class="mob-settings-sub">Signals per day (0=∞)</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobRvMaxDay" type="number" value="5" step="1" min="0" placeholder="0=∞"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbMaxDay" type="number" value="3" step="1" min="0" placeholder="0=∞"></div>
       </div>
       <div style="padding:6px 2px 2px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">
         SL is structural, not a %: the trigger day's low (Long) or high (Short).
@@ -11183,24 +11307,24 @@ function updateMobDataBadge() {
     const toON   = document.getElementById('mobToDate');
     const fromID = document.getElementById('mobIdFromDate');
     const toID   = document.getElementById('mobIdToDate');
-    const fromRV = document.getElementById('mobRvFromDate');
-    const toRV   = document.getElementById('mobRvToDate');
+    const fromRV = document.getElementById('mobPbFromDate');
+    const toRV   = document.getElementById('mobPbToDate');
     if (fromON) { fromON.value = document.getElementById('fromDate').value || fromVal; }
     if (toON)   { toON.value   = document.getElementById('toDate').value   || maxDate; }
     if (fromID) { fromID.value = document.getElementById('idFromDate').value || fromVal; }
     if (toID)   { toID.value   = document.getElementById('idToDate').value   || maxDate; }
-    if (fromRV) { fromRV.value = document.getElementById('rvFromDate').value || fromVal; }
-    if (toRV)   { toRV.value   = document.getElementById('rvToDate').value   || maxDate; }
+    if (fromRV) { fromRV.value = document.getElementById('pbFromDate').value || fromVal; }
+    if (toRV)   { toRV.value   = document.getElementById('pbToDate').value   || maxDate; }
   }
 }
 
 // Cache scan results HTML per strategy — preserved across strategy switches
-const _mobScanCache = { overnight: null, intraday: null, reversal: null };
+const _mobScanCache = { overnight: null, intraday: null, pullback: null };
 
 function mobSetStrategy(s) {
   document.getElementById('mobStOvernightBtn').classList.toggle('active', s === 'overnight');
   document.getElementById('mobStIntradayBtn').classList.toggle('active', s === 'intraday');
-  document.getElementById('mobStReversalBtn').classList.toggle('active', s === 'reversal');
+  document.getElementById('mobStPullbackBtn').classList.toggle('active', s === 'pullback');
   if (s === _mobStrategy) return;
 
   // Save current results before switching
@@ -11220,8 +11344,8 @@ function mobSetStrategy(s) {
 
   document.getElementById('mobOvernightSettings').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('mobIntradaySettings').style.display  = s === 'intraday'  ? '' : 'none';
-  document.getElementById('mobReversalSettings').style.display  = s === 'reversal'  ? '' : 'none';
-  // Intraday defaults to Short — direction locked. Overnight + Reversal: both, unlocked.
+  document.getElementById('mobPullbackSettings').style.display  = s === 'pullback'  ? '' : 'none';
+  // Intraday defaults to Short — direction locked. Overnight + Pullback: both, unlocked.
   if (s === 'intraday') { mobSetDir('short'); _lockDirection(true); }
   else { mobSetDir('both'); _lockDirection(false); }
   // Set correct ranking default for each strategy
@@ -11231,7 +11355,7 @@ function mobSetStrategy(s) {
   const desc = document.getElementById('mobStratDesc');
   if (desc) {
     desc.textContent = s === 'intraday' ? 'D1 momentum · D2 open entry'
-      : s === 'reversal' ? 'Weekly HH/HL pullback · Enter next open · Structural SL'
+      : s === 'pullback' ? 'Weekly HH/HL pullback · Enter next open · Structural SL'
       : 'Gap continuation · D1 close entry';
   }
   // Update strategy note at bottom
@@ -11240,8 +11364,8 @@ function mobSetStrategy(s) {
   if (s === 'intraday') {
     if (title) title.textContent = '⚡ Intraday Momentum';
     if (text)  text.textContent  = 'Identifies stocks with a strong directional move on Day 1 that carry momentum into Day 2. Enter at Day 2 open. If the stop loss is not triggered intraday, the trade is closed at Day 2 end-of-day — no overnight exposure. Strategy performs best on the short side.';
-  } else if (s === 'reversal') {
-    if (title) title.textContent = '↩️ Reversal';
+  } else if (s === 'pullback') {
+    if (title) title.textContent = '↩️ Pullback';
     if (text)  text.textContent  = "Finds stocks pulling back against a weekly uptrend (or rallying against a weekly downtrend), using real swing-pivot HH/HL detection — not a moving-average proxy. Waits for the first day price turns back in the trend's favour before entering at the next session's open. Stop loss is structural (the trigger day's low for Long, high for Short); target is a fixed % from entry.";
   } else {
     if (title) title.textContent = '🌙 Overnight Gap';
@@ -11273,6 +11397,9 @@ function mobSetDir(d) {
 
 function openMobSettings()  {
   syncMobileDefaults();   // re-apply saved values every time panel opens
+  const stratNames = { overnight: 'Gap', intraday: 'Momentum', pullback: 'Pullback' };
+  const titleEl = document.getElementById('mobSettingsPanelTitle');
+  if (titleEl) titleEl.textContent = `${stratNames[_mobStrategy] || ''} Settings`.trim();
   document.getElementById('mobSettingsPanel').classList.add('open');
   document.getElementById('mobSettingsBackdrop').classList.add('open');
 }
@@ -11286,8 +11413,8 @@ function closeMobSettings() {
   s('toDate',     g('mobToDate'));
   s('idFromDate', g('mobIdFromDate'));
   s('idToDate',   g('mobIdToDate'));
-  s('rvFromDate', g('mobRvFromDate'));
-  s('rvToDate',   g('mobRvToDate'));
+  s('pbFromDate', g('mobPbFromDate'));
+  s('pbToDate',   g('mobPbToDate'));
 
   if (_mobStrategy === 'overnight') {
     s('minGap',          g('mobMinGap'));
@@ -11314,20 +11441,24 @@ function closeMobSettings() {
     s('capitalPerTrade', g('mobCapital'));
     s('scanWrThreshold', g('mobWrInput'));
     s('scanPnlThreshold',g('mobPnlInput'));
-  } else if (_mobStrategy === 'reversal') {
-    s('rvLookbackDays',  g('mobRvLookbackDays'));
-    s('rvDropPct',       g('mobRvDropPct'));
-    s('rvConfirmDays',   g('mobRvConfirmDays'));
-    s('rvTpPct',         g('mobRvTpPct'));
-    s('rvHoldDays',      g('mobRvHoldDays'));
-    s('rvPivotBars',     g('mobRvPivotBars'));
-    s('maxSignalsDay',   g('mobRvMaxDay'));
+  } else if (_mobStrategy === 'pullback') {
+    s('pbLookbackDays',  g('mobPbLookbackDays'));
+    s('pbDropPct',       g('mobPbDropPct'));
+    s('pbConfirmDays',   g('mobPbConfirmDays'));
+    s('pbTpPct',         g('mobPbTpPct'));
+    s('pbHoldDays',      g('mobPbHoldDays'));
+    s('pbPivotBars',     g('mobPbPivotBars'));
+    s('maxSignalsDay',   g('mobPbMaxDay'));
     s('capitalPerTrade', g('mobCapital'));
     s('scanWrThreshold', g('mobWrInput'));
     s('scanPnlThreshold',g('mobPnlInput'));
   }
   document.getElementById('mobSettingsPanel').classList.remove('open');
   document.getElementById('mobSettingsBackdrop').classList.remove('open');
+
+  // Re-run the backtest for the current strategy so Stats/Summary numbers
+  // reflect whatever was just changed, rather than staying stale.
+  _rerunMobBacktestAfterSettingsChange();
 }
 
 function _mobUpdateCachePill(status, label) {
@@ -11398,18 +11529,18 @@ async function runMobileScanner() {
     document.getElementById('idFromDate').value = document.getElementById('mobIdFromDate').value;
     document.getElementById('idToDate').value   = document.getElementById('mobIdToDate').value;
     _strategy = 'intraday';
-  } else if (mobStrategy === 'reversal') {
-    document.getElementById('rvLookbackDays').value = document.getElementById('mobRvLookbackDays').value;
-    document.getElementById('rvDropPct').value      = document.getElementById('mobRvDropPct').value;
-    document.getElementById('rvConfirmDays').value  = document.getElementById('mobRvConfirmDays').value;
-    document.getElementById('rvTpPct').value        = document.getElementById('mobRvTpPct').value;
-    document.getElementById('rvHoldDays').value     = document.getElementById('mobRvHoldDays').value;
-    document.getElementById('rvPivotBars').value    = document.getElementById('mobRvPivotBars').value;
+  } else if (mobStrategy === 'pullback') {
+    document.getElementById('pbLookbackDays').value = document.getElementById('mobPbLookbackDays').value;
+    document.getElementById('pbDropPct').value      = document.getElementById('mobPbDropPct').value;
+    document.getElementById('pbConfirmDays').value  = document.getElementById('mobPbConfirmDays').value;
+    document.getElementById('pbTpPct').value        = document.getElementById('mobPbTpPct').value;
+    document.getElementById('pbHoldDays').value     = document.getElementById('mobPbHoldDays').value;
+    document.getElementById('pbPivotBars').value    = document.getElementById('mobPbPivotBars').value;
     const mobCapRv = document.getElementById('mobCapital'); if (mobCapRv) document.getElementById('capitalPerTrade').value = mobCapRv.value;
-    document.getElementById('maxSignalsDay').value = document.getElementById('mobRvMaxDay').value;
-    document.getElementById('rvFromDate').value = document.getElementById('mobRvFromDate').value;
-    document.getElementById('rvToDate').value   = document.getElementById('mobRvToDate').value;
-    _strategy = 'reversal';
+    document.getElementById('maxSignalsDay').value = document.getElementById('mobPbMaxDay').value;
+    document.getElementById('pbFromDate').value = document.getElementById('mobPbFromDate').value;
+    document.getElementById('pbToDate').value   = document.getElementById('mobPbToDate').value;
+    _strategy = 'pullback';
   }
   _direction = _mobDir;
 
@@ -11545,7 +11676,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
   // Re-run scanner logic to get longs/shorts arrays
   // Mobile direction is _mobDir, not _direction — override after reading
   const params = _strategy === 'intraday' ? { ...readIntradayParams(), direction: _mobDir }
-    : _strategy === 'reversal' ? { ...readReversalParams(), direction: _mobDir }
+    : _strategy === 'pullback' ? { ...readPullbackParams(), direction: _mobDir }
     : readOvernightParams();
 
   const longs = [], shorts = [];
@@ -11556,18 +11687,18 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
     const idx = ohlc.findIndex(c => c.date === scanDate);
     if (idx < 1) return;
 
-    if (_strategy === 'reversal') {
-      if (ohlc.length < params.rvLookbackDays + 5) return;
+    if (_strategy === 'pullback') {
+      if (ohlc.length < params.pbLookbackDays + 5) return;
       // Causal: only weeks up to scanDate feed the trend check.
       const weeklyBarsMob = _toWeeklyOHLC(ohlc.slice(0, idx + 1));
-      const swingsMob     = _weeklySwingPoints(weeklyBarsMob, params.rvPivotBars);
-      const sigMob = _detectReversalAtDate(ohlc, idx, swingsMob, params);
+      const swingsMob     = _weeklySwingPoints(weeklyBarsMob, params.pbPivotBars);
+      const sigMob = _detectPullbackAtDate(ohlc, idx, swingsMob, params);
       if (!sigMob) return;
 
       if (_mobDir === 'long'  && sigMob.side !== 'LONG')  return;
       if (_mobDir === 'short' && sigMob.side !== 'SHORT') return;
 
-      const tpPctMob   = params.rvTpPct / 100;
+      const tpPctMob   = params.pbTpPct / 100;
       const tpLevelMob = sigMob.side === 'LONG'
         ? sigMob.confirmClose * (1 + tpPctMob)
         : sigMob.confirmClose * (1 - tpPctMob);
@@ -11688,7 +11819,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
   // Sort using active ranking mode (Wilson or Expectancy)
   longs.sort(_signalSortFn); shorts.sort(_signalSortFn);
 
-  const maxDayId = _strategy === 'intraday' ? 'mobIdMaxDay' : _strategy === 'reversal' ? 'mobRvMaxDay' : 'mobMaxDay';
+  const maxDayId = _strategy === 'intraday' ? 'mobIdMaxDay' : _strategy === 'pullback' ? 'mobPbMaxDay' : 'mobMaxDay';
   const maxTotal = +document.getElementById(maxDayId).value || 0;
   let longsOut, shortsOut;
   if (maxTotal > 0) {
@@ -11781,7 +11912,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         </div>
         <div class="mob-card-sub">
           <div class="mob-dir-badge ${isBull?'long':'short'}">${isBull?'▲ LONG':'▼ SHORT'}</div>
-          <div class="mob-move ${isBull?'bull':'bear'}" title="${_strategy==='reversal' ? (isBull?'Pullback from rolling peak':'Rally from rolling trough') : 'Overnight Gap'}">${isBull?'+':''}${s.movePct}% <span style="font-size:9px;opacity:0.7;">${_strategy==='reversal' ? (isBull?'pullback':'rally') : 'gap'}</span></div>
+          <div class="mob-move ${isBull?'bull':'bear'}" title="${_strategy==='pullback' ? (isBull?'Pullback from rolling peak':'Rally from rolling trough') : 'Overnight Gap'}">${isBull?'+':''}${s.movePct}% <span style="font-size:9px;opacity:0.7;">${_strategy==='pullback' ? (isBull?'pullback':'rally') : 'gap'}</span></div>
           ${s.d1MovePct !== undefined ? `<div style="font-size:10px;color:${s.d1MovePct >= 0 ? 'var(--bull)' : 'var(--bear)'};font-weight:600;">${s.d1MovePct >= 0 ? '+' : ''}${s.d1MovePct}% <span style="opacity:0.75;font-size:9px;">D1 move</span></div>` : ''}
           ${mtfBadgeHTML(s.mtf)}
         </div>
@@ -11851,7 +11982,7 @@ updateDataStatusBar = function() {
 // ── Walk-Forward stub — TradeEdge does not use WF ────────────────────────────
 // _ensureMobTradesData (from TradeEasy Stats JS) checks _wfCaches before backtesting
 // Stubbing as empty so it always falls through to the silent backtest path
-const _wfCaches = { overnight: null, intraday: null, reversal: null };
+const _wfCaches = { overnight: null, intraday: null, pullback: null };
 function _wfCacheValid() { return false; }
 function _wfGetSignals() { return null; }
 
@@ -11863,8 +11994,68 @@ let _mobActiveTab = 'scanner';
 
 let _mobTradesSubTab   = 'summary';   // 'summary' | 'daywise' | 'stockwise' | 'monthly' | 'insights'
 let _mobTradesStratTab = 'overnight'; // default to Gap tab
-let _mobTradeCache     = { overnight: null, intraday: null, reversal: null }; // null = not yet run
-let _mobAllTradesCache = { overnight: null, intraday: null, reversal: null }; // uncapped — for All Trades tab
+// Stashed by _buildMobMonthly() for openMobMonthDay() — the day-trade map and
+// formatters, so the modal can render without re-threading them through onclick.
+let _mobMonthlyByDay = {};
+let _mobMonthlyFmtPct = null;
+let _mobMonthlyFmtPrice = null;
+
+function openMobMonthDay(dateStr) {
+  const dayTrades = _mobMonthlyByDay[dateStr];
+  if (!dayTrades || !dayTrades.length) return;
+  const fmtPct   = _mobMonthlyFmtPct   || (v => (v>=0?'+':'') + v.toFixed(2) + '%');
+  const fmtPrice = _mobMonthlyFmtPrice || (v => '₹' + v);
+  const dt = new Date(dateStr + 'T00:00:00');
+  const dateLabel = dt.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric', weekday:'short' });
+  const dayPnl  = dayTrades.reduce((s, t) => s + t.pnlPct, 0);
+  const dayWins = dayTrades.filter(t => t.outcome === 'WIN').length;
+  const daySL   = dayTrades.filter(t => t.slHit).length;
+  const dayLoss = dayTrades.length - dayWins - daySL;
+  const pnlColorHdr = dayPnl >= 0 ? 'var(--bull)' : 'var(--bear)';
+
+  const body = document.getElementById('mobMonthDayBody');
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">${dateLabel}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-top:2px;">
+          ${dayTrades.length}T &nbsp;
+          <span style="color:var(--bull);font-weight:700;">${dayWins}W</span>/<span style="color:var(--bear);font-weight:700;">${dayLoss}L</span>${daySL?'/<span style="color:#e65100;font-weight:700;">'+daySL+'SL</span>':''}
+        </div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:15px;color:${pnlColorHdr};">${fmtPct(dayPnl)}</div>
+    </div>
+    <div class="mob-trade-header">
+      <span>Dir</span><span>Symbol</span><span>Held (Entry→Exit)</span><span>Entry</span><span>Exit</span><span>PnL%</span>
+    </div>
+    ${dayTrades.map(t => {
+      const isBull   = t.side === 'LONG';
+      const pnlColor = t.pnlPct >= 0 ? 'var(--bull)' : 'var(--bear)';
+      const entryD = t.tradeDate || t.signalDate || '';
+      const exitD  = t.exitDate || entryD;
+      const fmtDM  = d => d ? `${d.slice(8,10)}/${d.slice(5,7)}` : '—';
+      const heldLabel = (entryD && exitD && entryD !== exitD)
+        ? `${fmtDM(entryD)}→${fmtDM(exitD)}`
+        : fmtDM(entryD || exitD);
+      return `
+      <div class="mob-trade-row">
+        <span class="mob-trade-dir" style="color:${isBull?'var(--bull)':'var(--bear)'};">${isBull?'▲L':'▼S'}</span>
+        <span class="mob-trade-sym">${t.sym}</span>
+        <span class="mob-trade-gap" style="color:var(--text2);font-size:9px;">${heldLabel}</span>
+        <span class="mob-trade-entry">${fmtPrice(t.entry)}</span>
+        <span class="mob-trade-exit">${fmtPrice(t.exit)}</span>
+        <span class="mob-trade-pnl" style="color:${pnlColor};">${fmtPct(t.pnlPct)}</span>
+      </div>`;
+    }).join('')}`;
+
+  document.getElementById('mobMonthDayModal').style.display = 'flex';
+}
+
+function closeMobMonthDay() {
+  document.getElementById('mobMonthDayModal').style.display = 'none';
+}
+let _mobTradeCache     = { overnight: null, intraday: null, pullback: null }; // null = not yet run
+let _mobAllTradesCache = { overnight: null, intraday: null, pullback: null }; // uncapped — for All Trades tab
 let _mobTradesBuilding = false;
 let _lastScanDate      = null; // scan date of the last scanner run — Stats uses same date cap
 
@@ -11934,31 +12125,41 @@ async function _runMobTradeBacktest(strat) {
     if (mobSl)   document.getElementById('idSlPct').value     = mobSl.value;
     if (mobSkip) { document.getElementById('idSkipPct').value = mobSkip.value;
       const vis = document.getElementById('idSkipPctVis'); if (vis) vis.value = mobSkip.value; }
-  } else if (strat === 'reversal') {
-    const mobLb = document.getElementById('mobRvLookbackDays');
-    const mobDp = document.getElementById('mobRvDropPct');
-    const mobCd = document.getElementById('mobRvConfirmDays');
-    const mobTp = document.getElementById('mobRvTpPct');
-    const mobHd = document.getElementById('mobRvHoldDays');
-    const mobPb = document.getElementById('mobRvPivotBars');
-    if (mobLb) document.getElementById('rvLookbackDays').value = mobLb.value;
-    if (mobDp) document.getElementById('rvDropPct').value      = mobDp.value;
-    if (mobCd) document.getElementById('rvConfirmDays').value  = mobCd.value;
-    if (mobTp) document.getElementById('rvTpPct').value        = mobTp.value;
-    if (mobHd) document.getElementById('rvHoldDays').value     = mobHd.value;
-    if (mobPb) document.getElementById('rvPivotBars').value    = mobPb.value;
+  } else if (strat === 'pullback') {
+    const mobLb = document.getElementById('mobPbLookbackDays');
+    const mobDp = document.getElementById('mobPbDropPct');
+    const mobCd = document.getElementById('mobPbConfirmDays');
+    const mobTp = document.getElementById('mobPbTpPct');
+    const mobHd = document.getElementById('mobPbHoldDays');
+    const mobPb = document.getElementById('mobPbPivotBars');
+    if (mobLb) document.getElementById('pbLookbackDays').value = mobLb.value;
+    if (mobDp) document.getElementById('pbDropPct').value      = mobDp.value;
+    if (mobCd) document.getElementById('pbConfirmDays').value  = mobCd.value;
+    if (mobTp) document.getElementById('pbTpPct').value        = mobTp.value;
+    if (mobHd) document.getElementById('pbHoldDays').value     = mobHd.value;
+    if (mobPb) document.getElementById('pbPivotBars').value    = mobPb.value;
   } else {
-    const mobMin  = document.getElementById('mobMinGap');
-    const mobMax  = document.getElementById('mobMaxGap');
-    const mobSl   = document.getElementById('mobIdSlPct');
-    if (mobMin)  document.getElementById('minGap').value     = mobMin.value;
-    if (mobMax)  document.getElementById('maxGap').value     = mobMax.value;
-    if (mobSl)   document.getElementById('idSlPct').value     = mobSl.value;
+    const mobMin     = document.getElementById('mobMinGap');
+    const mobMax     = document.getElementById('mobMaxGap');
+    const mobSlType  = document.getElementById('mobSlType');
+    const mobSl      = document.getElementById('mobSlPct');
+    const mobTpType  = document.getElementById('mobTpType');
+    const mobTp      = document.getElementById('mobTpPctVal');
+    const mobHold    = document.getElementById('mobHoldDays');
+    const mobMaxDay  = document.getElementById('mobMaxDay');
+    if (mobMin)    document.getElementById('minGap').value        = mobMin.value;
+    if (mobMax)    document.getElementById('maxGap').value        = mobMax.value;
+    if (mobSlType) document.getElementById('slType').value        = mobSlType.value;
+    if (mobSl)     document.getElementById('slPct').value          = mobSl.value;
+    if (mobTpType) document.getElementById('tpType').value        = mobTpType.value;
+    if (mobTp)     document.getElementById('tpPct').value          = mobTp.value;
+    if (mobHold)   document.getElementById('holdDays').value      = mobHold.value;
+    if (mobMaxDay) document.getElementById('maxSignalsDay').value = mobMaxDay.value;
   }
 
   // Date range: use user's selected dates from mobile settings
   const mobDateIds = strat === 'intraday' ? ['mobIdFromDate','mobIdToDate','idFromDate','idToDate']
-    : strat === 'reversal' ? ['mobRvFromDate','mobRvToDate','rvFromDate','rvToDate']
+    : strat === 'pullback' ? ['mobPbFromDate','mobPbToDate','pbFromDate','pbToDate']
     : ['mobFromDate','mobToDate','fromDate','toDate'];
   const mobFrom = document.getElementById(mobDateIds[0])?.value
                 || document.getElementById(mobDateIds[2])?.value
@@ -11971,8 +12172,8 @@ async function _runMobTradeBacktest(strat) {
   document.getElementById('toDate').value     = mobTo;
   document.getElementById('idFromDate').value = mobFrom;
   document.getElementById('idToDate').value   = mobTo;
-  document.getElementById('rvFromDate').value = mobFrom;
-  document.getElementById('rvToDate').value   = mobTo;
+  document.getElementById('pbFromDate').value = mobFrom;
+  document.getElementById('pbToDate').value   = mobTo;
 
   await runBacktestSilent();
   _mobTradeCache[strat]     = [...allTrades];          // capped — for all other tabs
@@ -11985,6 +12186,20 @@ async function _runMobTradeBacktest(strat) {
   const { wr: prevWr, pnl: prevPnl } = _wrPnlDefaultsFor(prevStrategy);
   if (prevWr  != null) document.getElementById('scanWrThreshold').value  = prevWr;
   if (prevPnl != null) document.getElementById('scanPnlThreshold').value = prevPnl;
+}
+
+// Re-run the current strategy's backtest after mobile Settings are saved or
+// applied, so Stats/Summary numbers reflect the just-changed params instead
+// of staying stale until the next full Stats-tab rebuild. Reuses
+// _runMobTradeBacktest, which already does the correct mobile→desktop param
+// sync for whichever strategy is passed in.
+async function _rerunMobBacktestAfterSettingsChange() {
+  if (!getAllLoadedSymbols().length) return;
+  await _runMobTradeBacktest(_mobStrategy);
+  if (_mobActiveTab === 'trades') {
+    _mobTradesStratTab = _mobStrategy; // keep Stats tab's strategy view in sync
+    buildMobTradesTab();
+  }
 }
 
 // Creates/shows a fixed overlay on the trades tab for progress display
@@ -12063,14 +12278,14 @@ async function _ensureMobTradesData() {
 
     const onTrades = buildTradesFromWFCache('overnight');
     const idTrades = buildTradesFromWFCache('intraday');
-    const rvTrades = buildTradesFromWFCache('reversal');
+    const pbTrades = buildTradesFromWFCache('pullback');
 
-    if (onTrades !== null || idTrades !== null || rvTrades !== null) {
+    if (onTrades !== null || idTrades !== null || pbTrades !== null) {
       _mobBuildOverlay('Building from Walk-Forward cache…', 10, '⚡ No look-ahead bias');
       await new Promise(r => setTimeout(r, 0));
       if (onTrades !== null) { _mobTradeCache['overnight'] = onTrades; _mobAllTradesCache['overnight'] = onTrades; }
       if (idTrades !== null) { _mobTradeCache['intraday']  = idTrades; _mobAllTradesCache['intraday']  = idTrades; }
-      if (rvTrades !== null) { _mobTradeCache['reversal']  = rvTrades; _mobAllTradesCache['reversal']  = rvTrades; }
+      if (pbTrades !== null) { _mobTradeCache['pullback']  = pbTrades; _mobAllTradesCache['pullback']  = pbTrades; }
 
       // For any strategy without WF cache, run silent backtest as fallback
       // Use full loaded range — Stats tab should show all trades, not capped to last scan date
@@ -12085,13 +12300,13 @@ async function _ensureMobTradesData() {
         await new Promise(r => setTimeout(r, 0));
         await _runMobTradeBacktest('intraday');
       }
-      if (rvTrades === null) {
-        _mobBuildOverlay('Running Reversal backtest…', 80, '(no WF cache for Reversal)');
+      if (pbTrades === null) {
+        _mobBuildOverlay('Running Pullback backtest…', 80, '(no WF cache for Pullback)');
         await new Promise(r => setTimeout(r, 0));
-        await _runMobTradeBacktest('reversal');
+        await _runMobTradeBacktest('pullback');
       }
 
-      const total = (_mobTradeCache.overnight||[]).length + (_mobTradeCache.intraday||[]).length + (_mobTradeCache.reversal||[]).length;
+      const total = (_mobTradeCache.overnight||[]).length + (_mobTradeCache.intraday||[]).length + (_mobTradeCache.pullback||[]).length;
       _mobBuildOverlay('Done ✓', 100, `${total} trades loaded`);
       await new Promise(r => setTimeout(r, 250));
       _mobHideBuildOverlay();
@@ -12100,8 +12315,8 @@ async function _ensureMobTradesData() {
     }
 
     // ── No WF cache — fall back to silent backtest ────────────────────────────
-    _mobTradeCache = { overnight: null, intraday: null, reversal: null };
-  _mobAllTradesCache = { overnight: null, intraday: null, reversal: null };
+    _mobTradeCache = { overnight: null, intraday: null, pullback: null };
+  _mobAllTradesCache = { overnight: null, intraday: null, pullback: null };
     allTrades = [];
     _allTradesForWR = [];
     _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
@@ -12118,11 +12333,11 @@ async function _ensureMobTradesData() {
     _mobBuildOverlay('Running Momentum backtest…', 40, '⚡ 1 Apr 2025 → latest data');
     await new Promise(r => setTimeout(r, 0));
     await _runMobTradeBacktest('intraday');
-    _mobBuildOverlay('Momentum done ✓', 70, '↩️ Starting Reversal…');
+    _mobBuildOverlay('Momentum done ✓', 70, '↩️ Starting Pullback…');
     await new Promise(r => setTimeout(r, 0));
-    _mobBuildOverlay('Running Reversal backtest…', 75, '↩️ 1 Apr 2025 → latest data');
+    _mobBuildOverlay('Running Pullback backtest…', 75, '↩️ 1 Apr 2025 → latest data');
     await new Promise(r => setTimeout(r, 0));
-    await _runMobTradeBacktest('reversal');
+    await _runMobTradeBacktest('pullback');
     _mobBuildOverlay('All done ✓', 100, '');
     await new Promise(r => setTimeout(r, 250));
 
@@ -12159,16 +12374,17 @@ function buildMobTradesTab() {
   const trades = _mobTradeCache[_mobTradesStratTab];
 
   // Strategy selector tabs — rendered into the fixed header (outside scroll container)
-  const stratColors = { overnight: 'var(--accent)', intraday: '#7c5cfc', reversal: '#2b8a6e' };
-  const stratLabels = { overnight: '📈 Gap', intraday: '⚡ Momentum', reversal: '↩️ Reversal' };
+  const stratColors = { overnight: 'var(--accent)', intraday: '#7c5cfc', pullback: '#2b8a6e' };
+  const stratLabels = { overnight: '📈 Gap', intraday: '⚡ Momentum', pullback: '↩️ Pullback' };
   if (hdr) {
     hdr.innerHTML = `
       <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px;">
-        ${['overnight','intraday','reversal'].map((strat, i) => {
+        ${['overnight','intraday','pullback'].map((strat, i) => {
           const active = _mobTradesStratTab === strat;
           return `<button onclick="mobSwitchTradesStratTab('${strat}')"
-            style="flex:1;padding:8px 4px;border:none;font-family:'Syne',sans-serif;font-weight:700;
-              font-size:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+            style="flex:1;padding:8px 2px;border:none;font-family:'Syne',sans-serif;font-weight:700;
+              font-size:11px;cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap;
+              overflow:hidden;text-overflow:ellipsis;
               ${i > 0 ? 'border-left:1px solid var(--border);' : ''}
               background:${active ? stratColors[strat] : 'var(--surface2)'};color:${active ? '#fff' : 'var(--text2)'};">
             ${stratLabels[strat]}
@@ -12180,7 +12396,7 @@ function buildMobTradesTab() {
   let html = '';
 
   if (!trades || trades.length === 0) {
-    const label = _mobTradesStratTab === 'overnight' ? 'Gap' : _mobTradesStratTab === 'intraday' ? 'Momentum' : 'Reversal';
+    const label = _mobTradesStratTab === 'overnight' ? 'Gap' : _mobTradesStratTab === 'intraday' ? 'Momentum' : 'Pullback';
     inner.innerHTML = `<div style="text-align:center;padding:32px 16px;font-family:'DM Mono',monospace;
       font-size:12px;color:var(--text3);">No ${label} trades in backtest range</div>`;
     if (empty) empty.style.display = 'none';
@@ -12421,9 +12637,12 @@ function buildMobTradesTab() {
   } else if (_mobTradesSubTab === 'stockwise') {
     html += _buildMobStockwise(trades, fmtPct);
   } else if (_mobTradesSubTab === 'monthly') {
-    html += _buildMobMonthly(trades, fmtPct);
+    html += _buildMobMonthly(trades, fmtPct, fmtPrice);
   } else {
     html += _buildMobInsights(trades, fmtPct, fmtPrice, { wins, losses, sls, wr, avgWin, avgLoss, expectancy });
+    if (_mobTradesStratTab === 'pullback') {
+      html += _buildPullbackPositionInsights(trades);
+    }
   }
 
   inner.innerHTML = html;
@@ -12622,10 +12841,10 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
   let trades   = (_mobAllTradesCache[strat] || _allTradesForWR || []).slice();
 
   // Intraday Momentum = SHORT only (gap down stocks only — strategy design)
-  // Gap + Reversal both respect the user's direction setting
+  // Gap + Pullback both respect the user's direction setting
   if (strat === 'intraday') {
     trades = trades.filter(t => t.side === 'SHORT');
-  } else if (strat === 'overnight' || strat === 'reversal') {
+  } else if (strat === 'overnight' || strat === 'pullback') {
     if (_direction === 'long')  trades = trades.filter(t => t.side === 'LONG');
     if (_direction === 'short') trades = trades.filter(t => t.side === 'SHORT');
   }
@@ -12829,8 +13048,11 @@ function _buildMobDaywise(trades, fmtPct, fmtPrice) {
   }).join('');
 }
 
-function _buildMobMonthly(trades, fmtPct) {
-  // Group trades by month (YYYY-MM) and by trade date (D2 exit date), matching desktop calendar
+function _buildMobMonthly(trades, fmtPct, fmtPrice) {
+  // Group trades by month (YYYY-MM) and by tradeDate — the D2 outcome day for
+  // Overnight/Intraday (entry+exit are the same day there), but the ENTRY day
+  // for Pullback specifically (exitDate is a separate, often later, field).
+  // Matches desktop's calendar grouping (_tradeStats.byTradeDay).
   const byMonth = {}, byDay = {};
   trades.forEach(t => {
     const d = t.tradeDate || t.signalDate;
@@ -12838,6 +13060,11 @@ function _buildMobMonthly(trades, fmtPct) {
     (byMonth[m] = byMonth[m] || []).push(t);
     (byDay[d] = byDay[d] || []).push(t);
   });
+  // Stashed for openMobMonthDay() — day cells below only pass the date string
+  // through onclick (keeps the HTML clean), the modal reads trades from here.
+  _mobMonthlyByDay = byDay;
+  _mobMonthlyFmtPct = fmtPct;
+  _mobMonthlyFmtPrice = fmtPrice;
   const months = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
   const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
@@ -12872,7 +13099,7 @@ function _buildMobMonthly(trades, fmtPct) {
         const dp = dayTrades.reduce((s, t) => s + t.pnlPct, 0);
         const cls = dp >= 0 ? 'profit' : 'loss';
         const title = `${dayTrades.length}T ${fmtPct(dp)}`;
-        calCells += `<div class="mob-cal-cell has-trades ${cls}" title="${title}">${day}<br><span style="font-size:7px;">${fmtPct(dp)}</span></div>`;
+        calCells += `<div class="mob-cal-cell has-trades ${cls}" title="${title}" onclick="openMobMonthDay('${ds}')" style="cursor:pointer;">${day}<br><span style="font-size:7px;">${fmtPct(dp)}</span></div>`;
       }
     }
 
@@ -12903,6 +13130,150 @@ function _buildMobMonthly(trades, fmtPct) {
         </div>
       </div>`;
   }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PULLBACK POSITION / HOLDING-PERIOD INSIGHTS
+// Uses daysHeld/exitReason (added to trade objects in _simulatePullbackExit)
+// and _pullbackOpenPositions (positions still open as of the latest loaded
+// date) to surface concurrency and holding-period behaviour — none of this
+// existed before; open positions used to be silently discarded.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Max simultaneously-open positions across the whole trade set (resolved +
+// currently open), by checking, for every date a position opened or closed,
+// how many positions were live that day. O(dates × trades) — trivial at
+// backtest scale (a few hundred trades, a few hundred distinct dates).
+function _computeMaxConcurrent(trades) {
+  if (!trades.length) return { max: 0, maxDate: null };
+  const dates = new Set();
+  trades.forEach(t => { dates.add(t.tradeDate); dates.add(t.exitDate); });
+  let max = 0, maxDate = null;
+  [...dates].sort().forEach(d => {
+    const count = trades.filter(t => t.tradeDate <= d && d <= t.exitDate).length;
+    if (count > max) { max = count; maxDate = d; }
+  });
+  return { max, maxDate };
+}
+
+// Avg days held, overall and split by outcome (WIN / LOSS / SL / FLAT).
+function _avgDaysHeldByOutcome(trades) {
+  const buckets = {};
+  trades.forEach(t => { (buckets[t.outcome] = buckets[t.outcome] || []).push(t.daysHeld || 0); });
+  const avgOf = arr => arr.length ? arr.reduce((s,v) => s+v, 0) / arr.length : null;
+  const overall = avgOf(trades.map(t => t.daysHeld || 0));
+  const byOutcome = {};
+  Object.keys(buckets).forEach(k => { byOutcome[k] = { avg: avgOf(buckets[k]), count: buckets[k].length }; });
+  return { overall, byOutcome };
+}
+
+// Avg days held bucketed by return% band — shows whether bigger winners
+// resolve faster or slower than small ones (useful for tuning Hold Days/TP%).
+function _daysHeldByReturnBucket(trades) {
+  const bands = [
+    { label: '< 0%',  test: v => v < 0 },
+    { label: '0–2%',  test: v => v >= 0 && v < 2 },
+    { label: '2–4%',  test: v => v >= 2 && v < 4 },
+    { label: '4–6%',  test: v => v >= 4 && v < 6 },
+    { label: '6–8%',  test: v => v >= 6 && v < 8 },
+    { label: '≥ 8%',  test: v => v >= 8 },
+  ];
+  return bands.map(b => {
+    const subset = trades.filter(t => b.test(t.pnlPct));
+    return {
+      label: b.label,
+      count: subset.length,
+      avgDays: subset.length ? subset.reduce((s,t) => s + (t.daysHeld||0), 0) / subset.length : null,
+    };
+  }).filter(b => b.count > 0);
+}
+
+// % of resolved trades that exited via TP / SL / Hold-Days timeout.
+function _exitReasonBreakdown(trades) {
+  const total = trades.length || 1;
+  const counts = { TP: 0, SL: 0, TIMEOUT: 0 };
+  trades.forEach(t => { if (counts[t.exitReason] !== undefined) counts[t.exitReason]++; });
+  return Object.entries(counts).map(([reason, count]) => ({ reason, count, pct: count / total * 100 }));
+}
+
+function _buildPullbackPositionInsights(trades) {
+  const openPositions = _pullbackOpenPositions || [];
+  const { max: maxConcurrent, maxDate } = _computeMaxConcurrent([...trades, ...openPositions]);
+  const { overall: avgDaysHeld } = _avgDaysHeldByOutcome(trades);
+  const byBucket = _daysHeldByReturnBucket(trades);
+  const exitReasons = _exitReasonBreakdown(trades);
+  const reasonLabels = { TP: '🎯 TP Hit', SL: '🛑 SL Hit', TIMEOUT: '⏱ Hold Expired' };
+  const reasonColors = { TP: 'var(--bull)', SL: 'var(--bear)', TIMEOUT: 'var(--gold)' };
+
+  let html = `
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:var(--text2);margin:14px 0 8px;">
+      📍 Position &amp; Holding-Period Insights
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center;">
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Currently Open</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:${openPositions.length ? 'var(--accent)' : 'var(--text2)'};">${openPositions.length}</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center;"
+        title="${maxDate ? 'Peak reached on ' + maxDate : ''}">
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Max Concurrent (ever)</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--text);">${maxConcurrent}</div>
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center;margin-bottom:10px;">
+      <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Avg Days Held (resolved trades)</div>
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--text);">${avgDaysHeld !== null ? avgDaysHeld.toFixed(1) : '—'}</div>
+    </div>`;
+
+  // ── Currently open positions list ──────────────────────────────────────────
+  if (openPositions.length) {
+    html += `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;">
+        <div style="padding:7px 12px;background:var(--surface2);border-bottom:1px solid var(--border);">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;">📂 Open Positions</span>
+        </div>
+        ${openPositions.map(t => `
+          <div style="display:flex;justify-content:space-between;align-items:center;
+            padding:6px 10px;border-bottom:1px solid var(--border);">
+            <div>
+              <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;">${t.sym}</span>
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);margin-left:6px;">${t.side} · since ${t.tradeDate} · Day ${t.daysHeld}</span>
+            </div>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:12px;
+              color:${t.pnlPct>=0?'var(--bull)':'var(--bear)'};">${t.pnlPct>=0?'+':''}${t.pnlPct.toFixed(2)}%</span>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  // ── Avg days held by return band ───────────────────────────────────────────
+  if (byBucket.length) {
+    html += `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;">
+        <div style="padding:7px 12px;background:var(--surface2);border-bottom:1px solid var(--border);">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.6px;">⏳ Avg Days Held by Return%</span>
+        </div>
+        ${byBucket.map(b => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);">
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);">${b.label} <span style="color:var(--text3);">(${b.count})</span></span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:12px;">${b.avgDays.toFixed(1)}d</span>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  // ── Exit reason breakdown ──────────────────────────────────────────────────
+  html += `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;">
+      <div style="padding:7px 12px;background:var(--surface2);border-bottom:1px solid var(--border);">
+        <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.6px;">🚪 Exit Reason Breakdown</span>
+      </div>
+      ${exitReasons.map(r => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);">
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:${reasonColors[r.reason]};">${reasonLabels[r.reason]}</span>
+          <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:12px;">${r.count} · ${r.pct.toFixed(1)}%</span>
+        </div>`).join('')}
+    </div>`;
+
+  return html;
 }
 
 function _buildMobInsights(trades, fmtPct, fmtPrice, stats) {
@@ -13201,8 +13572,8 @@ function _mobRefreshTradesTab() {
     await new Promise(r => setTimeout(r, 900));
     if (overlay) overlay.style.display = 'none';
     // Invalidate trade cache — fresh data
-    _mobTradeCache = { overnight: null, intraday: null, reversal: null };
-  _mobAllTradesCache = { overnight: null, intraday: null, reversal: null };
+    _mobTradeCache = { overnight: null, intraday: null, pullback: null };
+  _mobAllTradesCache = { overnight: null, intraday: null, pullback: null };
     allTrades = []; _allTradesForWR = []; _lastBacktestedStrategy = null; _lastBacktestedWrThresh = null; _lastBacktestedPnlThresh = null; _lastBacktestedFrom = null; _lastBacktestedTo = null;
     updateDataStatusBar();
   } catch(e) {
@@ -13257,6 +13628,30 @@ function syncMobileDefaults() {
       if (el('mobIdMaxDay'))  el('mobIdMaxDay').value   = d.maxSignalsDay;
     } catch(e) { console.warn('[syncMobileDefaults] intraday error', e); }
   }
+
+  // Pullback — strategy-specific params only
+  const pbRaw = localStorage.getItem('TE_PULLBACK_DEFAULTS');
+  if (pbRaw) {
+    try {
+      const d = { ...PULLBACK_DEFAULTS, ...JSON.parse(pbRaw) };
+      if (el('mobPbLookbackDays')) el('mobPbLookbackDays').value = d.pbLookbackDays;
+      if (el('mobPbDropPct'))      el('mobPbDropPct').value      = d.pbDropPct;
+      if (el('mobPbConfirmDays'))  el('mobPbConfirmDays').value  = d.pbConfirmDays;
+      if (el('mobPbTpPct'))        el('mobPbTpPct').value        = d.pbTpPct;
+      if (el('mobPbHoldDays'))     el('mobPbHoldDays').value     = d.pbHoldDays;
+      if (el('mobPbPivotBars'))    el('mobPbPivotBars').value    = d.pbPivotBars;
+      if (el('mobPbMaxDay'))       el('mobPbMaxDay').value       = d.maxSignalsDay;
+    } catch(e) { console.warn('[syncMobileDefaults] pullback error', e); }
+  }
+
+  // The blocks above all read/write the same shared mobWrInput/mobPnlInput
+  // fields, so whichever strategy was saved last would otherwise win
+  // regardless of which strategy is actually active on load — re-sync to
+  // the real active mobile strategy (_mobStrategy defaults to 'overnight'),
+  // same corrective step desktop's loadSavedDefaults() already does.
+  const { wr: activeMobWr, pnl: activeMobPnl, maxDay: activeMobMaxDay } = _wrPnlDefaultsFor(_mobStrategy || 'overnight');
+  if (activeMobWr  != null && el('mobWrInput'))  el('mobWrInput').value  = activeMobWr;
+  if (activeMobPnl != null && el('mobPnlInput')) el('mobPnlInput').value = activeMobPnl;
 }
 
 window.addEventListener('DOMContentLoaded', () => { if (isMobile()) { initMobileShell(); syncMobileDefaults(); } });
