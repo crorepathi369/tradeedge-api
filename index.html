@@ -5747,6 +5747,17 @@ async function runBacktest() {
   const skipped = [];
   if (typeof backtestIntraday !== 'undefined') backtestIntraday._skipLog = [];
 
+  // Pullback needs all available prior history for weekly swing warm-up — same
+  // logic as runBacktestSilent(). Without full history, fewer swing points are
+  // detected → different signals → different WR scores → maxPerDay picks
+  // different top-N trades than the mobile path, causing day-wise mismatch.
+  const sliceOHLC = (ohlcFull) => {
+    if (_strategy === 'pullback') return ohlcFull.filter(c => c.date <= to);
+    const firstIdx = ohlcFull.findIndex(c => c.date >= from);
+    const startIdx = Math.max(0, firstIdx - 1);
+    return ohlcFull.slice(startIdx).filter(c => c.date <= to);
+  };
+
   for (let i = 0; i < syms.length; i++) {
     const sym = syms[i];
     setProgress(Math.round(i / syms.length * 95), `Processing ${sym} (${i+1}/${syms.length})…`);
@@ -5756,9 +5767,7 @@ async function runBacktest() {
     // Sanitize in place — strip any weekend candles that slipped through (e.g. old CSVs)
     // Special sessions (Budget Day etc.) are preserved by isValidTradingDay
     _loadedOHLC[sym] = ohlcFull = ohlcFull.filter(c => isValidTradingDay(c.date));
-    const firstIdx = ohlcFull.findIndex(c => c.date >= from);
-    const startIdx = Math.max(0, firstIdx - 1);
-    let ohlc = ohlcFull.slice(startIdx).filter(c => c.date <= to);
+    let ohlc = sliceOHLC(ohlcFull);
     if (ohlc.length < 5) { skipped.push(sym); continue; }
     const trades = engine(ohlc, sym, params);
     localTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'SKIP'));
@@ -5781,9 +5790,7 @@ async function runBacktest() {
   for (const sym of syms) {
     const ohlcFull = _loadedOHLC[sym];
     if (!ohlcFull) continue;
-    const firstIdx = ohlcFull.findIndex(c => c.date >= from);
-    const startIdx = Math.max(0, firstIdx - 1);
-    const ohlc = ohlcFull.slice(startIdx).filter(c => c.date <= to);
+    const ohlc = sliceOHLC(ohlcFull);
     if (ohlc.length < 5) continue;
     const trades = engine(ohlc, sym, wrParams, false);
     wrTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
