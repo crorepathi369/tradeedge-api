@@ -2730,6 +2730,11 @@
         <input type="number" id="maxSignalsDay" value="1" min="0" max="200" step="1"
           style="width:48px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
           title="Cap signals per day (0 = no limit)." placeholder="0=∞">
+        <!-- Per-strategy backing fields — see _maxDayEl()/_wrThreshEl()/_pnlThreshEl(). The
+             visible input above always mirrors whichever one is active; engine code never
+             reads the visible input directly. -->
+        <input type="hidden" id="idMaxSignalsDay" value="1">
+        <input type="hidden" id="pbMaxSignalsDay" value="3">
         <span style="width:1px;height:16px;background:var(--border);"></span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;">Rank</span>
         <select id="rankingMode"
@@ -2756,12 +2761,16 @@
         <input type="number" id="scanWrThreshold" value="40" min="0" max="100" step="5"
           style="width:48px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
           title="Only include signals where Wilson-adjusted win rate ≥ this value. Applied to both backtest cap and live scanner.">
+        <input type="hidden" id="idScanWrThreshold" value="40">
+        <input type="hidden" id="pbScanWrThreshold" value="60">
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
         <span style="width:1px;height:16px;background:var(--border);"></span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;" title="Avg net PnL% per trade from backtest history">Net PnL ≥</span>
         <input type="number" id="scanPnlThreshold" value="0.3" min="-10" max="10" step="0.1"
           style="width:52px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
           title="Only include signals where avg net PnL% per trade ≥ this value. Applied to both backtest cap and live scanner.">
+        <input type="hidden" id="idScanPnlThreshold" value="0.3">
+        <input type="hidden" id="pbScanPnlThreshold" value="2">
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
       </div>
 
@@ -5634,7 +5643,7 @@ async function runBacktestSilent() {
     wrTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'OPEN'));
   }
 
-  const maxN = +document.getElementById('maxSignalsDay').value || 0;
+  const maxN = +_maxDayEl().value || 0;
   // WR/PnL quality filter — computed unconditionally (not just when maxN>0)
   // so it can also be applied to open positions below, the same way it's
   // already applied to resolved trades. Without this, a currently-open
@@ -5650,8 +5659,8 @@ async function runBacktestSilent() {
     const { wilson, expectancy } = _scoreFromTrades(statMap[sym+'_'+side] || []);
     return _getRankingMode() === 'expectancy' ? expectancy : wilson;
   };
-  const wrThresh  = +document.getElementById('scanWrThreshold').value || 0;
-  const pnlThresh = +document.getElementById('scanPnlThreshold').value || 0;
+  const wrThresh  = +_wrThreshEl().value || 0;
+  const pnlThresh = +_pnlThreshEl().value || 0;
   const wilsonOf = (sym, side) => {
     const trades = statMap[sym+'_'+side] || [];
     const total = trades.length;
@@ -5693,9 +5702,10 @@ async function runBacktestSilent() {
   allTrades = localTrades;
   _allTradesForWR = wrTrades;
   _lastBacktestedStrategy  = _strategy;
-  _lastBacktestedWrThresh  = +document.getElementById('scanWrThreshold').value  || 0;
-  _lastBacktestedPnlThresh = +document.getElementById('scanPnlThreshold').value || 0;
+  _lastBacktestedWrThresh  = +_wrThreshEl().value  || 0;
+  _lastBacktestedPnlThresh = +_pnlThreshEl().value || 0;
   ({ from: _lastBacktestedFrom, to: _lastBacktestedTo } = readBacktestDates());
+  _lastBacktestedParamsFingerprint = _computeParamsFingerprint();
 
   computeTradeStats(allTrades);
   // Refresh All Trades tab if it's active (silent backtest triggered by scanner)
@@ -5780,7 +5790,7 @@ async function runBacktest() {
   }
 
   // Max signals per day cap — uses shared _getRankingMode() + _scoreFromTrades()
-  const maxPerDay = +document.getElementById('maxSignalsDay').value || 0;
+  const maxPerDay = +_maxDayEl().value || 0;
   if (maxPerDay > 0) {
     const statMap = {};
     wrTrades.forEach(t => {
@@ -5794,8 +5804,8 @@ async function runBacktest() {
       return _getRankingMode() === 'expectancy' ? expectancy : wilson;
     };
     // Apply same WR threshold as scanner — so backtest cap and scanner pick identical signals
-    const wrThresh  = +document.getElementById('scanWrThreshold').value || 0;
-    const pnlThresh = +document.getElementById('scanPnlThreshold').value || 0;
+    const wrThresh  = +_wrThreshEl().value || 0;
+    const pnlThresh = +_pnlThreshEl().value || 0;
     const wilsonOf = (sym, side) => {
       const trades = statMap[sym + '_' + side] || [];
       const total = trades.length;
@@ -5834,9 +5844,10 @@ async function runBacktest() {
   allTrades = localTrades;
   _allTradesForWR = wrTrades;
   _lastBacktestedStrategy  = _strategy;
-  _lastBacktestedWrThresh  = +document.getElementById('scanWrThreshold').value  || 0;
-  _lastBacktestedPnlThresh = +document.getElementById('scanPnlThreshold').value || 0;
+  _lastBacktestedWrThresh  = +_wrThreshEl().value  || 0;
+  _lastBacktestedPnlThresh = +_pnlThreshEl().value || 0;
   ({ from: _lastBacktestedFrom, to: _lastBacktestedTo } = readBacktestDates());
+  _lastBacktestedParamsFingerprint = _computeParamsFingerprint();
 
   setProgress(100, `Done. ${allTrades.length} trades across ${syms.length - skipped.length} symbols.`);
 
@@ -6081,15 +6092,16 @@ function setStrategy(s) {
 // Returns true only if _allTradesForWR was produced by the currently active strategy
 // AND with the same WR/PnL thresholds AND same date range currently set
 function wrDataMatchesStrategy() {
-  const curWr   = +document.getElementById('scanWrThreshold').value  || 0;
-  const curPnl  = +document.getElementById('scanPnlThreshold').value || 0;
+  const curWr   = +_wrThreshEl().value  || 0;
+  const curPnl  = +_pnlThreshEl().value || 0;
   const { from: curFrom, to: curTo } = readBacktestDates();
   return _lastBacktestedStrategy !== null
     && _lastBacktestedStrategy === _strategy
     && _lastBacktestedWrThresh  === curWr
     && _lastBacktestedPnlThresh === curPnl
     && _lastBacktestedFrom      === curFrom
-    && _lastBacktestedTo        === curTo;
+    && _lastBacktestedTo        === curTo
+    && _lastBacktestedParamsFingerprint === _computeParamsFingerprint();
 }
 
 // ── Signal scoring ────────────────────────────────────────────────────────────
@@ -6103,14 +6115,46 @@ function _scoreFromTrades(histTrades) {
   const wilson = total > 0 ? (wins.length + 1) / (total + 2) : 0.5;
   const avgWin  = wins.length   > 0 ? wins.reduce((s,t)=>s+t.pnlPct,0)   / wins.length   : 0;
   const avgLoss = losses.length > 0 ? losses.reduce((s,t)=>s+t.pnlPct,0) / losses.length : 0;
-  // Expectancy: meaningful only with 10+ trades; else use wilson-derived pseudo-expectancy
-  const expectancy = total >= 10
+  // Always the real, percentage-scale expectancy — winRate*avgWin + lossRate*avgLoss.
+  // Previously this switched to a completely different, incompatible -1..+1
+  // "wilson-derived pseudo-expectancy" below 10 trades, which meant a 3-trade
+  // signal could never outrank a 50-trade one in Expectancy-mode ranking
+  // regardless of true quality — two different scales sharing one label.
+  // Noisier at low N, yes, but that's what the "low sample ⚠" badge already
+  // warns about — it shouldn't also silently swap in a different formula.
+  const expectancy = total > 0
     ? (wins.length/total * avgWin) + (losses.length/total * avgLoss)
-    : (wilson - 0.5) * 2;  // maps 0.5→0, 0.75→+0.5
+    : 0;
   return { wilson, expectancy, avgWin, avgLoss };
 }
 
 // Returns sort score for a signal — uses active ranking mode
+// ── Per-strategy settings accessors ────────────────────────────────────────
+// Max/day and WR/PnL thresholds each have their own dedicated field per
+// strategy (idMaxSignalsDay/pbMaxSignalsDay, idScanWrThreshold/
+// pbScanWrThreshold, idScanPnlThreshold/pbScanPnlThreshold — Overnight keeps
+// the original maxSignalsDay/scanWrThreshold/scanPnlThreshold ids). Every
+// read/write of these three settings anywhere in the app goes through these
+// three functions instead of touching a shared field directly — a strategy
+// can now only ever read a value it (or its own saved defaults) actually
+// wrote, never another strategy's leftover value from earlier in a batch run.
+// The visible desktop inputs (maxSignalsDay/scanWrThreshold/scanPnlThreshold)
+// remain the on-screen control and are kept mirrored to whichever strategy
+// is active by setStrategy()/mobSetStrategy(), but nothing else reads them
+// directly anymore.
+function _maxDayEl() {
+  const id = _strategy === 'intraday' ? 'idMaxSignalsDay' : _strategy === 'pullback' ? 'pbMaxSignalsDay' : 'maxSignalsDay';
+  return document.getElementById(id);
+}
+function _wrThreshEl() {
+  const id = _strategy === 'intraday' ? 'idScanWrThreshold' : _strategy === 'pullback' ? 'pbScanWrThreshold' : 'scanWrThreshold';
+  return document.getElementById(id);
+}
+function _pnlThreshEl() {
+  const id = _strategy === 'intraday' ? 'idScanPnlThreshold' : _strategy === 'pullback' ? 'pbScanPnlThreshold' : 'scanPnlThreshold';
+  return document.getElementById(id);
+}
+
 function _getRankingMode() {
   const el = document.getElementById('rankingMode');
   return el ? el.value : 'wilson';
@@ -6765,8 +6809,8 @@ async function runScanner() {
   }
 
   const params = readOvernightParams();
-  const wrThreshold  = +document.getElementById('scanWrThreshold').value || 0;
-  const pnlThreshold = +document.getElementById('scanPnlThreshold').value || 0;
+  const wrThreshold  = +_wrThreshEl().value || 0;
+  const pnlThreshold = +_pnlThreshEl().value || 0;
 
   const longs = [], shorts = [];
 
@@ -6872,7 +6916,7 @@ async function runScanner() {
   longs.sort(_signalSortFn);
   shorts.sort(_signalSortFn);
 
-  const maxTotal = +document.getElementById('maxSignalsDay').value || 0;
+  const maxTotal = +_maxDayEl().value || 0;
 let longsOut, shortsOut;
   if (maxTotal > 0) {
     const allSigs = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
@@ -6903,8 +6947,8 @@ let longsOut, shortsOut;
 function runScannerIntraday(scanDate, syms) {
   const idParams    = readIntradayParams();
   const hasBacktest = wrDataMatchesStrategy();
-  const wrThreshold  = +document.getElementById('scanWrThreshold').value || 0;
-  const pnlThreshold = +document.getElementById('scanPnlThreshold').value || 0;
+  const wrThreshold  = +_wrThreshEl().value || 0;
+  const pnlThreshold = +_pnlThreshEl().value || 0;
 
   const longs = [], shorts = [];
 
@@ -7008,7 +7052,7 @@ function runScannerIntraday(scanDate, syms) {
   longs.sort(_signalSortFn);
   shorts.sort(_signalSortFn);
 
-  const maxTotalID = +document.getElementById('maxSignalsDay').value || 0;
+  const maxTotalID = +_maxDayEl().value || 0;
   let longsOut, shortsOut;
   if (maxTotalID > 0) {
     const allSigsID = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
@@ -7395,8 +7439,8 @@ function _detectPullbackAtDate(ohlc, idx, swings, params) {
 
 function runScannerPullback(scanDate, syms) {
   const params = readPullbackParams();
-  const wrThreshold  = +document.getElementById('scanWrThreshold').value || 0;
-  const pnlThreshold = +document.getElementById('scanPnlThreshold').value || 0;
+  const wrThreshold  = +_wrThreshEl().value || 0;
+  const pnlThreshold = +_pnlThreshEl().value || 0;
 
   const longs = [], shorts = [];
 
@@ -7421,6 +7465,14 @@ function runScannerPullback(scanDate, syms) {
       ? sig.confirmClose * (1 + tpPct)
       : sig.confirmClose * (1 - tpPct);
 
+    // Real entry price when scanning a historical date — the next session's
+    // open already exists in loaded data, so use it directly instead of the
+    // confirmClose approximation, matching exactly what the backtest records.
+    // Only falls back to the approximation for a live/today scan, where
+    // tomorrow's price genuinely doesn't exist yet.
+    const hasNextBar = (idx + 1) < ohlc.length;
+    const entryPrice = hasNextBar ? ohlc[idx + 1].open : sig.confirmClose;
+
     const wrSource   = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
     const histTrades = wrSource.filter(t => t.sym === sym && t.side === sig.side && t.outcome !== 'SKIP');
     const histWins   = histTrades.filter(t => t.outcome === 'WIN').length;
@@ -7433,7 +7485,8 @@ function runScannerPullback(scanDate, syms) {
 
     const signal = {
       sym, gapPct: +sig.movePct.toFixed(2), // repurposed field — matches trade-shape convention
-      entry:    +sig.confirmClose.toFixed(2), // approx — actual entry is next session's open
+      entry:    +entryPrice.toFixed(2),
+      isLiveEstimate: !hasNextBar, // true only when entry is still an approximation
       slLevel:  +sig.sl.toFixed(2),
       tpLevel:  +tpLevel.toFixed(2),
       triggerDate: sig.triggerDate,
@@ -7451,7 +7504,7 @@ function runScannerPullback(scanDate, syms) {
   longs.sort(_signalSortFn);
   shorts.sort(_signalSortFn);
 
-  const maxTotal = +document.getElementById('maxSignalsDay').value || 0;
+  const maxTotal = +_maxDayEl().value || 0;
   let longsOut, shortsOut;
   if (maxTotal > 0) {
     const allSigs = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
@@ -7523,8 +7576,8 @@ function renderScannerPullback(scanDate, longs, shorts, params) {
             <span style="font-size:9px;color:var(--gold);font-weight:600;">✓ Confirmed today — entry ${nextFmt} open</span>
           </div>
           <div class="sc-field">
-            <span class="sc-label">Entry (~next open)</span>
-            <span class="sc-val">~₹${s.entry.toFixed(2)}</span>
+            <span class="sc-label">Entry${s.isLiveEstimate ? ' (~next open)' : ''}</span>
+            <span class="sc-val">${s.isLiveEstimate ? '~' : ''}₹${s.entry.toFixed(2)}</span>
           </div>
           <div class="sc-field">
             <span class="sc-label">SL (structural)</span>
@@ -8784,9 +8837,7 @@ function buildIntradaySweep() {
   const baseParams = { idMinMove, idMaxMove, idSkipPct, idMaxOnGap, direction: _direction };
   const from = document.getElementById('idFromDate').value;
   const to   = document.getElementById('idToDate').value;
-  const maxPerDay = +document.getElementById('maxSignalsDay').value || 0;
-
-  // Pre-filter OHLC slices once (reuse across all SL/TP combos)
+  const maxPerDay = +_maxDayEl().value || 0;
   const ohlcSlices = [];
   syms.forEach(sym => {
     const ohlcFull = _loadedOHLC[sym];
@@ -8970,10 +9021,10 @@ function buildOvernightSweep() {
   });
 
   // Cap / rank / filter settings — must match main backtest exactly
-  const maxPerDay   = +document.getElementById('maxSignalsDay').value || 0;
+  const maxPerDay   = +_maxDayEl().value || 0;
   const rankMode    = _getRankingMode(); // 'expectancy' | 'wilson'
-  const wrThresh    = +document.getElementById('scanWrThreshold').value  || 0;
-  const pnlThresh   = +document.getElementById('scanPnlThreshold').value || 0;
+  const wrThresh    = +_wrThreshEl().value  || 0;
+  const pnlThresh   = +_pnlThreshEl().value || 0;
 
   // Build result matrix — SL% rows x MinGap% cols
   // Keep all other params (maxGap, closeFilter, tpType, holdDays) from current config
@@ -10206,6 +10257,21 @@ let allTrades = [];
 let _backtestRunToken = 0;
 let _allTradesForWR = []; // full uncapped trades — used by scanner for Hist WR lookups
 let _lastBacktestedStrategy  = null; // tracks which strategy produced the current _allTradesForWR
+// Full fingerprint of every param that affects trade generation or ranking —
+// not just WR/PnL/dates. Field-by-field tracking (the four vars above) missed
+// changes to Hold Days, TP%, Confirm Days, Direction, Ranking Mode, etc.,
+// letting the Scanner silently use stale rankings after those changed while
+// Stats/backtest views had already refreshed. This fingerprint closes that gap.
+let _lastBacktestedParamsFingerprint = null;
+function _computeParamsFingerprint() {
+  try {
+    return JSON.stringify({
+      params: readCurrentParams(),
+      direction: _direction,
+      rankingMode: document.getElementById('rankingMode')?.value,
+    });
+  } catch (e) { return null; }
+}
 let _lastBacktestedWrThresh  = null;
 let _lastBacktestedPnlThresh = null;
 let _lastBacktestedFrom      = null;
@@ -11512,10 +11578,10 @@ async function runMobileScanner() {
     document.getElementById('tpPct').value   = document.getElementById('mobTpPctVal').value;
     document.getElementById('holdDays').value = document.getElementById('mobHoldDays').value;
     document.getElementById('closeFilter').value = 'strict';
-    document.getElementById('maxSignalsDay').value = document.getElementById('mobMaxDay').value;
+    _strategy   = 'overnight';
+    _maxDayEl().value = document.getElementById('mobMaxDay').value;
     document.getElementById('fromDate').value = document.getElementById('mobFromDate').value;
     document.getElementById('toDate').value   = document.getElementById('mobToDate').value;
-    _strategy   = 'overnight';
   } else if (mobStrategy === 'intraday') {
     document.getElementById('idMinMove').value  = document.getElementById('mobIdMinMove').value;
     document.getElementById('idMaxMove').value  = document.getElementById('mobIdMaxMove').value;
@@ -11525,10 +11591,10 @@ async function runMobileScanner() {
     document.getElementById('idHoldDays').value = document.getElementById('mobIdHoldDays').value;
     document.getElementById('idMaxOnGap').value = document.getElementById('mobIdMaxOnGap').value;
     document.getElementById('idEntryType').value = document.getElementById('mobIdEntryType').value;
-    document.getElementById('maxSignalsDay').value = document.getElementById('mobIdMaxDay').value;
+    _strategy = 'intraday';
+    _maxDayEl().value = document.getElementById('mobIdMaxDay').value;
     document.getElementById('idFromDate').value = document.getElementById('mobIdFromDate').value;
     document.getElementById('idToDate').value   = document.getElementById('mobIdToDate').value;
-    _strategy = 'intraday';
   } else if (mobStrategy === 'pullback') {
     document.getElementById('pbLookbackDays').value = document.getElementById('mobPbLookbackDays').value;
     document.getElementById('pbDropPct').value      = document.getElementById('mobPbDropPct').value;
@@ -11537,10 +11603,10 @@ async function runMobileScanner() {
     document.getElementById('pbHoldDays').value     = document.getElementById('mobPbHoldDays').value;
     document.getElementById('pbPivotBars').value    = document.getElementById('mobPbPivotBars').value;
     const mobCapRv = document.getElementById('mobCapital'); if (mobCapRv) document.getElementById('capitalPerTrade').value = mobCapRv.value;
-    document.getElementById('maxSignalsDay').value = document.getElementById('mobPbMaxDay').value;
+    _strategy = 'pullback';
+    _maxDayEl().value = document.getElementById('mobPbMaxDay').value;
     document.getElementById('pbFromDate').value = document.getElementById('mobPbFromDate').value;
     document.getElementById('pbToDate').value   = document.getElementById('mobPbToDate').value;
-    _strategy = 'pullback';
   }
   _direction = _mobDir;
 
@@ -11555,8 +11621,8 @@ async function runMobileScanner() {
   }
 
   // Sync WR/PnL thresholds BEFORE silent backtest so cap logic uses correct thresholds
-  document.getElementById('scanWrThreshold').value  = +document.getElementById('mobWrInput').value  || 0;
-  document.getElementById('scanPnlThreshold').value = +document.getElementById('mobPnlInput').value || 0;
+  _wrThreshEl().value  = +document.getElementById('mobWrInput').value  || 0;
+  _pnlThreshEl().value = +document.getElementById('mobPnlInput').value || 0;
 
   // Auto-run backtest silently if WR data doesn't match current strategy
   if (!wrDataMatchesStrategy()) {
@@ -11918,7 +11984,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         </div>
         <div class="mob-card-levels">
           <div class="mob-level">
-            <div class="mob-level-label">Entry</div>
+            <div class="mob-level-label">Entry${s.isLiveEstimate ? ' <span title="Approx. — actual entry is next session\'s open, not yet known" style="opacity:0.6;">~</span>' : ''}</div>
             <div class="mob-level-val entry">₹${fmtStockPrice(s.entry)}</div>
           </div>
           <div class="mob-level">
@@ -12105,15 +12171,13 @@ async function _runMobTradeBacktest(strat) {
   _direction = strat === 'intraday' ? 'short' : 'both';
   document.getElementById('rankingMode').value = strat === 'intraday' ? 'wilson' : 'expectancy';
 
-  // scanWrThreshold/scanPnlThreshold are a single shared input pair reflecting
-  // whichever strategy tab is currently on-screen — not necessarily `strat` here,
-  // since this function runs all 3 strategies back-to-back when the Stats tab
-  // builds its trade cache from cold. Pull this strategy's own persisted
-  // default/override directly rather than trusting whatever's currently displayed.
+  // Each strategy has its own dedicated WR/PnL threshold field (see
+  // _wrThreshEl()/_pnlThreshEl()) — pull this strategy's own persisted
+  // default/override into it directly.
   {
     const { wr: btWr, pnl: btPnl } = _wrPnlDefaultsFor(strat);
-    if (btWr  != null) document.getElementById('scanWrThreshold').value  = btWr;
-    if (btPnl != null) document.getElementById('scanPnlThreshold').value = btPnl;
+    if (btWr  != null) _wrThreshEl().value  = btWr;
+    if (btPnl != null) _pnlThreshEl().value = btPnl;
   }
 
   // ── Sync all strategy params from mobile inputs → desktop inputs ───────────
@@ -12124,12 +12188,14 @@ async function _runMobTradeBacktest(strat) {
     const mobTp   = document.getElementById('mobIdTpPct');
     const mobSl   = document.getElementById('mobIdSlPct');
     const mobSkip = document.getElementById('mobIdSkipPct');
+    const mobMd   = document.getElementById('mobIdMaxDay');
     if (mobMin)  document.getElementById('idMinMove').value  = mobMin.value;
     if (mobMax)  document.getElementById('idMaxMove').value  = mobMax.value;
     if (mobTp)   document.getElementById('idTpPct').value     = mobTp.value;
     if (mobSl)   document.getElementById('idSlPct').value     = mobSl.value;
     if (mobSkip) { document.getElementById('idSkipPct').value = mobSkip.value;
       const vis = document.getElementById('idSkipPctVis'); if (vis) vis.value = mobSkip.value; }
+    if (mobMd)   _maxDayEl().value = mobMd.value;
   } else if (strat === 'pullback') {
     const mobLb = document.getElementById('mobPbLookbackDays');
     const mobDp = document.getElementById('mobPbDropPct');
@@ -12137,12 +12203,14 @@ async function _runMobTradeBacktest(strat) {
     const mobTp = document.getElementById('mobPbTpPct');
     const mobHd = document.getElementById('mobPbHoldDays');
     const mobPb = document.getElementById('mobPbPivotBars');
+    const mobMd = document.getElementById('mobPbMaxDay');
     if (mobLb) document.getElementById('pbLookbackDays').value = mobLb.value;
     if (mobDp) document.getElementById('pbDropPct').value      = mobDp.value;
     if (mobCd) document.getElementById('pbConfirmDays').value  = mobCd.value;
     if (mobTp) document.getElementById('pbTpPct').value        = mobTp.value;
     if (mobHd) document.getElementById('pbHoldDays').value     = mobHd.value;
     if (mobPb) document.getElementById('pbPivotBars').value    = mobPb.value;
+    if (mobMd) _maxDayEl().value  = mobMd.value;
   } else {
     const mobMin     = document.getElementById('mobMinGap');
     const mobMax     = document.getElementById('mobMaxGap');
@@ -12159,7 +12227,7 @@ async function _runMobTradeBacktest(strat) {
     if (mobTpType) document.getElementById('tpType').value        = mobTpType.value;
     if (mobTp)     document.getElementById('tpPct').value          = mobTp.value;
     if (mobHold)   document.getElementById('holdDays').value      = mobHold.value;
-    if (mobMaxDay) document.getElementById('maxSignalsDay').value = mobMaxDay.value;
+    if (mobMaxDay) _maxDayEl().value = mobMaxDay.value;
   }
 
   // Date range: use user's selected dates from mobile settings
@@ -12184,13 +12252,13 @@ async function _runMobTradeBacktest(strat) {
   _mobTradeCache[strat]     = [...allTrades];          // capped — for all other tabs
   _mobAllTradesCache[strat] = [..._allTradesForWR];    // uncapped — for All Trades tab
 
-  // Restore strategy and direction (dates already correct — they match mobile settings)
+  // Restore strategy and direction (dates already correct — they match mobile settings).
+  // No WR/PnL/Max-day restore needed anymore — each strategy has its own
+  // dedicated field (_maxDayEl()/_wrThreshEl()/_pnlThreshEl()), so nothing
+  // written above ever touched another strategy's value in the first place.
   _strategy  = prevStrategy;
   _direction = prevDirection;
   document.getElementById('rankingMode').value = prevStrategy === 'intraday' ? 'wilson' : 'expectancy';
-  const { wr: prevWr, pnl: prevPnl } = _wrPnlDefaultsFor(prevStrategy);
-  if (prevWr  != null) document.getElementById('scanWrThreshold').value  = prevWr;
-  if (prevPnl != null) document.getElementById('scanPnlThreshold').value = prevPnl;
 }
 
 // Re-run the current strategy's backtest after mobile Settings are saved or
@@ -13031,7 +13099,7 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
 
 function _buildMobDaywise(trades, fmtPct, fmtPrice) {
   const byDay = {};
-  trades.forEach(t => { (byDay[t.signalDate] = byDay[t.signalDate] || []).push(t); });
+  trades.forEach(t => { const d = t.tradeDate || t.signalDate; (byDay[d] = byDay[d] || []).push(t); });
   const days = Object.keys(byDay).sort((a, b) => b.localeCompare(a));
 
   return days.map((date, idx) => {
@@ -13044,6 +13112,11 @@ function _buildMobDaywise(trades, fmtPct, fmtPrice) {
     const dt = new Date(date + 'T00:00:00');
     const dateLabel = dt.toLocaleDateString('en-IN', { day:'2-digit', month:'short', weekday:'short' });
     const groupId = 'mobDayGrp_' + idx;
+
+    // Same custom column layout as the Monthly day-detail modal — Held needs
+    // more room than the shared table's default Gap% column width.
+    const gridCols = '22px 1fr 82px 50px 50px 54px';
+    const fmtPct1 = v => (v>=0?'+':'') + v.toFixed(1) + '%';
 
     return `
       <div class="mob-day-group">
@@ -13059,20 +13132,26 @@ function _buildMobDaywise(trades, fmtPct, fmtPrice) {
           <span class="mob-day-pnl ${pnlClass}">${fmtPct(dayPnl)}</span>
         </div>
         <div class="mob-day-trades" id="${groupId}_body">
-          <div class="mob-trade-header">
-            <span>Dir</span><span>Symbol</span><span>Gap%</span><span>Entry</span><span>Exit</span><span>PnL%</span>
+          <div class="mob-trade-header" style="grid-template-columns:${gridCols};">
+            <span>Dir</span><span>Symbol</span><span>Held (Entry→Exit)</span><span>Entry</span><span>Exit</span><span>PnL%</span>
           </div>
           ${dayTrades.map(t => {
             const isBull   = t.side === 'LONG';
             const pnlColor = t.pnlPct >= 0 ? 'var(--bull)' : 'var(--bear)';
+            const entryD = t.tradeDate || t.signalDate || '';
+            const exitD  = t.exitDate || entryD;
+            const fmtDM  = d => d ? `${d.slice(8,10)}/${d.slice(5,7)}` : '—';
+            const heldLabel = (entryD && exitD && entryD !== exitD)
+              ? `${fmtDM(entryD)}→${fmtDM(exitD)}`
+              : fmtDM(entryD || exitD);
             return `
-            <div class="mob-trade-row">
+            <div class="mob-trade-row" style="grid-template-columns:${gridCols};">
               <span class="mob-trade-dir" style="color:${isBull?'var(--bull)':'var(--bear)'};">${isBull?'▲L':'▼S'}</span>
               <span class="mob-trade-sym">${t.sym}</span>
-              <span class="mob-trade-gap" style="color:${isBull?'var(--bull)':'var(--bear)'};">${isBull?'+':''}${t.gapPct}%</span>
-              <span class="mob-trade-entry">${fmtPrice(t.entry)}</span>
-              <span class="mob-trade-exit">${fmtPrice(t.exit)}</span>
-              <span class="mob-trade-pnl" style="color:${pnlColor};">${fmtPct(t.pnlPct)}</span>
+              <span style="color:var(--text2);font-size:9px;white-space:nowrap;">${heldLabel}</span>
+              <span class="mob-trade-entry" style="font-size:9px;">${fmtPrice(t.entry)}</span>
+              <span class="mob-trade-exit" style="font-size:9px;">${fmtPrice(t.exit)}</span>
+              <span class="mob-trade-pnl" style="color:${pnlColor};font-size:13px;font-weight:800;">${fmtPct1(t.pnlPct)}</span>
             </div>`;
           }).join('')}
         </div>
