@@ -2701,9 +2701,9 @@
         <div class="control-group"><label>To Date</label><input type="date" id="pbToDate"></div>
         <div class="control-group"><label title="Trigger fires when price closes this % away from the rolling peak/trough (Long: pullback from a recent high. Short: rally from a recent low).">Move %</label><input type="number" id="pbDropPct" value="6" step="0.5" min="1" max="30" title="Minimum decline (Long) / rally (Short) from the rolling peak/trough to qualify as a trigger"></div>
         <div class="control-group"><label title="How many trailing days define the 'recent peak/trough' the Move % is measured against.">Lookback Days</label><input type="number" id="pbLookbackDays" value="15" step="1" min="3" max="60" title="Rolling window (days) used to find the recent peak (Long) / trough (Short)"></div>
-        <div class="control-group"><label title="How many days after the trigger day to wait for the first confirming bounce (up-day for Long, down-day for Short) close before giving up on this setup.">Confirm Days</label><input type="number" id="pbConfirmDays" value="3" step="1" min="1" max="5" title="Days to wait for a confirming up/down-day close after the trigger day"></div>
-        <div class="control-group"><label>TP %</label><input type="number" id="pbTpPct" value="8" step="0.5" min="0.5" max="30" title="Take profit % from entry"></div>
-        <div class="control-group"><label>Hold Days</label><input type="number" id="pbHoldDays" value="5" step="1" min="1" max="60" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
+        <div class="control-group"><label title="How many days after the trigger day to wait for the first confirming bounce (up-day for Long, down-day for Short) close before giving up on this setup.">Confirm Days</label><input type="number" id="pbConfirmDays" value="1" step="1" min="1" max="5" title="Days to wait for a confirming up/down-day close after the trigger day"></div>
+        <div class="control-group"><label>TP %</label><input type="number" id="pbTpPct" value="9" step="0.5" min="0.5" max="30" title="Take profit % from entry"></div>
+        <div class="control-group"><label>Hold Days</label><input type="number" id="pbHoldDays" value="8" step="1" min="1" max="60" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
         <div class="control-group"><label title="Weekly swing-pivot width — a weekly bar needs this many weeks lower/higher on each side to count as a swing high/low.">Pivot Weeks</label><input type="number" id="pbPivotBars" value="2" step="1" min="1" max="6" title="Weeks on each side required to confirm a weekly swing high/low"></div>
       </div>
       <div style="margin-top:8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">
@@ -2766,7 +2766,7 @@
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
         <span style="width:1px;height:16px;background:var(--border);"></span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;" title="Avg net PnL% per trade from backtest history">Net PnL ≥</span>
-        <input type="number" id="scanPnlThreshold" value="0.3" min="-10" max="10" step="0.1"
+        <input type="number" id="scanPnlThreshold" value="2.4" min="-10" max="10" step="0.1"
           style="width:52px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
           title="Only include signals where avg net PnL% per trade ≥ this value. Applied to both backtest cap and live scanner.">
         <input type="hidden" id="idScanPnlThreshold" value="0.3">
@@ -5744,6 +5744,7 @@ async function runBacktest() {
   // Breeze tail already merged into _loadedOHLC at cloud load time — no per-run fetch needed.
 
   let localTrades = [];
+  const openPositions = [];
   const skipped = [];
   if (typeof backtestIntraday !== 'undefined') backtestIntraday._skipLog = [];
 
@@ -5770,8 +5771,11 @@ async function runBacktest() {
     let ohlc = sliceOHLC(ohlcFull);
     if (ohlc.length < 5) { skipped.push(sym); continue; }
     const trades = engine(ohlc, sym, params);
-    localTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'SKIP'));
+    const inRange = trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'SKIP');
+    localTrades.push(...inRange.filter(t => t.outcome !== 'OPEN'));
+    if (_strategy === 'pullback') openPositions.push(...inRange.filter(t => t.outcome === 'OPEN'));
   }
+  if (_strategy === 'pullback') _pullbackOpenPositions = openPositions;
 
   // Direction filter for display results only
   if (!isIntraday) {
@@ -5793,7 +5797,7 @@ async function runBacktest() {
     const ohlc = sliceOHLC(ohlcFull);
     if (ohlc.length < 5) continue;
     const trades = engine(ohlc, sym, wrParams, false);
-    wrTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
+    wrTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'OPEN'));
   }
 
   // Max signals per day cap — uses shared _getRankingMode() + _scoreFromTrades()
@@ -6204,8 +6208,8 @@ const INTRADAY_DEFAULTS_D1_CLOSE = {
 // Convenience alias — always points to D2 Open defaults (used by legacy callers)
 const INTRADAY_DEFAULTS = INTRADAY_DEFAULTS_D2_OPEN;
 const PULLBACK_DEFAULTS = {
-  pbLookbackDays: 15, pbDropPct: 6, pbConfirmDays: 3, pbTpPct: 8, pbHoldDays: 5, pbPivotBars: 2,
-  maxSignalsDay: 3, wrThreshold: 60, pnlThreshold: 2, capitalPerTrade: 1000000,
+  pbLookbackDays: 15, pbDropPct: 6, pbConfirmDays: 1, pbTpPct: 9, pbHoldDays: 8, pbPivotBars: 2,
+  maxSignalsDay: 3, wrThreshold: 60, pnlThreshold: 2.4, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
 };
 
@@ -11201,15 +11205,15 @@ renderWatchlist();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Confirm Days</div><div class="mob-settings-sub">Days to wait for confirming close</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbConfirmDays" type="number" value="3" step="1" min="1" max="5"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbConfirmDays" type="number" value="1" step="1" min="1" max="5"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">TP %</div><div class="mob-settings-sub">From entry</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbTpPct" type="number" value="8" step="0.5" min="0.5" max="30"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbTpPct" type="number" value="9" step="0.5" min="0.5" max="30"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Hold Days</div><div class="mob-settings-sub">Max days to wait for TP/SL</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbHoldDays" type="number" value="5" step="1" min="1" max="60"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbHoldDays" type="number" value="8" step="1" min="1" max="60"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Pivot Weeks</div><div class="mob-settings-sub">Weekly swing-pivot width</div></div>
@@ -11286,7 +11290,7 @@ renderWatchlist();
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex:1;">
           <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);white-space:nowrap;">Net PnL ≥</span>
-          <input type="number" id="mobPnlInput" value="0.3" min="-10" max="10" step="0.1"
+          <input type="number" id="mobPnlInput" value="2.4" min="-10" max="10" step="0.1"
             style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;
               font-family:'DM Mono',monospace;font-size:13px;background:var(--surface);text-align:center;">
           <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);">%</span>
