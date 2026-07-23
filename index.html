@@ -2696,14 +2696,14 @@
 
     <!-- PULLBACK PARAMS -->
     <div id="pullbackParams" style="display:none;">
-      <div class="controls-grid" style="grid-template-columns: 130px 130px 90px 90px 90px 80px 90px 80px 100px;">
+      <div class="controls-grid" style="grid-template-columns: 130px 130px 90px 90px 90px 80px 90px 80px 80px;">
         <div class="control-group"><label>From Date</label><input type="date" id="pbFromDate"></div>
         <div class="control-group"><label>To Date</label><input type="date" id="pbToDate"></div>
         <div class="control-group"><label title="Trigger fires when price closes this % away from the rolling peak/trough (Long: pullback from a recent high. Short: rally from a recent low).">Move %</label><input type="number" id="pbDropPct" value="6" step="0.5" min="1" max="30" title="Minimum decline (Long) / rally (Short) from the rolling peak/trough to qualify as a trigger"></div>
         <div class="control-group"><label title="How many trailing days define the 'recent peak/trough' the Move % is measured against.">Lookback Days</label><input type="number" id="pbLookbackDays" value="15" step="1" min="3" max="60" title="Rolling window (days) used to find the recent peak (Long) / trough (Short)"></div>
         <div class="control-group"><label title="How many days after the trigger day to wait for the first confirming bounce (up-day for Long, down-day for Short) close before giving up on this setup.">Confirm Days</label><input type="number" id="pbConfirmDays" value="1" step="1" min="1" max="5" title="Days to wait for a confirming up/down-day close after the trigger day"></div>
-        <div class="control-group"><label>TP %</label><input type="number" id="pbTpPct" value="8" step="0.5" min="0.5" max="30" title="Take profit % from entry"></div>
-        <div class="control-group"><label>Hold Days</label><input type="number" id="pbHoldDays" value="5" step="1" min="1" max="60" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
+        <div class="control-group"><label>TP %</label><input type="number" id="pbTpPct" value="9" step="0.5" min="0.5" max="30" title="Take profit % from entry"></div>
+        <div class="control-group"><label>Hold Days</label><input type="number" id="pbHoldDays" value="8" step="1" min="1" max="60" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
         <div class="control-group"><label title="Weekly swing-pivot width — a weekly bar needs this many weeks lower/higher on each side to count as a swing high/low.">Pivot Weeks</label><input type="number" id="pbPivotBars" value="2" step="1" min="1" max="6" title="Weeks on each side required to confirm a weekly swing high/low"></div>
         <div class="control-group"><label title="Max number of Pullback positions open at the same time across all symbols, backtest only (0 = no limit). Not applied to the live scanner.">Max Positions</label><input type="number" id="pbMaxPositions" value="4" step="1" min="0" max="200" placeholder="0=∞" title="Cap on simultaneously open Pullback positions during backtest (0 = no limit). Live scanner is not affected."></div>
       </div>
@@ -2730,12 +2730,13 @@
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;">Max/day</span>
         <input type="number" id="maxSignalsDay" value="1" min="0" max="200" step="1"
           style="width:48px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
-          title="Cap signals per day (0 = no limit)." placeholder="0=∞">
+          title="Cap signals per day (0 = no limit)." placeholder="0=∞"
+          oninput="_syncMaxDayHidden(_strategy, this.value)">
         <!-- Per-strategy backing fields — see _maxDayEl()/_wrThreshEl()/_pnlThreshEl(). The
              visible input above always mirrors whichever one is active; engine code never
              reads the visible input directly. -->
         <input type="hidden" id="idMaxSignalsDay" value="1">
-        <input type="hidden" id="pbMaxSignalsDay" value="2">
+        <input type="hidden" id="pbMaxSignalsDay" value="3">
         <span style="width:1px;height:16px;background:var(--border);"></span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;">Rank</span>
         <select id="rankingMode"
@@ -2761,7 +2762,8 @@
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;" title="Wilson-adjusted WR — discounts symbols with few trades">Adj WR ≥</span>
         <input type="number" id="scanWrThreshold" value="40" min="0" max="100" step="5"
           style="width:48px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
-          title="Only include signals where Wilson-adjusted win rate ≥ this value. Applied to both backtest cap and live scanner.">
+          title="Only include signals where Wilson-adjusted win rate ≥ this value. Applied to both backtest cap and live scanner."
+          oninput="_syncWrThresholdHidden(_strategy, this.value)">
         <input type="hidden" id="idScanWrThreshold" value="40">
         <input type="hidden" id="pbScanWrThreshold" value="60">
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
@@ -2769,7 +2771,8 @@
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;" title="Avg net PnL% per trade from backtest history">Net PnL ≥</span>
         <input type="number" id="scanPnlThreshold" value="2.4" min="-10" max="10" step="0.1"
           style="width:52px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
-          title="Only include signals where avg net PnL% per trade ≥ this value. Applied to both backtest cap and live scanner.">
+          title="Only include signals where avg net PnL% per trade ≥ this value. Applied to both backtest cap and live scanner."
+          oninput="_syncPnlThresholdHidden(_strategy, this.value)">
         <input type="hidden" id="idScanPnlThreshold" value="0.3">
         <input type="hidden" id="pbScanPnlThreshold" value="2">
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
@@ -5283,9 +5286,55 @@ function backtest(ohlc, symId, params, debug = false) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PULLBACK MAX POSITIONS CAP — backtest only, never applied to the live scanner.
+// backtestPullback() already blocks overlapping trades *within the same symbol*
+// (busyUntilIdx), but across symbols there's nothing stopping dozens of Pullback
+// trades — each held up to Hold Days — from being open on the same calendar day.
+// This walks all candidate trades (already through the per-day Max/day cap) in
+// chronological entry order and rejects any trade that would push the number of
+// simultaneously-open positions above the cap, so the backtest reflects a
+// realistic capital-constrained portfolio.
+//
+// A position occupies a slot from its tradeDate through its exitDate inclusive.
+// A slot vacated by an exit is treated as available for a new entry that same
+// day (exit-before-entry netting — same convention used elsewhere for capital
+// reuse). Still-OPEN positions (no resolved exit yet, still live as of the last
+// loaded date) never vacate their slot within the simulation.
+// Same-tradeDate ties keep their incoming order (stable sort), which is already
+// the Max/day cap's score ranking — so higher-quality signals get first claim
+// on a limited slot.
+// ─────────────────────────────────────────────────────────────────────────────
+function _applyPullbackMaxPositions(trades, openPositions, maxPositions) {
+  if (!maxPositions || maxPositions <= 0) return { trades, openPositions };
+
+  const NEVER_VACATES = '9999-99-99';
+  const tagged = [
+    ...trades.map(t => ({ t, isOpen: false })),
+    ...openPositions.map(t => ({ t, isOpen: true })),
+  ].sort((a, b) => (a.t.tradeDate < b.t.tradeDate ? -1 : a.t.tradeDate > b.t.tradeDate ? 1 : 0));
+
+  const active = [];     // exitDates (or NEVER_VACATES) of currently-held slots
+  const keptTrades = [];
+  const keptOpen = [];
+
+  for (const { t, isOpen } of tagged) {
+    for (let i = active.length - 1; i >= 0; i--) {
+      if (active[i] <= t.tradeDate) active.splice(i, 1);
+    }
+    if (active.length < maxPositions) {
+      active.push(isOpen ? NEVER_VACATES : t.exitDate);
+      if (isOpen) keptOpen.push(t); else keptTrades.push(t);
+    }
+    // else: rejected — would exceed the concurrent-position cap
+  }
+  return { trades: keptTrades, openPositions: keptOpen };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PULLBACK BACKTEST ENGINE
 // Long:  weekly uptrend (HH/HL) + daily pullback ≥dropPct% off a rolling peak,
-//        confirmed by the first up-day close within confirmDays. SL = trigger-day low.
+// confirmed by the first up-day close within confirmDays. SL = trigger-day low.
 // Short: weekly downtrend (LH/LL) + daily rally ≥dropPct% off a rolling trough,
 //        confirmed by the first down-day close within confirmDays. SL = trigger-day high.
 // Entry: next session's open after the confirmation candle closes (no lookahead —
@@ -5302,53 +5351,54 @@ function backtestPullback(ohlc, symId, params, debug = false) {
   const swings     = _weeklySwingPoints(weeklyBars, params.pbPivotBars);
 
   let lastLongRefIdx = -1, lastShortRefIdx = -1;
-  // Enforces one open (or pending-confirmation) position per symbol at a time.
-  // Without this, a fresh trigger from a *different* peak/trough can fire while an
-  // earlier trade in the same symbol is still open — Hold Days can run several
-  // weeks, so overlapping/pyramided positions in the same stock were common.
-  // Set to at least the confirmation window on every trigger (confirmed or not),
-  // and extended to the trade's actual exit index once a trade is confirmed.
+  // Enforces one open position per symbol at a time. Without this, a fresh
+  // trigger from a *different* peak/trough can fire while an earlier trade in
+  // the same symbol is still open — Hold Days can run several weeks, so
+  // overlapping/pyramided positions in the same stock were common. Only set
+  // once a trade actually confirms and enters (below), never on a bare
+  // detection — see lastLongRefIdx/lastShortRefIdx note below.
   let busyUntilIdx = -1;
 
+  // Walk day-by-day treating `i` as a candidate CONFIRM day and delegating
+  // the actual trigger/trend/confirm decision to _detectPullbackAtDate() —
+  // the exact same function the Live Scanner calls. Previously this loop
+  // re-implemented that logic independently, checking the weekly trend on
+  // the TRIGGER day rather than the confirm day; when a downtrend/uptrend
+  // only became official between the trigger day and the confirm day (a
+  // weekend/new-week swing confirmation landing in between), the backtest
+  // silently skipped a setup the Scanner correctly confirmed. Calling
+  // _detectPullbackAtDate() here makes that divergence structurally
+  // impossible going forward. See tradeedge bug: MUTHOOTFIN/ASHOKLEY
+  // missing from Day-wise vs Live Scanner (trend was null on the trigger
+  // day but 'down' by the confirm day).
   for (let i = params.pbLookbackDays; i < ohlc.length - 1; i++) {
     if (i <= busyUntilIdx) continue;
 
-    const today = ohlc[i];
-    const trend = weeklyTrendAsOf(swings, today.date);
-    if (!trend) continue;
+    const sig = _detectPullbackAtDate(ohlc, i, swings, params);
+    if (!sig) continue;
 
-    if (trend === 'up') {
-      const trig = _pullbackTriggerAt(ohlc, i, 'LONG', params);
-      if (trig && trig.refIdx !== lastLongRefIdx) {
-        lastLongRefIdx = trig.refIdx; // suppress re-trigger from the same peak
-        const confirmIdx = _pullbackConfirmIdx(ohlc, i, 'LONG', params.pbConfirmDays);
-        busyUntilIdx = i + params.pbConfirmDays;
-        if (confirmIdx !== -1 && confirmIdx + 1 < ohlc.length) {
-          const entryIdx = confirmIdx + 1;
-          const entry = ohlc[entryIdx].open;
-          if (entry > trig.sl) {
-            const trade = _simulatePullbackExit(ohlc, entryIdx, entry, trig.sl, 'LONG', params, symId, today.date, trig.movePct);
-            if (trade) { trades.push(trade); busyUntilIdx = trade._exitIdx; }
-            if (debug) console.log(symId, today.date, `LONG pullback: drop ${trig.movePct.toFixed(2)}% sl=${trig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
-          }
-        }
-      }
-    } else if (trend === 'down') {
-      const trig = _pullbackTriggerAt(ohlc, i, 'SHORT', params);
-      if (trig && trig.refIdx !== lastShortRefIdx) {
-        lastShortRefIdx = trig.refIdx; // suppress re-trigger from the same trough
-        const confirmIdx = _pullbackConfirmIdx(ohlc, i, 'SHORT', params.pbConfirmDays);
-        busyUntilIdx = i + params.pbConfirmDays;
-        if (confirmIdx !== -1 && confirmIdx + 1 < ohlc.length) {
-          const entryIdx = confirmIdx + 1;
-          const entry = ohlc[entryIdx].open;
-          if (entry < trig.sl) {
-            const trade = _simulatePullbackExit(ohlc, entryIdx, entry, trig.sl, 'SHORT', params, symId, today.date, trig.movePct);
-            if (trade) { trades.push(trade); busyUntilIdx = trade._exitIdx; }
-            if (debug) console.log(symId, today.date, `SHORT pullback: rise ${trig.movePct.toFixed(2)}% sl=${trig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
-          }
-        }
-      }
+    const side = sig.side;
+    const lastRefIdx = side === 'LONG' ? lastLongRefIdx : lastShortRefIdx;
+    // NOTE: lastLongRefIdx/lastShortRefIdx are intentionally only updated
+    // once a trade actually confirms and enters (below) — otherwise a
+    // trigger that fails to confirm this time would permanently block every
+    // future retrigger off the same peak/trough for as long as it stays the
+    // rolling-lookback reference (often weeks), even though price can
+    // legitimately cross the Move% threshold again later.
+    if (sig.refIdx === lastRefIdx) continue;
+
+    const entryIdx = i + 1;
+    if (entryIdx >= ohlc.length) continue;
+    const entry = ohlc[entryIdx].open;
+    const validDirection = side === 'LONG' ? entry > sig.sl : entry < sig.sl;
+    if (!validDirection) continue;
+
+    const trade = _simulatePullbackExit(ohlc, entryIdx, entry, sig.sl, side, params, symId, sig.triggerDate, sig.movePct);
+    if (trade) {
+      trades.push(trade);
+      busyUntilIdx = trade._exitIdx;
+      if (side === 'LONG') lastLongRefIdx = sig.refIdx; else lastShortRefIdx = sig.refIdx;
+      if (debug) console.log(symId, ohlc[i].date, `${side} pullback: confirm-day trend, trigger ${sig.triggerDate}, move ${sig.movePct.toFixed(2)}% sl=${sig.sl} entry=${entry} (${ohlc[entryIdx].date})`);
     }
   }
   return trades;
@@ -5429,51 +5479,6 @@ function _simulatePullbackExit(ohlc, entryIdx, entry, sl, side, params, symId, t
     pnlPct:   +pnlPct.toFixed(2),
     _exitIdx: exitIdx, // internal — lets backtestPullback() block re-entry until this trade closes
   };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PULLBACK MAX POSITIONS CAP — backtest only, never applied to the live scanner.
-// backtestPullback() already blocks overlapping trades *within the same symbol*
-// (busyUntilIdx), but across symbols there's nothing stopping dozens of Pullback
-// trades — each held up to Hold Days — from being open on the same calendar day.
-// This walks all candidate trades (already through the per-day Max/day cap) in
-// chronological entry order and rejects any trade that would push the number of
-// simultaneously-open positions above the cap, so the backtest reflects a
-// realistic capital-constrained portfolio.
-//
-// A position occupies a slot from its tradeDate through its exitDate inclusive.
-// A slot vacated by an exit is treated as available for a new entry that same
-// day (exit-before-entry netting — same convention used elsewhere for capital
-// reuse). Still-OPEN positions (no resolved exit yet, still live as of the last
-// loaded date) never vacate their slot within the simulation.
-// Same-tradeDate ties keep their incoming order (stable sort), which is already
-// the Max/day cap's score ranking — so higher-quality signals get first claim
-// on a limited slot.
-// ─────────────────────────────────────────────────────────────────────────────
-function _applyPullbackMaxPositions(trades, openPositions, maxPositions) {
-  if (!maxPositions || maxPositions <= 0) return { trades, openPositions };
-
-  const NEVER_VACATES = '9999-99-99';
-  const tagged = [
-    ...trades.map(t => ({ t, isOpen: false })),
-    ...openPositions.map(t => ({ t, isOpen: true })),
-  ].sort((a, b) => (a.t.tradeDate < b.t.tradeDate ? -1 : a.t.tradeDate > b.t.tradeDate ? 1 : 0));
-
-  const active = [];     // exitDates (or NEVER_VACATES) of currently-held slots
-  const keptTrades = [];
-  const keptOpen = [];
-
-  for (const { t, isOpen } of tagged) {
-    for (let i = active.length - 1; i >= 0; i--) {
-      if (active[i] <= t.tradeDate) active.splice(i, 1);
-    }
-    if (active.length < maxPositions) {
-      active.push(isOpen ? NEVER_VACATES : t.exitDate);
-      if (isOpen) keptOpen.push(t); else keptTrades.push(t);
-    }
-    // else: rejected — would exceed the concurrent-position cap
-  }
-  return { trades: keptTrades, openPositions: keptOpen };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6041,6 +6046,44 @@ function mobEntryTypeChanged(val) {
 // strategy's settings (see saveStrategyDefaults/loadSavedDefaults) even though
 // scanWrThreshold/scanPnlThreshold are a single shared input pair — so switching
 // strategies needs to re-sync them, same as rankingMode already does below.
+// Keeps the hidden per-strategy Max/day fields (idMaxSignalsDay/pbMaxSignalsDay)
+// in sync with the single visible "Max/day" input. BUG FIX: previously nothing
+// in the codebase ever wrote to these hidden fields after their hardcoded HTML
+// defaults (idMaxSignalsDay=1, pbMaxSignalsDay=3) — editing or saving the
+// visible Max/day box only ever affected the 'overnight' strategy (which reads
+// the visible input directly via _maxDayEl()); Intraday and Pullback always
+// silently scanned/backtested with their frozen HTML defaults regardless of
+// what the UI showed or what the user saved. Call this any time the visible
+// field's value changes for any reason (user typing, defaults loading, or a
+// strategy switch), passing the strategy the value should apply to.
+function _syncMaxDayHidden(strategy, value) {
+  const id = strategy === 'intraday' ? 'idMaxSignalsDay' : strategy === 'pullback' ? 'pbMaxSignalsDay' : null;
+  if (!id) return; // 'overnight' has no separate hidden field — _maxDayEl() reads the visible input directly
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
+// BUG FIX: identical issue to _syncMaxDayHidden above, for the Adj WR / Net PnL
+// filter fields. idScanWrThreshold/pbScanWrThreshold and idScanPnlThreshold/
+// pbScanPnlThreshold were never written to anywhere — frozen forever at their
+// hardcoded HTML defaults (40/60 and 0.3/2). Editing the visible "FILTERS Adj
+// WR / Net PnL" boxes had no effect at all on Intraday or Pullback backtests
+// or their live scanners, since _wrThreshEl()/_pnlThreshEl() always read the
+// stale hidden fields instead. Call these any time the visible field's value
+// changes (typing, defaults loading, strategy switch), same as Max/day.
+function _syncWrThresholdHidden(strategy, value) {
+  const id = strategy === 'intraday' ? 'idScanWrThreshold' : strategy === 'pullback' ? 'pbScanWrThreshold' : null;
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+function _syncPnlThresholdHidden(strategy, value) {
+  const id = strategy === 'intraday' ? 'idScanPnlThreshold' : strategy === 'pullback' ? 'pbScanPnlThreshold' : null;
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
 function _wrPnlDefaultsFor(s) {
   try {
     if (s === 'overnight') {
@@ -6072,9 +6115,9 @@ function setStrategy(s) {
   if (s === _strategy) return; // no change, no need to clear
   _strategy = s;
   const { wr: wrDefault, pnl: pnlDefault, maxDay: maxDayDefault } = _wrPnlDefaultsFor(s);
-  if (wrDefault  != null) document.getElementById('scanWrThreshold').value  = wrDefault;
-  if (pnlDefault != null) document.getElementById('scanPnlThreshold').value = pnlDefault;
-  if (maxDayDefault != null) document.getElementById('maxSignalsDay').value = maxDayDefault;
+  if (wrDefault  != null) { document.getElementById('scanWrThreshold').value  = wrDefault;  _syncWrThresholdHidden(s, wrDefault); }
+  if (pnlDefault != null) { document.getElementById('scanPnlThreshold').value = pnlDefault; _syncPnlThresholdHidden(s, pnlDefault); }
+  if (maxDayDefault != null) { document.getElementById('maxSignalsDay').value = maxDayDefault; _syncMaxDayHidden(s, maxDayDefault); }
   document.getElementById('overnightParams').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('intradayParams').style.display  = s === 'intraday'  ? '' : 'none';
   document.getElementById('pullbackParams').style.display  = s === 'pullback'  ? '' : 'none';
@@ -6278,8 +6321,8 @@ const INTRADAY_DEFAULTS_D1_CLOSE = {
 // Convenience alias — always points to D2 Open defaults (used by legacy callers)
 const INTRADAY_DEFAULTS = INTRADAY_DEFAULTS_D2_OPEN;
 const PULLBACK_DEFAULTS = {
-  pbLookbackDays: 15, pbDropPct: 6, pbConfirmDays: 1, pbTpPct: 8, pbHoldDays: 5, pbPivotBars: 2,
-  maxSignalsDay: 2, pbMaxPositions: 4, wrThreshold: 60, pnlThreshold: 2.4, capitalPerTrade: 1000000,
+  pbLookbackDays: 15, pbDropPct: 6, pbConfirmDays: 1, pbTpPct: 7, pbHoldDays: 8, pbPivotBars: 2,
+  maxSignalsDay: 2, pbMaxPositions: 4, wrThreshold: 50, pnlThreshold: 2.4, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
 };
 
@@ -6445,8 +6488,8 @@ function loadSavedDefaults() {
       document.getElementById('pbTpPct').value        = d.pbTpPct;
       document.getElementById('pbHoldDays').value     = d.pbHoldDays;
       document.getElementById('pbPivotBars').value    = d.pbPivotBars;
-      document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
       document.getElementById('pbMaxPositions').value = d.pbMaxPositions;
+      document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
       if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
       if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
       if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
@@ -6459,9 +6502,9 @@ function loadSavedDefaults() {
   // win regardless of which strategy is actually active on load — re-sync to
   // the real active strategy (_strategy defaults to 'overnight').
   const { wr: activeWr, pnl: activePnl, maxDay: activeMaxDay } = _wrPnlDefaultsFor(_strategy);
-  if (activeWr  != null) document.getElementById('scanWrThreshold').value  = activeWr;
-  if (activePnl != null) document.getElementById('scanPnlThreshold').value = activePnl;
-  if (activeMaxDay != null) document.getElementById('maxSignalsDay').value = activeMaxDay;
+  if (activeWr  != null) { document.getElementById('scanWrThreshold').value  = activeWr;  _syncWrThresholdHidden(_strategy, activeWr); }
+  if (activePnl != null) { document.getElementById('scanPnlThreshold').value = activePnl; _syncPnlThresholdHidden(_strategy, activePnl); }
+  if (activeMaxDay != null) { document.getElementById('maxSignalsDay').value = activeMaxDay; _syncMaxDayHidden(_strategy, activeMaxDay); }
 }
 
 // ── Save current params as user defaults ──────────────────────────────────────
@@ -6520,8 +6563,8 @@ function saveStrategyDefaults() {
       pbTpPct:        +document.getElementById('pbTpPct').value,
       pbHoldDays:     +document.getElementById('pbHoldDays').value,
       pbPivotBars:    +document.getElementById('pbPivotBars').value,
+      pbMaxPositions: +document.getElementById('pbMaxPositions').value || 0,
       maxSignalsDay:  +document.getElementById('maxSignalsDay').value,
-      pbMaxPositions: +document.getElementById('pbMaxPositions').value,
       wrThreshold:    +document.getElementById('scanWrThreshold').value,
       pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
       capitalPerTrade:+document.getElementById('capitalPerTrade').value,
@@ -6569,6 +6612,8 @@ function resetStrategyDefaults() {
   // Reset signal filters — use saved value if available, else hardcoded default
   document.getElementById('scanWrThreshold').value  = 40;
   document.getElementById('scanPnlThreshold').value = 0.3;
+  _syncWrThresholdHidden(_strategy, 40);
+  _syncPnlThresholdHidden(_strategy, 0.3);
   if (_strategy === 'overnight') {
     // Load saved defaults if available, otherwise fall back to hardcoded
     const savedRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
@@ -6606,8 +6651,9 @@ function resetStrategyDefaults() {
     document.getElementById('idHoldDays').value      = d.idHoldDays;
     document.getElementById('idMaxOnGap').value      = d.idMaxOnGap;
     document.getElementById('maxSignalsDay').value   = d.maxSignalsDay;
-    if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-    if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+    _syncMaxDayHidden('intraday', d.maxSignalsDay);
+    if (d.wrThreshold)    { document.getElementById('scanWrThreshold').value  = d.wrThreshold;  _syncWrThresholdHidden('intraday', d.wrThreshold); }
+    if (d.pnlThreshold)   { document.getElementById('scanPnlThreshold').value = d.pnlThreshold; _syncPnlThresholdHidden('intraday', d.pnlThreshold); }
     if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value  = d.capitalPerTrade;
     document.getElementById('rankingMode').value = d.rankingMode || 'wilson';
     setDirection('short');
@@ -6623,9 +6669,11 @@ function resetStrategyDefaults() {
     document.getElementById('pbTpPct').value        = d.pbTpPct;
     document.getElementById('pbHoldDays').value     = d.pbHoldDays;
     document.getElementById('pbPivotBars').value    = d.pbPivotBars;
+    document.getElementById('pbMaxPositions').value = d.pbMaxPositions;
     document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
-    if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-    if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+    _syncMaxDayHidden('pullback', d.maxSignalsDay);
+    if (d.wrThreshold)    { document.getElementById('scanWrThreshold').value  = d.wrThreshold;  _syncWrThresholdHidden('pullback', d.wrThreshold); }
+    if (d.pnlThreshold)   { document.getElementById('scanPnlThreshold').value = d.pnlThreshold; _syncPnlThresholdHidden('pullback', d.pnlThreshold); }
     if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
     document.getElementById('rankingMode').value = d.rankingMode || 'expectancy';
     _lockDirection(false);
@@ -6706,8 +6754,8 @@ function saveMobDefaults() {
       pbTpPct:        +document.getElementById('mobPbTpPct').value,
       pbHoldDays:     +document.getElementById('mobPbHoldDays').value,
       pbPivotBars:    +document.getElementById('mobPbPivotBars').value,
+      pbMaxPositions: +document.getElementById('mobPbMaxPositions')?.value || 0,
       maxSignalsDay:  +document.getElementById('mobPbMaxDay').value,
-      pbMaxPositions: +document.getElementById('mobPbMaxPositions').value,
       wrThreshold:    +document.getElementById('mobWrInput')?.value  || 60,
       pnlThreshold:   +document.getElementById('mobPnlInput')?.value || 2,
       capitalPerTrade: capital,
@@ -6771,8 +6819,8 @@ function resetMobDefaults() {
     document.getElementById('mobPbTpPct').value        = d.pbTpPct;
     document.getElementById('mobPbHoldDays').value     = d.pbHoldDays;
     document.getElementById('mobPbPivotBars').value    = d.pbPivotBars;
-    document.getElementById('mobPbMaxDay').value       = d.maxSignalsDay;
     if (document.getElementById('mobPbMaxPositions')) document.getElementById('mobPbMaxPositions').value = d.pbMaxPositions;
+    document.getElementById('mobPbMaxDay').value       = d.maxSignalsDay;
     if (wrEl)  wrEl.value  = d.wrThreshold  || 60;
     if (pnlEl) pnlEl.value = d.pnlThreshold || 2;
   }
@@ -7520,7 +7568,7 @@ function _detectPullbackAtDate(ohlc, idx, swings, params) {
     }
     if (alreadyConfirmedEarlier) continue;
     const trig = _pullbackTriggerAt(ohlc, t, side, params);
-    if (trig) return { side, triggerDate: ohlc[t].date, sl: trig.sl, movePct: trig.movePct, confirmClose: ohlc[idx].close };
+    if (trig) return { side, triggerDate: ohlc[t].date, triggerIdx: t, refIdx: trig.refIdx, sl: trig.sl, movePct: trig.movePct, confirmClose: ohlc[idx].close };
   }
   return null;
 }
@@ -8140,24 +8188,28 @@ function buildResults(errors) {
   if (_strategy === 'intraday') buildIntradaySweep();
   if (_strategy === 'overnight') buildOvernightSweep();
   // Populate Insights tab (all strategies) — reuses the same builder as mobile.
+  // For Pullback, the Position & Holding-Period Insights section (formerly its
+  // own separate "Positions" tab) is appended directly below the main insights,
+  // so everything lives in one place instead of split across two tabs.
   const insightsContent = document.getElementById('insightsContent');
   if (insightsContent && allTrades.length > 0) {
     const fmtPctIns   = v => (v>=0?'+':'') + v.toFixed(2) + '%';
     const fmtPriceIns = v => '₹' + fmtStockPrice(v);
-    insightsContent.innerHTML = _buildMobInsights(allTrades, fmtPctIns, fmtPriceIns, {
+    let insightsHtml = _buildMobInsights(allTrades, fmtPctIns, fmtPriceIns, {
       wins: _tradeStats.nWins, losses: _tradeStats.nLoss, sls: _tradeStats.nSL,
       wr: _tradeStats.winRate, avgWin: _tradeStats.avgWin, avgLoss: _tradeStats.avgLoss,
       expectancy: _tradeStats.expectancy,
     });
+    if (_strategy === 'pullback') {
+      insightsHtml += _buildPullbackPositionInsights(allTrades);
+    }
+    insightsContent.innerHTML = insightsHtml;
   }
-  // Show/populate Positions tab (Pullback only) — reuses the same computation
-  // and rendering already built for the mobile Insights tab.
+  // Positions tab is retired — its content now lives at the bottom of Insights
+  // (see above). Keep the tab button permanently hidden rather than removing
+  // it outright, in case anything else still references #tab-positions.
   const positionsTab = document.getElementById('positionsTab');
-  if (positionsTab) positionsTab.style.display = _strategy === 'pullback' ? '' : 'none';
-  if (_strategy === 'pullback') {
-    const positionsContent = document.getElementById('positionsContent');
-    if (positionsContent) positionsContent.innerHTML = _buildPullbackPositionInsights(allTrades);
-  }
+  if (positionsTab) positionsTab.style.display = 'none';
   // Initialise day-wise date range pickers to match backtest params
   const from = _strategy === 'intraday'
     ? document.getElementById('idFromDate').value
@@ -8624,6 +8676,7 @@ function renderUnifiedTable(trades) {
       <td style="color:${t.slHit?'var(--bear)':'inherit'};">
         ₹${t.exit.toFixed(2)}
         <span style="font-size:9px;color:var(--text3);margin-left:2px;">(${t.exitNote})</span>
+        ${t.exitDate ? `<br><span style="font-size:9px;color:var(--text3);">Exit: ${new Date(t.exitDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</span>` : ''}
       </td>
       <td class="${t.pnlPct>=0?'pos-val':'neg-val'}">${t.pnlPct>=0?'+':''}${t.pnlPct.toFixed(2)}%</td>
       <td class="${rupeePnl>=0?'pos-val':'neg-val'}" style="font-weight:600;">${rupeePnl>=0?'+':''}₹${fmtRupee(rupeePnl)}</td>
@@ -11286,11 +11339,11 @@ renderWatchlist();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">TP %</div><div class="mob-settings-sub">From entry</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbTpPct" type="number" value="8" step="0.5" min="0.5" max="30"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbTpPct" type="number" value="9" step="0.5" min="0.5" max="30"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Hold Days</div><div class="mob-settings-sub">Max days to wait for TP/SL</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbHoldDays" type="number" value="5" step="1" min="1" max="60"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbHoldDays" type="number" value="8" step="1" min="1" max="60"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Pivot Weeks</div><div class="mob-settings-sub">Weekly swing-pivot width</div></div>
@@ -11298,7 +11351,7 @@ renderWatchlist();
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Max/day</div><div class="mob-settings-sub">Signals per day (0=∞)</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbMaxDay" type="number" value="2" step="1" min="0" placeholder="0=∞"></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPbMaxDay" type="number" value="3" step="1" min="0" placeholder="0=∞"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">Max Positions</div><div class="mob-settings-sub">Concurrent open, backtest only (0=∞)</div></div>
@@ -11606,8 +11659,8 @@ function closeMobSettings() {
     s('pbTpPct',         g('mobPbTpPct'));
     s('pbHoldDays',      g('mobPbHoldDays'));
     s('pbPivotBars',     g('mobPbPivotBars'));
-    s('maxSignalsDay',   g('mobPbMaxDay'));
     s('pbMaxPositions',  g('mobPbMaxPositions'));
+    s('maxSignalsDay',   g('mobPbMaxDay'));
     s('capitalPerTrade', g('mobCapital'));
     s('scanWrThreshold', g('mobWrInput'));
     s('scanPnlThreshold',g('mobPnlInput'));
@@ -12297,16 +12350,16 @@ async function _runMobTradeBacktest(strat) {
     const mobTp = document.getElementById('mobPbTpPct');
     const mobHd = document.getElementById('mobPbHoldDays');
     const mobPb = document.getElementById('mobPbPivotBars');
-    const mobMd = document.getElementById('mobPbMaxDay');
     const mobMp = document.getElementById('mobPbMaxPositions');
+    const mobMd = document.getElementById('mobPbMaxDay');
     if (mobLb) document.getElementById('pbLookbackDays').value = mobLb.value;
     if (mobDp) document.getElementById('pbDropPct').value      = mobDp.value;
     if (mobCd) document.getElementById('pbConfirmDays').value  = mobCd.value;
     if (mobTp) document.getElementById('pbTpPct').value        = mobTp.value;
     if (mobHd) document.getElementById('pbHoldDays').value     = mobHd.value;
     if (mobPb) document.getElementById('pbPivotBars').value    = mobPb.value;
-    if (mobMd) _maxDayEl().value  = mobMd.value;
     if (mobMp) document.getElementById('pbMaxPositions').value = mobMp.value;
+    if (mobMd) _maxDayEl().value  = mobMd.value;
   } else {
     const mobMin     = document.getElementById('mobMinGap');
     const mobMax     = document.getElementById('mobMaxGap');
@@ -13854,8 +13907,8 @@ function syncMobileDefaults() {
       if (el('mobPbTpPct'))        el('mobPbTpPct').value        = d.pbTpPct;
       if (el('mobPbHoldDays'))     el('mobPbHoldDays').value     = d.pbHoldDays;
       if (el('mobPbPivotBars'))    el('mobPbPivotBars').value    = d.pbPivotBars;
-      if (el('mobPbMaxDay'))       el('mobPbMaxDay').value       = d.maxSignalsDay;
       if (el('mobPbMaxPositions')) el('mobPbMaxPositions').value = d.pbMaxPositions;
+      if (el('mobPbMaxDay'))       el('mobPbMaxDay').value       = d.maxSignalsDay;
     } catch(e) { console.warn('[syncMobileDefaults] pullback error', e); }
   }
 
