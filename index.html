@@ -3024,8 +3024,7 @@
         <div class="tab active" onclick="switchTab('daywise',this)">Day-wise Trades</div>
         <div class="tab" onclick="switchTab('alltrades',this)">All Trades</div>
         <div class="tab" onclick="switchTab('calendar',this)">📅 Calendar View</div>
-        <div class="tab" onclick="switchTab('symbolSummary',this)">Symbol Summary</div>
-        <div class="tab" onclick="switchTab('verdict',this)">Strategy Verdict</div>
+        <div class="tab" onclick="switchTab('symbolSummary',this)">Stockwise</div>
         <div class="tab" onclick="switchTab('insights',this)">💡 Insights</div>
         <div class="tab" id="sweepTab" onclick="switchTab('sweep',this)" style="display:none;">🔬 Param Sweep</div>
         <div class="tab" id="positionsTab" onclick="switchTab('positions',this)" style="display:none;">📍 Positions</div>
@@ -3069,7 +3068,8 @@
           </div>
           <button class="sort-btn active" id="srtDate" onclick="sortDays('date',this)">Date ↓</button>
           <button class="sort-btn" id="srtPnl" onclick="sortDays('pnl',this)">PnL ↓</button>
-          <div style="margin-left:auto;">
+          <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+            <button onclick="downloadDaywiseCSV()" class="sort-btn" title="Download Day-wise trades as CSV" style="padding:5px 10px;font-size:12px;">⬇ CSV</button>
             <button id="expandToggleBtn" class="expand-btn" onclick="toggleExpandAll()" title="Expand / Collapse All" style="padding:5px 10px;font-size:14px;line-height:1;">⊞</button>
           </div>
         </div>
@@ -3120,6 +3120,10 @@
             style="padding:5px 12px;border-radius:8px;border:1px solid var(--border2);
               font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;
               background:var(--surface2);color:var(--text2);">↺ Reset</button>
+          <button onclick="downloadAllTradesCSV()"
+            style="padding:5px 12px;border-radius:8px;border:1px solid var(--border2);
+              font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;
+              background:var(--surface2);color:var(--text2);">⬇ CSV</button>
         </div>
 
         <!-- Summary bar -->
@@ -3131,12 +3135,14 @@
           <table id="atTable" style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:12px;">
             <thead>
               <tr style="border-bottom:2px solid var(--border2);color:var(--text3);font-size:11px;">
-                <th style="text-align:left;padding:6px 8px;white-space:nowrap;">Signal Date</th>
+                <th style="text-align:left;padding:6px 8px;white-space:nowrap;">Entry Date</th>
+                <th style="text-align:left;padding:6px 8px;white-space:nowrap;" id="atColConfirmDate">Confirm Date</th>
                 <th style="text-align:left;padding:6px 8px;">Symbol</th>
                 <th style="text-align:center;padding:6px 8px;">Dir</th>
-                <th style="text-align:right;padding:6px 8px;">Gap%</th>
-                <th style="text-align:right;padding:6px 8px;">Entry</th>
-                <th style="text-align:right;padding:6px 8px;">Exit</th>
+                <th style="text-align:right;padding:6px 8px;">Move%</th>
+                <th style="text-align:right;padding:6px 8px;">Entry ₹</th>
+                <th style="text-align:right;padding:6px 8px;white-space:nowrap;">Exit Date</th>
+                <th style="text-align:right;padding:6px 8px;">Exit ₹</th>
                 <th style="text-align:right;padding:6px 8px;">PnL%</th>
                 <th style="text-align:center;padding:6px 8px;">Result</th>
               </tr>
@@ -3182,15 +3188,6 @@
         </div>
 
         <!-- Day detail modal -->
-        <div id="calDayModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.45);overflow-y:auto;" onclick="if(event.target===this)closeCalModal()">
-          <div style="background:var(--surface);border-radius:14px;max-width:640px;margin:40px auto;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,0.3);position:relative;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-              <div id="calModalTitle" style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;"></div>
-              <button onclick="closeCalModal()" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);cursor:pointer;font-size:13px;">✕ Close</button>
-            </div>
-            <div id="calModalBody"></div>
-          </div>
-        </div>
       </div>
 
       <!-- SYMBOL SUMMARY -->
@@ -3219,13 +3216,9 @@
       </div>
 
       <!-- MONTHLY BREAKDOWN -->
-      <!-- VERDICT -->
-      <div class="tab-content" id="tab-verdict">
-        <div id="verdictContent"></div>
-      </div>
-
-      <!-- INSIGHTS (all strategies) -->
+      <!-- INSIGHTS + VERDICT (combined) -->
       <div class="tab-content" id="tab-insights">
+        <div id="verdictContent"></div>
         <div id="insightsContent" style="max-width:520px;margin:0 auto;padding:16px 0;">
           <div style="text-align:center;padding:40px;color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;">
             Run a backtest to see trade insights.
@@ -5460,9 +5453,10 @@ function _simulatePullbackExit(ohlc, entryIdx, entry, sl, side, params, symId, t
 
   return {
     sym: symId,
-    signalDate: triggerDate,
-    tradeDate:  entryDate,
-    exitDate:   ohlc[exitIdx].date,
+    signalDate:  triggerDate,
+    confirmDate: entryIdx > 0 ? ohlc[entryIdx - 1].date : entryDate, // day scanner recommends (confirm candle)
+    tradeDate:   entryDate,
+    exitDate:    ohlc[exitIdx].date,
     side,
     gapPct:   +triggerMovePct.toFixed(2), // repurposed: decline/rally % that triggered the setup
     entry:    +entry.toFixed(2),
@@ -9316,33 +9310,78 @@ function buildOvernightSweep() {
 // ─────────────────────────────────────────────────────────────────────────────
 function buildVerdict(errors) {
   const { total, nWins, winRate, totalPnl, avgPnl, slRate, longWR, shortWR } = _tradeStats;
+  const strat = _strategy || 'overnight';
 
-  let strength, icon, iconCls, title, subtitle;
+  // Strategy-specific label
+  const stratLabel = strat === 'pullback' ? 'Pullback' : strat === 'intraday' ? 'Intraday Momentum' : 'Overnight Gap';
+
+  // Strong/Marginal/Weak thresholds are the same across strategies
+  let icon, iconCls, title, subtitle;
   if (winRate >= 58 && avgPnl > 0.3) {
-    strength = 'strong'; icon = '🟢'; iconCls = 'strong';
-    title = 'Strong Edge Found'; subtitle = 'Gap continuation shows statistically meaningful positive expectancy.';
+    icon = '🟢'; iconCls = 'strong';
+    title = 'Strong Edge Found';
+    subtitle = strat === 'pullback'
+      ? 'Pullback strategy shows strong trend alignment and consistent mean-reversion entries.'
+      : strat === 'intraday'
+      ? 'Intraday momentum signals show statistically meaningful positive expectancy on D2.'
+      : 'Gap continuation shows statistically meaningful positive expectancy.';
   } else if (winRate >= 50 && avgPnl > 0) {
-    strength = 'neutral'; icon = '🟡'; iconCls = 'neutral';
-    title = 'Marginal Edge'; subtitle = 'Positive but thin. Needs careful filtering and risk management.';
+    icon = '🟡'; iconCls = 'neutral';
+    title = 'Marginal Edge';
+    subtitle = strat === 'pullback'
+      ? 'Pullback setups show a positive edge but needs tighter confirmation criteria or better trend filters.'
+      : strat === 'intraday'
+      ? 'Momentum signals are positive but thin — consider tightening move% range or SL placement.'
+      : 'Positive but thin. Needs careful gap-size filtering and risk management.';
   } else {
-    strength = 'weak'; icon = '🔴'; iconCls = 'weak';
-    title = 'Weak / No Edge'; subtitle = 'Gap continuation alone may not provide consistent alpha. Consider additional filters.';
+    icon = '🔴'; iconCls = 'weak';
+    title = 'Weak / No Edge';
+    subtitle = strat === 'pullback'
+      ? 'Pullback alone may not provide consistent alpha — check trend quality and confirm days.'
+      : strat === 'intraday'
+      ? 'Intraday momentum signals may be too noisy. Consider stricter move% or sector filters.'
+      : 'Gap continuation alone may not provide consistent alpha. Consider additional filters.';
   }
 
   const pros = [], cons = [], suggestions = [];
+
+  // Common stats
   if (winRate >= 55) pros.push(`Win rate ${winRate.toFixed(1)}% is above 55% threshold`);
   if (winRate < 50)  cons.push(`Win rate ${winRate.toFixed(1)}% is below breakeven threshold`);
   if (avgPnl > 0.2)  pros.push(`Average PnL of +${avgPnl.toFixed(2)}% per trade provides positive expectancy`);
   if (avgPnl < 0)    cons.push(`Negative avg PnL (${avgPnl.toFixed(2)}%) per trade — strategy loses money on average`);
-  if (slRate < 20)   pros.push(`SL hit rate ${slRate.toFixed(1)}% — gaps rarely fill immediately, keeping positions alive`);
-  if (slRate > 30)   cons.push(`High SL hit rate ${slRate.toFixed(1)}% — many gaps reverse on open`);
-  if (longWR > shortWR + 5)  pros.push(`Gap-up longs (${longWR.toFixed(1)}% WR) outperform gap-down shorts (${shortWR.toFixed(1)}% WR)`);
-  if (shortWR > longWR + 5)  pros.push(`Gap-down shorts (${shortWR.toFixed(1)}% WR) outperform gap-up longs (${longWR.toFixed(1)}% WR)`);
-  if (Math.abs(longWR - shortWR) < 5) suggestions.push('Long and short win rates are similar — no directional bias in the strategy');
 
-  suggestions.push('Consider adding volume filter: high-volume gaps tend to continue more reliably');
-  suggestions.push('Market regime filter (Nifty above/below 200EMA) can improve hit rate significantly');
-  suggestions.push('Test on sector-specific stocks for stronger momentum clusters');
+  // Strategy-specific pros/cons
+  if (strat === 'overnight') {
+    if (slRate < 20)  pros.push(`SL hit rate ${slRate.toFixed(1)}% — gaps rarely fill immediately, keeping positions alive`);
+    if (slRate > 30)  cons.push(`High SL hit rate ${slRate.toFixed(1)}% — many gaps reverse sharply on D2 open`);
+    if (longWR > shortWR + 5) pros.push(`Gap-up longs (${longWR.toFixed(1)}% WR) outperform gap-down shorts (${shortWR.toFixed(1)}% WR)`);
+    if (shortWR > longWR + 5) pros.push(`Gap-down shorts (${shortWR.toFixed(1)}% WR) outperform gap-up longs (${longWR.toFixed(1)}% WR)`);
+    if (Math.abs(longWR - shortWR) < 5) suggestions.push('Long and short win rates are similar — no strong directional bias');
+    suggestions.push('Consider adding volume filter: high-volume gaps tend to continue more reliably');
+    suggestions.push('Market regime filter (Nifty above/below 200EMA) can improve hit rate significantly');
+    suggestions.push('Test on sector-specific stocks for stronger gap momentum clusters');
+  } else if (strat === 'intraday') {
+    if (slRate < 20)  pros.push(`Low SL hit rate ${slRate.toFixed(1)}% — momentum holds well into D2`);
+    if (slRate > 35)  cons.push(`High SL hit rate ${slRate.toFixed(1)}% — D2 often reverses before reaching target`);
+    if (longWR > shortWR + 5) pros.push(`Long setups (${longWR.toFixed(1)}% WR) outperform shorts (${shortWR.toFixed(1)}% WR) — bullish bias working`);
+    if (shortWR > longWR + 5) pros.push(`Short setups (${shortWR.toFixed(1)}% WR) outperform longs (${longWR.toFixed(1)}% WR) — bearish bias working`);
+    suggestions.push('Tighten move% range to filter out weak momentum signals');
+    suggestions.push('Sector rotation check: momentum clusters tend to appear in trending sectors');
+    suggestions.push('Market regime filter (Nifty trend) can separate momentum vs. mean-reversion days');
+    suggestions.push('Consider Skip% carefully — it prevents fighting strong gap-against-move days');
+  } else { // pullback
+    if (slRate < 15)  pros.push(`Low SL hit rate ${slRate.toFixed(1)}% — structural SLs are holding well`);
+    if (slRate > 30)  cons.push(`High SL hit rate ${slRate.toFixed(1)}% — structural lows/highs being broken too often`);
+    if (longWR > shortWR + 5) pros.push(`Long pullbacks (${longWR.toFixed(1)}% WR) outperform short rallies (${shortWR.toFixed(1)}% WR)`);
+    if (shortWR > longWR + 5) pros.push(`Short rallies (${shortWR.toFixed(1)}% WR) outperform long pullbacks (${longWR.toFixed(1)}% WR)`);
+    if (Math.abs(longWR - shortWR) < 5) suggestions.push('Both directions have similar WR — market is not showing a clear trend bias');
+    suggestions.push('Increase Confirm Days if too many false breakouts are hitting SL');
+    suggestions.push('Tighten Drop% threshold to only catch deeper, higher-quality pullbacks');
+    suggestions.push('Check Max Positions setting — over-diversification reduces per-trade capital efficiency');
+    suggestions.push('Market regime filter (weekly trend of Nifty) can separate high-quality vs. low-quality pullback environments');
+  }
+
   if (errors.length > 0) suggestions.push(`Data unavailable for: ${errors.join(', ')} — results may be incomplete`);
 
   document.getElementById('verdictContent').innerHTML = `
@@ -9812,7 +9851,16 @@ function renderMonthlyView() {
     return;
   }
 
-  let cumPnl = 0, cumRupee = 0;
+  // Pre-compute cumulative in chronological order (oldest first → newest last)
+  const cumByMonth = {};
+  let _cp = 0, _cr = 0;
+  [...months].reverse().forEach(m => {
+    const mt = byMonth[m];
+    _cp += mt.reduce((s, t) => s + t.pnlPct, 0);
+    _cr += mt.reduce((s, t) => s + (t.pnlPct / 100 * capital), 0);
+    cumByMonth[m] = { pct: _cp, rupee: _cr };
+  });
+
   let html = `<div style="overflow-x:auto;">
     <table style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:12px;">
       <thead>
@@ -9829,6 +9877,16 @@ function renderMonthlyView() {
       </thead>
       <tbody>`;
 
+  // Build open-position lookup by month (Pullback only)
+  const openByMonth = {};
+  if (_strategy === 'pullback') {
+    (_pullbackOpenPositions || []).forEach(t => {
+      const key = (t.tradeDate || '').slice(0, 7);
+      if (key) (openByMonth[key] = openByMonth[key] || []).push(t);
+    });
+  }
+  const totOpenCount = _strategy === 'pullback' ? (_pullbackOpenPositions || []).length : 0;
+
   // Totals row — computed upfront and shown at top
   const allTrades = Object.values(byDay).flat();
   const totWins  = allTrades.filter(t => t.outcome === 'WIN').length;
@@ -9840,13 +9898,16 @@ function renderMonthlyView() {
   const totCls   = _pnlColor(totPnl);
   html += `<tr style="background:var(--surface2);border-bottom:2px solid var(--border2);font-weight:700;">
     <td style="padding:10px 14px;font-family:'Syne',sans-serif;font-size:12px;color:var(--text);">TOTAL</td>
-    <td style="padding:10px 8px;text-align:center;color:var(--accent);">${allTrades.length}</td>
+    <td style="padding:10px 8px;text-align:center;color:var(--accent);">${allTrades.length}${totOpenCount?`<br><span onclick="showOpenPositionsModal('')" style="font-size:10px;color:var(--accent);font-weight:400;cursor:pointer;" title="Click to see all open positions">+${totOpenCount} ◉ open</span>`:''}</td>
     <td style="padding:10px 8px;text-align:center;color:var(--text2);">${totWins}/${totLoss}/${totSL}</td>
     <td style="padding:10px 8px;text-align:center;color:${totWR>=55?'var(--bull)':totWR>=45?'var(--gold)':'var(--bear)'};">${totWR}%</td>
     <td style="padding:10px 8px;text-align:right;color:${totCls};">${_pnlSign(totPnl)}${totPnl.toFixed(2)}%</td>
     <td style="padding:10px 8px;text-align:right;color:${totCls};">${_pnlSign(totPnl/allTrades.length)}${(totPnl/allTrades.length).toFixed(2)}%</td>
     <td style="padding:10px 8px;text-align:right;color:${_pnlColor(totRupee)};">${_pnlSign(totRupee)}₹${Math.abs(totRupee).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-    <td style="padding:10px 14px;text-align:right;color:${totCls};">${_pnlSign(totPnl)}${totPnl.toFixed(2)}%</td>
+    <td style="padding:10px 14px;text-align:right;color:${totCls};">
+      <div style="font-weight:700;">${_pnlSign(totPnl)}${totPnl.toFixed(2)}%</div>
+      <div style="font-size:10px;color:${_pnlColor(totRupee)};font-weight:400;">${_pnlSign(totRupee)}₹${Math.abs(totRupee).toLocaleString('en-IN',{maximumFractionDigits:0})}</div>
+    </td>
   </tr>`;
 
   let prevYear = '';
@@ -9861,8 +9922,9 @@ function renderMonthlyView() {
     const rupee = trades.reduce((s, t) => s + (t.pnlPct / 100 * capital), 0);
     const wr    = Math.round(wins / trades.length * 100);
     const avg   = pnl / trades.length;
-    cumPnl   += pnl;
-    cumRupee += rupee;
+    const openC = (openByMonth[m] || []).length;
+    const cumPnl   = cumByMonth[m].pct;
+    const cumRupee = cumByMonth[m].rupee;
 
     const pnlCls  = _pnlColor(pnl);
     const cumCls  = _pnlColor(cumPnl);
@@ -9879,13 +9941,16 @@ function renderMonthlyView() {
 
     html += `<tr style="${rowBg}border-bottom:1px solid var(--border);">
       <td style="padding:9px 14px;font-weight:600;color:var(--text);white-space:nowrap;">${monthName}</td>
-      <td style="padding:9px 8px;text-align:center;color:var(--accent);font-weight:700;">${trades.length}</td>
+      <td style="padding:9px 8px;text-align:center;color:var(--accent);font-weight:700;">${trades.length}${openC?`<br><span onclick="showOpenPositionsModal('${m}')" style="font-size:10px;color:var(--accent);font-weight:400;cursor:pointer;" title="Click to see open positions">+${openC} ◉</span>`:''}</td>
       <td style="padding:9px 8px;text-align:center;color:var(--text2);">${wins}/${loss}/${sl}</td>
       <td style="padding:9px 8px;text-align:center;font-weight:700;color:${wrCls};">${wr}%</td>
       <td style="padding:9px 8px;text-align:right;font-weight:700;color:${pnlCls};">${_pnlSign(pnl)}${pnl.toFixed(2)}%</td>
       <td style="padding:9px 8px;text-align:right;color:${pnlCls};">${_pnlSign(avg)}${avg.toFixed(2)}%</td>
       <td style="padding:9px 8px;text-align:right;color:${_pnlColor(rupee)};">${_pnlSign(rupee)}₹${Math.abs(rupee).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-      <td style="padding:9px 14px;text-align:right;font-weight:700;color:${cumCls};">${_pnlSign(cumPnl)}${cumPnl.toFixed(2)}%</td>
+      <td style="padding:9px 14px;text-align:right;">
+        <div style="font-weight:700;color:${cumCls};">${_pnlSign(cumPnl)}${cumPnl.toFixed(2)}%</div>
+        <div style="font-size:10px;color:${_pnlColor(cumRupee)};">${_pnlSign(cumRupee)}₹${Math.abs(cumRupee).toLocaleString('en-IN',{maximumFractionDigits:0})}</div>
+      </td>
     </tr>`;
   });
 
@@ -9913,7 +9978,7 @@ function mobSetCalView(view) {
 function mobRenderMonthlyView() {
   const container = document.getElementById('mobMonthlyInner');
   if (!container) return;
-  // Always use byTradeDay (exit date) to match desktop calendar view
+  // Always use byTradeDay to match desktop calendar view
   const byDay = _tradeStats && _tradeStats.byTradeDay ? _tradeStats.byTradeDay : {};
 
   const byMonth = {};
@@ -9923,6 +9988,15 @@ function mobRenderMonthlyView() {
     byMonth[key].push(...trades);
   });
 
+  // Build open-position lookup by month (Pullback only)
+  const openByMonth = {};
+  if (_strategy === 'pullback') {
+    (_pullbackOpenPositions || []).forEach(t => {
+      const key = (t.tradeDate || '').slice(0, 7);
+      if (key) (openByMonth[key] = openByMonth[key] || []).push(t);
+    });
+  }
+
   const months = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
   if (!months.length) {
     container.innerHTML = '<div style="text-align:center;padding:40px;font-family:\'DM Mono\',monospace;font-size:12px;color:var(--text3);">Run a backtest to see monthly stats</div>';
@@ -9930,7 +10004,17 @@ function mobRenderMonthlyView() {
   }
 
   const capital = getCapital ? getCapital() : 1000000;
-  let cumPnl = 0;
+
+  // Pre-compute cumulative in chronological order (oldest → newest)
+  const mobCumByMonth = {};
+  let _mcp = 0, _mcr = 0;
+  [...months].reverse().forEach(m => {
+    const mt = byMonth[m];
+    _mcp += mt.reduce((s, t) => s + t.pnlPct, 0);
+    _mcr += mt.reduce((s, t) => s + (t.pnlPct / 100 * capital), 0);
+    mobCumByMonth[m] = { pct: _mcp, rupee: _mcr };
+  });
+
   let prevYear = '';
   let html = '';
 
@@ -9943,7 +10027,9 @@ function mobRenderMonthlyView() {
     const pnl   = trades.reduce((s, t) => s + t.pnlPct, 0);
     const wr    = Math.round(wins / trades.length * 100);
     const avg   = pnl / trades.length;
-    cumPnl += pnl;
+    const openC = (openByMonth[m] || []).length;
+    const cumPnl   = mobCumByMonth[m].pct;
+    const cumRupee = mobCumByMonth[m].rupee;
     const pnlCls = _pnlColor(pnl);
     const wrCls  = wr >= 55 ? 'var(--bull)' : wr >= 45 ? 'var(--gold)' : 'var(--bear)';
     const cumCls = _pnlColor(cumPnl);
@@ -9959,12 +10045,16 @@ function mobRenderMonthlyView() {
       padding:12px 14px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--text);">${monthName}</span>
-        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:${pnlCls};">${_pnlSign(pnl)}${pnl.toFixed(2)}%</span>
+        <div style="text-align:right;">
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:${pnlCls};">${_pnlSign(pnl)}${pnl.toFixed(2)}%</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">Cum: <span style="color:${cumCls};font-weight:600;">${_pnlSign(cumPnl)}${cumPnl.toFixed(2)}%</span> · <span style="color:${cumCls};">${_pnlSign(cumRupee)}₹${Math.abs(cumRupee).toLocaleString('en-IN',{maximumFractionDigits:0})}</span></div>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
         <div style="text-align:center;background:var(--surface2);border-radius:6px;padding:6px 4px;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px;">Trades</div>
           <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--accent);">${trades.length}</div>
+          ${openC ? `<div onclick="showOpenPositionsModal('${m}')" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);cursor:pointer;" title="Tap to see open positions">+${openC} ◉</div>` : ''}
         </div>
         <div style="text-align:center;background:var(--surface2);border-radius:6px;padding:6px 4px;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px;">Win %</div>
@@ -10018,6 +10108,14 @@ function renderCalendarYear() {
   const year   = _calYear;
   const byDay  = _tradeStats.byTradeDay || {};
 
+  // Build open-position lookup by entry date (Pullback only; empty for other strategies)
+  const openByDay = {};
+  if (_strategy === 'pullback') {
+    (_pullbackOpenPositions || []).forEach(t => {
+      (openByDay[t.tradeDate] = openByDay[t.tradeDate] || []).push(t);
+    });
+  }
+
   document.getElementById('calYearLabel').textContent = year;
 
   // Year summary
@@ -10050,7 +10148,10 @@ function renderCalendarYear() {
     const mSkips  = mTrades.filter(t => t.outcome === 'SKIP').length;
     const mActive = mTrades.filter(t => t.outcome !== 'SKIP');
     const mTotal  = mActive.length;
-    if (!mTotal && !mSkips) continue; // skip empty months
+    const mOpenCount = Object.entries(openByDay)
+      .filter(([d]) => d.startsWith(monthPfx))
+      .reduce((s,[,os]) => s + os.length, 0);
+    if (!mTotal && !mSkips && !mOpenCount) continue; // skip empty months
     const mWins  = mActive.filter(t => t.outcome === 'WIN').length;
     const mLoss  = mActive.filter(t => t.outcome !== 'WIN' && !t.slHit).length;
     const mSL    = mActive.filter(t => t.slHit).length;
@@ -10067,7 +10168,8 @@ function renderCalendarYear() {
       const isWknd  = dow === 0 || dow === 6;
       const trades  = byDay[dateStr] || [];
 
-      if (!trades.length) {
+      const openHere = openByDay[dateStr] || [];
+      if (!trades.length && !openHere.length) {
         grid += `<div style="text-align:center;padding:3px 1px;border-radius:3px;font-family:'DM Mono',monospace;font-size:9px;color:${isWknd?'var(--text3)':'var(--text2)'};">${day}</div>`;
         continue;
       }
@@ -10077,17 +10179,20 @@ function renderCalendarYear() {
       const wins   = active.filter(t => t.outcome === 'WIN').length;
       const slHit  = active.filter(t => t.slHit).length;
       const pnl    = active.reduce((s,t) => s + t.pnlPct, 0);
-      const bg     = active.length ? _pnlBg(pnl) : 'var(--surface2)';
+      const bg     = active.length ? _pnlBg(pnl) : openHere.length ? 'var(--surface2)' : 'var(--surface2)';
       const color  = _pnlColor(pnl);
       const pnlStr = active.length ? _pnlSign(pnl) + pnl.toFixed(2) + '%' : '';
       const wlLabel = active.length ? (slHit > 0 ? `${wins}W/${slHit}SL` : `${wins}W/${active.length-wins}L`) : '';
       const skipStr = skips > 0 ? `${skips}⊘` : '';
-      grid += `<div onclick="openCalDay('${dateStr}')" title="${dateStr}: ${active.length}T ${wins}W ${pnlStr}${skips>0?' · '+skips+' skipped':''}"
+      const openStr = openHere.length ? `<div onclick="event.stopPropagation();showOpenPositionsModal('${dateStr}')" style="font-size:7px;color:var(--accent);font-weight:600;line-height:1.2;cursor:pointer;" title="Click to see open positions">●${openHere.length}open</div>` : '';
+      const openTitle = openHere.length ? ` · ${openHere.length} open: ${openHere.map(t=>t.sym).join(',')}` : '';
+      grid += `<div onclick="openCalDay('${dateStr}')" title="${dateStr}: ${active.length}T ${wins}W ${pnlStr}${skips>0?' · '+skips+' skipped':''}${openTitle}"
         style="text-align:center;padding:3px 1px 4px;border-radius:4px;cursor:pointer;
                background:${bg};font-family:'DM Mono',monospace;">
         <div style="font-size:8px;color:var(--text3);line-height:1.3;">${day}</div>
         <div style="font-size:9px;font-weight:700;color:${color};line-height:1.3;">${pnlStr}</div>
         <div style="font-size:7px;color:var(--text3);line-height:1.2;">${wlLabel}${wlLabel&&skipStr?' ':''}${skipStr}</div>
+        ${openStr}
       </div>`;
     }
 
@@ -10105,10 +10210,11 @@ function renderCalendarYear() {
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;">${grid}</div>
       </div>
       <!-- Stats footer -->
-      ${mTotal ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);background:var(--surface2);">
-        <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
+      ${mTotal || mOpenCount ? `<div style="display:grid;grid-template-columns:repeat(${mTotal?4:1},1fr);border-top:1px solid var(--border);background:var(--surface2);">
+        ${mTotal ? `<div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Trades</div>
           <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--accent);">${mTotal}</div>
+          ${mOpenCount ? `<div onclick="showOpenPositionsModal('${monthPfx}')" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--accent);cursor:pointer;font-weight:600;" title="Click to see open positions">+${mOpenCount} ◉ open</div>` : ''}
         </div>
         <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Win Rate</div>
@@ -10121,7 +10227,10 @@ function renderCalendarYear() {
         <div style="text-align:center;padding:6px 4px;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Avg/T</div>
           <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:${mPnlCls};">${_pnlSign(mTotal?mPnl/mTotal:0)}${(mTotal?mPnl/mTotal:0).toFixed(2)}%</div>
-        </div>
+        </div>` : `<div onclick="showOpenPositionsModal('${monthPfx}')" style="text-align:center;padding:6px 4px;cursor:pointer;" title="Click to see open positions">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Open Positions</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--accent);">${mOpenCount} ◉</div>
+        </div>`}
       </div>` : `<div style="text-align:center;padding:8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);border-top:1px solid var(--border);background:var(--surface2);">No trades</div>`}
     </div>`;
   }
@@ -10135,6 +10244,15 @@ function renderCalendar() { renderCalendarYear(); } // legacy alias
 
 function openCalDay(dateStr) {
   const trades = (_tradeStats.byTradeDay || {})[dateStr] || [];
+  const openPositions = _strategy === 'pullback'
+    ? (_pullbackOpenPositions || []).filter(t => t.tradeDate === dateStr)
+    : [];
+
+  // If no closed trades but open positions exist, show the open positions modal
+  if (!trades.length && openPositions.length) {
+    showOpenPositionsModal(dateStr);
+    return;
+  }
   if (!trades.length) return;
 
   const dt  = new Date(dateStr + 'T00:00:00');
@@ -10179,6 +10297,42 @@ function openCalDay(dateStr) {
     <span style="color:${pnlCls};font-weight:700;">${_pnlSign(pnl)}${pnl.toFixed(2)}% net</span>
   </div>`;
 
+  // Build open positions section for this day (Pullback only)
+  let openSection = '';
+  if (openPositions.length) {
+    const openRows = openPositions.map(t => {
+      const dirC = t.side === 'LONG' ? 'var(--bull)' : 'var(--bear)';
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px 10px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">${t.sym}</td>
+        <td style="padding:8px 10px;font-size:11px;color:${dirC};">${t.side === 'LONG' ? '▲ LONG' : '▼ SHORT'}</td>
+        <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;">₹${t.entry?.toFixed(2) || '—'}</td>
+        <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--bear);">₹${t.sl?.toFixed(2) || '—'}</td>
+        <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--bull);">₹${t.tp?.toFixed(2) || '—'}</td>
+        <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--accent);">${t.daysHeld != null ? t.daysHeld + 'd' : '—'}</td>
+      </tr>`;
+    }).join('');
+    openSection = `
+    <div style="margin-top:18px;">
+      <div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--accent);margin-bottom:8px;">
+        ◉ Open Position${openPositions.length > 1 ? 's' : ''} · still live</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Symbol</th>
+              <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Dir</th>
+              <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Entry ₹</th>
+              <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--bear);text-transform:uppercase;">SL</th>
+              <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--bull);text-transform:uppercase;">Target</th>
+              <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;">Held</th>
+            </tr>
+          </thead>
+          <tbody>${openRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
   document.getElementById('calModalBody').innerHTML = summary + `
     <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;">
@@ -10196,13 +10350,87 @@ function openCalDay(dateStr) {
         </thead>
         <tbody>${rows}</tbody>
       </table>
-    </div>`;
+    </div>${openSection}`;
 
   document.getElementById('calDayModal').style.display = '';
 }
 
 function closeCalModal() {
   document.getElementById('calDayModal').style.display = 'none';
+}
+
+// Shows a popup listing open (still-live) pullback positions for a date or month key.
+// dateOrMonth: 'YYYY-MM-DD' (day) or 'YYYY-MM' (month) — matched against t.tradeDate; '' = all
+function showOpenPositionsModal(dateOrMonth) {
+  // Use live array; fall back to render-time snapshot (mobile path)
+  const pool = (_pullbackOpenPositions && _pullbackOpenPositions.length)
+    ? _pullbackOpenPositions
+    : (_mobOpenPositionsCache || []);
+  const positions = pool.filter(t => (t.tradeDate || '').startsWith(dateOrMonth));
+  if (!positions.length) return;
+
+  const isMonth = dateOrMonth.length === 7;
+  const isAll   = dateOrMonth === '';
+  const label   = isAll
+    ? 'All Open Positions'
+    : isMonth
+      ? new Date(dateOrMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+      : new Date(dateOrMonth + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
+  const titleHtml = `◉ Open Positions &nbsp;<span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--accent);">${label} · ${positions.length} position${positions.length>1?'s':''}</span>`;
+
+  const rows = positions.map(t => {
+    const dirC = t.side === 'LONG' ? 'var(--bull)' : 'var(--bear)';
+    const heldSoFar = t.daysHeld != null ? `${t.daysHeld}d` : '—';
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px 10px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">${t.sym}</td>
+      <td style="padding:8px 10px;font-size:11px;color:${dirC};">${t.side === 'LONG' ? '▲ LONG' : '▼ SHORT'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">${t.tradeDate}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;">₹${t.entry?.toFixed(2) || '—'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--bear);">₹${t.sl?.toFixed(2) || '—'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--bull);">₹${t.tp?.toFixed(2) || '—'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--accent);">${heldSoFar}</td>
+    </tr>`;
+  }).join('');
+
+  const bodyHtml = `
+    <div style="margin-bottom:14px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">
+      These positions are still live as of the latest loaded data — exit and P&amp;L not yet determined.
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);">
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Symbol</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Dir</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Entry Date</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Entry ₹</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--bear);text-transform:uppercase;">SL</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--bull);text-transform:uppercase;">Target</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;">Held So Far</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  // On mobile use the proven mobMonthDayModal; on desktop use calDayModal
+  if (window.innerWidth <= 768) {
+    const body = document.getElementById('mobMonthDayBody');
+    if (body) {
+      body.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);">
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--accent);">◉ Open Positions</div>
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);">${label} · ${positions.length} pos</div>
+        </div>
+        ${bodyHtml}`;
+      document.getElementById('mobMonthDayModal').style.display = 'flex';
+    }
+  } else {
+    document.getElementById('calModalTitle').innerHTML = titleHtml;
+    document.getElementById('calModalBody').innerHTML = bodyHtml;
+    document.getElementById('calDayModal').style.display = 'block';
+  }
 }
 
 function switchTab(id, el) {
@@ -10248,9 +10476,17 @@ function buildAllTradesTab() {
   }
   empty.style.display = 'none';
 
+  // For Pullback: use confirmDate (= scanner recommendation date) as the primary date field.
+  // For Overnight/Intraday: signalDate == scanner date, so fall back to that.
+  const getDisplayDate = t => t.confirmDate || t.signalDate;
+
+  // Update column header label based on strategy
+  const colHeader = document.getElementById('atColConfirmDate');
+  if (colHeader) colHeader.textContent = _strategy === 'pullback' ? 'Confirm Date' : 'Signal Date';
+
   // Populate month dropdown from available data
   const monthSel = document.getElementById('atMonthFilter');
-  const months   = [...new Set(trades.map(t => t.signalDate.slice(0,7)))].sort().reverse();
+  const months   = [...new Set(trades.map(t => getDisplayDate(t).slice(0,7)))].sort().reverse();
   const curMonth = monthSel.value;
   monthSel.innerHTML = '<option value="all">All Months</option>'
     + months.map(m => {
@@ -10269,13 +10505,13 @@ function buildAllTradesTab() {
   if (symF)            trades = trades.filter(t => t.sym.includes(symF));
   if (dirF !== 'all')  trades = trades.filter(t => t.side === dirF);
   if (resF !== 'all')  trades = trades.filter(t => t.outcome === resF);
-  if (monthF !== 'all') trades = trades.filter(t => t.signalDate.startsWith(monthF));
+  if (monthF !== 'all') trades = trades.filter(t => getDisplayDate(t).startsWith(monthF));
 
   // Sort
   trades.sort((a, b) => {
     switch (sort) {
-      case 'date_desc': return b.signalDate.localeCompare(a.signalDate);
-      case 'date_asc':  return a.signalDate.localeCompare(b.signalDate);
+      case 'date_desc': return getDisplayDate(b).localeCompare(getDisplayDate(a));
+      case 'date_asc':  return getDisplayDate(a).localeCompare(getDisplayDate(b));
       case 'pnl_desc':  return b.pnlPct - a.pnlPct;
       case 'pnl_asc':   return a.pnlPct - b.pnlPct;
       case 'gap_desc':  return Math.abs(b.gapPct) - Math.abs(a.gapPct);
@@ -10326,11 +10562,13 @@ function buildAllTradesTab() {
     return `<tr style="border-bottom:1px solid var(--border);"
               onmouseover="this.style.background='var(--surface2)'"
               onmouseout="this.style.background=''">
-      <td style="padding:7px 8px;color:var(--text3);white-space:nowrap;">${t.signalDate}</td>
+      <td style="padding:7px 8px;color:var(--text3);white-space:nowrap;">${t.tradeDate}</td>
+      <td style="padding:7px 8px;color:var(--text3);white-space:nowrap;">${getDisplayDate(t)}</td>
       <td style="padding:7px 8px;font-weight:600;">${t.sym}</td>
       <td style="padding:7px 8px;text-align:center;color:${dirC};">${t.side==='LONG'?'▲':'▼'} ${t.side}</td>
       <td style="padding:7px 8px;text-align:right;color:${gapC};">${t.gapPct>=0?'+':''}${t.gapPct}%</td>
       <td style="padding:7px 8px;text-align:right;">₹${t.entry.toLocaleString('en-IN')}</td>
+      <td style="padding:7px 8px;text-align:right;color:var(--text3);white-space:nowrap;">${t.exitDate || '—'}</td>
       <td style="padding:7px 8px;text-align:right;">₹${t.exit.toLocaleString('en-IN')}</td>
       <td style="padding:7px 8px;text-align:right;font-weight:600;color:${pnlC};">${t.pnlPct>=0?'+':''}${t.pnlPct}%</td>
       <td style="padding:7px 8px;text-align:center;">
@@ -10342,11 +10580,84 @@ function buildAllTradesTab() {
   }).join('');
 
   tbody.innerHTML = rows
-    + (truncated ? `<tr><td colspan="8" style="text-align:center;padding:12px;
+    + (truncated ? `<tr><td colspan="10" style="text-align:center;padding:12px;
         color:var(--text3);font-family:'DM Mono',monospace;font-size:11px;">
         Showing ${MAX_ROWS} of ${trades.length} trades — use Month filter to narrow down
       </td></tr>` : '')
-    || `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text3);">No trades match filters</td></tr>`;
+    || `<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text3);">No trades match filters</td></tr>`;
+}
+
+function _csvEscape(v) { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s; }
+
+function _triggerCSVDownload(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadAllTradesCSV() {
+  let trades = (_allTradesForWR || []).slice();
+  if (_direction === 'long')  trades = trades.filter(t => t.side === 'LONG');
+  if (_direction === 'short') trades = trades.filter(t => t.side === 'SHORT');
+
+  const symF   = (document.getElementById('atSymFilter').value || '').toUpperCase().trim();
+  const dirF   = document.getElementById('atDirFilter').value;
+  const resF   = document.getElementById('atResultFilter').value;
+  const monthF = document.getElementById('atMonthFilter').value;
+  const getD   = t => t.confirmDate || t.signalDate;
+
+  if (symF)             trades = trades.filter(t => t.sym.includes(symF));
+  if (dirF !== 'all')   trades = trades.filter(t => t.side === dirF);
+  if (resF !== 'all')   trades = trades.filter(t => t.outcome === resF);
+  if (monthF !== 'all') trades = trades.filter(t => getD(t).startsWith(monthF));
+
+  const header = ['Confirm Date','Symbol','Direction','Move%','Entry Date','Entry Price','Exit Date','Exit Price','PnL%','Result','Days Held'];
+  const rows   = [...trades].sort((a,b) => (b.tradeDate||b.signalDate).localeCompare(a.tradeDate||a.signalDate)).map(t => [
+    getD(t), t.sym, t.side, t.gapPct, t.tradeDate, t.entry, t.exitDate || '', t.exit, t.pnlPct, t.outcome, t.daysHeld ?? ''
+  ].map(_csvEscape).join(','));
+
+  const strat = (_strategy || 'trades').toUpperCase();
+  const date  = new Date().toISOString().slice(0,10);
+  _triggerCSVDownload([header.join(','), ...rows].join('\n'), `TradeEdge_${strat}_AllTrades_${date}.csv`);
+}
+
+function downloadMobAllTradesCSV() {
+  const strat = _mobTradesStratTab || _strategy || 'overnight';
+  let trades = (_mobAllTradesCache[strat] || _allTradesForWR || []).slice();
+  if (strat === 'intraday') {
+    trades = trades.filter(t => t.side === 'SHORT');
+  } else if (strat === 'overnight' || strat === 'pullback') {
+    if (_mobDir === 'long')  trades = trades.filter(t => t.side === 'LONG');
+    if (_mobDir === 'short') trades = trades.filter(t => t.side === 'SHORT');
+  }
+  if (_mobAtSymFilter) trades = trades.filter(t => t.sym.includes(_mobAtSymFilter.toUpperCase()));
+  if (!trades.length) return;
+
+  const getD = t => t.confirmDate || t.signalDate;
+  const header = ['Confirm Date','Symbol','Direction','Move%','Entry Date','Entry Price','Exit Date','Exit Price','PnL%','Result','Days Held'];
+  const rows = [...trades].sort((a,b) => (b.tradeDate||b.signalDate).localeCompare(a.tradeDate||a.signalDate)).map(t => [
+    getD(t), t.sym, t.side, t.gapPct, t.tradeDate, t.entry, t.exitDate || '', t.exit, t.pnlPct, t.outcome, t.daysHeld ?? ''
+  ].map(_csvEscape).join(','));
+
+  const date = new Date().toISOString().slice(0, 10);
+  _triggerCSVDownload([header.join(','), ...rows].join('\n'), `TradeEdge_${strat.toUpperCase()}_AllTrades_${date}.csv`);
+}
+
+function downloadDaywiseCSV() {
+  const trades = allTrades.slice();
+  if (!trades.length) return;
+  const isPb = _strategy === 'pullback';
+  const header = ['Entry Date','Signal Date','Symbol','Direction','Move%','Entry Price','Exit Date','Exit Price','PnL%','Result','Days Held'];
+  const rows   = [...trades].sort((a,b) => (b.tradeDate||b.signalDate).localeCompare(a.tradeDate||a.signalDate)).map(t => [
+    t.tradeDate || t.signalDate, isPb ? t.signalDate : (t.tradeDate || t.signalDate),
+    t.sym, t.side, t.gapPct, t.entry, t.exitDate || '', t.exit, t.pnlPct, t.outcome, t.daysHeld ?? ''
+  ].map(_csvEscape).join(','));
+
+  const strat = (_strategy || 'trades').toUpperCase();
+  const date  = new Date().toISOString().slice(0,10);
+  _triggerCSVDownload([header.join(','), ...rows].join('\n'), `TradeEdge_${strat}_DaywiseTrades_${date}.csv`);
 }
 
 function clearResults() {
@@ -11551,7 +11862,7 @@ function mobSetStrategy(s) {
   const mobPnlEl = document.getElementById('mobPnlInput');
   if (mobWrEl)  mobWrEl.value  = document.getElementById('scanWrThreshold').value;
   if (mobPnlEl) mobPnlEl.value = document.getElementById('scanPnlThreshold').value;
-  _mobAtMonth = null; _mobAtSymFilter = ""; // reset on strategy switch
+  _mobAtMonth = null; _mobAtSymFilter = ""; _mobDwSymFilter = ""; // reset on strategy switch
 
   document.getElementById('mobOvernightSettings').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('mobIntradaySettings').style.display  = s === 'intraday'  ? '' : 'none';
@@ -12212,6 +12523,7 @@ let _mobTradesStratTab = 'overnight'; // default to Gap tab
 let _mobMonthlyByDay = {};
 let _mobMonthlyFmtPct = null;
 let _mobMonthlyFmtPrice = null;
+let _mobOpenPositionsCache = []; // snapshot of open positions at last _buildMobMonthly render
 
 function openMobMonthDay(dateStr) {
   const dayTrades = _mobMonthlyByDay[dateStr];
@@ -12684,8 +12996,8 @@ function buildMobTradesTab() {
         <button class="mob-subtab-btn ${_mobTradesSubTab==='summary'   ?'active':''}" onclick="mobSwitchTradesSubTab('summary')">📈 Summary</button>
         <button class="mob-subtab-btn ${_mobTradesSubTab==='daywise'   ?'active':''}" onclick="mobSwitchTradesSubTab('daywise')">📅 Day-wise</button>
         <button class="mob-subtab-btn ${_mobTradesSubTab==='alltrades' ?'active':''}" onclick="mobSwitchTradesSubTab('alltrades')">📋 All Trades</button>
+        <button class="mob-subtab-btn ${_mobTradesSubTab==='monthly'   ?'active':''}" onclick="mobSwitchTradesSubTab('monthly')">📅 Calendar</button>
         <button class="mob-subtab-btn ${_mobTradesSubTab==='stockwise' ?'active':''}" onclick="mobSwitchTradesSubTab('stockwise')">📊 Stockwise</button>
-        <button class="mob-subtab-btn ${_mobTradesSubTab==='monthly'   ?'active':''}" onclick="mobSwitchTradesSubTab('monthly')">🗓 Monthly</button>
         <button class="mob-subtab-btn ${_mobTradesSubTab==='insights'  ?'active':''}" onclick="mobSwitchTradesSubTab('insights')">💡 Insights</button>
       </div>`;
   }
@@ -13044,6 +13356,7 @@ function _buildMobStockwise(trades, fmtPct) {
 
 let _mobAtMonth     = null; // currently viewed month in All Trades — null = latest
 let _mobAtSymFilter = '';  // symbol search filter for All Trades
+let _mobDwSymFilter = '';  // symbol search filter for Day-wise
 
 function mobAtSymSearch(val) {
   _mobAtSymFilter = (val || '').toUpperCase().trim();
@@ -13109,8 +13422,9 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
   // When symbol filter active — show ALL months (bypass pagination)
   const symFiltered = !!_mobAtSymFilter;
 
-  // Months list (newest first)
-  const months = [...new Set(trades.map(t => t.signalDate.slice(0,7)))].sort().reverse();
+  // Months list (newest first) — use confirmDate for Pullback (= scanner recommendation date)
+  const getAtDate = t => t.confirmDate || t.signalDate;
+  const months = [...new Set(trades.map(t => getAtDate(t).slice(0,7)))].sort().reverse();
   if (!_mobAtMonth || !months.includes(_mobAtMonth)) _mobAtMonth = months[0];
   const curIdx   = months.indexOf(_mobAtMonth);
   const hasPrev  = curIdx < months.length - 1; // older month exists
@@ -13118,7 +13432,7 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
   const [y, mo]  = (_mobAtMonth||'2026-01').split('-');
   const monthLabel = new Date(+y,+mo-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
   // When filtering by symbol, show all trades across all months
-  const mt = symFiltered ? trades : trades.filter(t => t.signalDate.startsWith(_mobAtMonth));
+  const mt = symFiltered ? trades : trades.filter(t => getAtDate(t).startsWith(_mobAtMonth));
 
   // Overall stats
   const totalW   = trades.filter(t=>t.outcome==='WIN').length;
@@ -13149,6 +13463,9 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
     ${_mobAtSymFilter ? `<button onclick="mobAtSymSearch('')"
       style="padding:6px 12px;border-radius:8px;border:1px solid var(--border2);
         background:var(--surface2);color:var(--text2);font-size:12px;cursor:pointer;">✕</button>` : ''}
+    <button onclick="downloadMobAllTradesCSV()"
+      style="padding:6px 12px;border-radius:8px;border:1px solid var(--border2);
+        background:var(--surface2);color:var(--text2);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">⬇ CSV</button>
   </div>
 
   <!-- Overall summary strip -->
@@ -13226,8 +13543,9 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
           <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">${t.sym}</span>
           <span style="font-size:10px;color:${dirC}">${t.side==='LONG'?'&#9650;':'&#9660;'}</span>
-          <span style="font-size:10px;color:var(--text3)">D1: ${t.signalDate.slice(5)}</span>
-          <span style="font-size:10px;color:var(--text3)">→ D2: ${(t.tradeDate||t.exitDate||t.signalDate).slice(5)}</span>
+          <span style="font-size:10px;color:var(--text3)">In: ${(t.tradeDate||t.signalDate).slice(5)}</span>
+          <span style="font-size:10px;color:var(--text3)">→ Out: ${t.exitDate ? t.exitDate.slice(5) : '—'}</span>
+          ${t.daysHeld != null ? `<span style="font-size:10px;color:var(--text3)">(${t.daysHeld}d)</span>` : ''}
         </div>
         <div style="font-size:11px;color:var(--text3);">
           Gap <span style="color:${t.gapPct>=0?'var(--bull)':'var(--bear)'}">${t.gapPct>=0?'+':''}${t.gapPct}%</span>
@@ -13246,10 +13564,32 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
 }
 
 
-function _buildMobDaywise(trades, fmtPct, fmtPrice) {
+function downloadMobDaywiseCSV() {
+  const strat = _mobTradesStratTab || _strategy || 'overnight';
+  const trades = (_mobTradeCache[strat] || allTrades || []).slice();
+  if (!trades.length) return;
+  const isPb = strat === 'pullback';
+  const header = ['Entry Date','Signal Date','Symbol','Direction','Move%','Entry Price','Exit Date','Exit Price','PnL%','Result','Days Held'];
+  const rows = [...trades].sort((a,b) => (b.tradeDate||b.signalDate).localeCompare(a.tradeDate||a.signalDate)).map(t => [
+    t.tradeDate || t.signalDate, isPb ? t.signalDate : (t.tradeDate || t.signalDate),
+    t.sym, t.side, t.gapPct, t.entry, t.exitDate || '', t.exit, t.pnlPct, t.outcome, t.daysHeld ?? ''
+  ].map(_csvEscape).join(','));
+  const date = new Date().toISOString().slice(0, 10);
+  _triggerCSVDownload([header.join(','), ...rows].join('\n'), `TradeEdge_${strat.toUpperCase()}_DaywiseTrades_${date}.csv`);
+}
+
+function _buildMobDwTradesHtml(allTrades) {
+  const trades = _mobDwSymFilter ? allTrades.filter(t => t.sym.includes(_mobDwSymFilter)) : allTrades;
+  const fmtPct   = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+  const fmtPrice = v => '₹' + fmtStockPrice(v);
   const byDay = {};
   trades.forEach(t => { const d = t.tradeDate || t.signalDate; (byDay[d] = byDay[d] || []).push(t); });
   const days = Object.keys(byDay).sort((a, b) => b.localeCompare(a));
+
+  if (!days.length) {
+    return `<div style="text-align:center;padding:20px;color:var(--text3);
+      font-family:'DM Mono',monospace;font-size:12px;">${_mobDwSymFilter ? 'No trades found for ' + _mobDwSymFilter : 'No trades'}</div>`;
+  }
 
   return days.map((date, idx) => {
     const dayTrades = byDay[date];
@@ -13267,11 +13607,12 @@ function _buildMobDaywise(trades, fmtPct, fmtPrice) {
     const gridCols = '22px 1fr 82px 50px 50px 54px';
     const fmtPct1 = v => (v>=0?'+':'') + v.toFixed(1) + '%';
 
+    const autoOpen = !!_mobDwSymFilter;
     return `
       <div class="mob-day-group">
         <div class="mob-day-header" onclick="mobToggleDayGroup('${groupId}')">
           <div class="mob-day-header-left">
-            <span class="mob-day-chevron" id="${groupId}_ch">▶</span>
+            <span class="mob-day-chevron" id="${groupId}_ch">${autoOpen ? '▼' : '▶'}</span>
             <span class="mob-day-date">${dateLabel}</span>
             <span class="mob-day-count">
               ${dayTrades.length}T &nbsp;
@@ -13280,7 +13621,7 @@ function _buildMobDaywise(trades, fmtPct, fmtPrice) {
           </div>
           <span class="mob-day-pnl ${pnlClass}">${fmtPct(dayPnl)}</span>
         </div>
-        <div class="mob-day-trades" id="${groupId}_body">
+        <div class="mob-day-trades${autoOpen ? ' open' : ''}" id="${groupId}_body">
           <div class="mob-trade-header" style="grid-template-columns:${gridCols};">
             <span>Dir</span><span>Symbol</span><span>Held (Entry→Exit)</span><span>Entry</span><span>Exit</span><span>PnL%</span>
           </div>
@@ -13308,6 +13649,42 @@ function _buildMobDaywise(trades, fmtPct, fmtPrice) {
   }).join('');
 }
 
+function _buildMobDaywise(trades, fmtPct, fmtPrice) {
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+    <input id="mobDwSymInput" value="${_mobDwSymFilter}"
+      placeholder="Search symbol…"
+      oninput="mobDwSymSearch(this.value)"
+      autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+      style="flex:1;padding:7px 12px;border-radius:8px;border:1px solid var(--border2);
+        font-family:'DM Mono',monospace;font-size:12px;background:var(--surface2);color:var(--text);outline:none;">
+    <button id="mobDwClearBtn" onclick="mobDwSymClear()" ${_mobDwSymFilter ? '' : 'style="display:none"'}
+      style="padding:6px 12px;border-radius:8px;border:1px solid var(--border2);
+        background:var(--surface2);color:var(--text2);font-size:12px;cursor:pointer;">✕</button>
+    <button onclick="downloadMobDaywiseCSV()"
+      style="padding:6px 12px;border-radius:8px;border:1px solid var(--border2);
+        background:var(--surface2);color:var(--text2);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">⬇ CSV</button>
+  </div>
+  <div id="mobDwContent">${_buildMobDwTradesHtml(trades)}</div>`;
+}
+
+function mobDwSymSearch(val) {
+  _mobDwSymFilter = (val || '').toUpperCase().trim();
+  const clearBtn = document.getElementById('mobDwClearBtn');
+  if (clearBtn) clearBtn.style.display = _mobDwSymFilter ? '' : 'none';
+  const content = document.getElementById('mobDwContent');
+  if (content) {
+    const strat = _mobTradesStratTab || _strategy || 'overnight';
+    const trades = _mobTradeCache[strat] || allTrades || [];
+    content.innerHTML = _buildMobDwTradesHtml(trades);
+  }
+}
+
+function mobDwSymClear() {
+  const input = document.getElementById('mobDwSymInput');
+  if (input) input.value = '';
+  mobDwSymSearch('');
+}
+
 function _buildMobMonthly(trades, fmtPct, fmtPrice) {
   // Group trades by month (YYYY-MM) and by tradeDate — the D2 outcome day for
   // Overnight/Intraday (entry+exit are the same day there), but the ENTRY day
@@ -13325,8 +13702,30 @@ function _buildMobMonthly(trades, fmtPct, fmtPrice) {
   _mobMonthlyByDay = byDay;
   _mobMonthlyFmtPct = fmtPct;
   _mobMonthlyFmtPrice = fmtPrice;
+  // Snapshot open positions at render time so showOpenPositionsModal can use them at tap time
+  _mobOpenPositionsCache = (_mobTradesStratTab === 'pullback') ? (_pullbackOpenPositions || []).slice() : [];
   const months = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
   const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+  // Pre-compute cumulative in chronological order (oldest → newest)
+  const capital = getCapital ? getCapital() : 1000000;
+  const mobMthCum = {};
+  let _mcp = 0, _mcr = 0;
+  [...months].reverse().forEach(m => {
+    const mt = byMonth[m];
+    _mcp += mt.reduce((s, t) => s + t.pnlPct, 0);
+    _mcr += mt.reduce((s, t) => s + (t.pnlPct / 100 * capital), 0);
+    mobMthCum[m] = { pct: _mcp, rupee: _mcr };
+  });
+
+  // Open positions lookup by entry month (Pullback only)
+  const openByMonth = {};
+  if (_mobTradesStratTab === 'pullback') {
+    (_pullbackOpenPositions || []).forEach(t => {
+      const key = (t.tradeDate || '').slice(0, 7);
+      if (key) (openByMonth[key] = openByMonth[key] || []).push(t);
+    });
+  }
 
   return months.map(m => {
     const mTrades = byMonth[m];
@@ -13336,7 +13735,11 @@ function _buildMobMonthly(trades, fmtPct, fmtPrice) {
     const mWR     = mTrades.length ? (mWins / mTrades.length * 100) : 0;
     const mPnl    = mTrades.reduce((s, t) => s + t.pnlPct, 0);
     const mAvg    = mTrades.length ? mPnl / mTrades.length : 0;
+    const cumPnl   = mobMthCum[m].pct;
+    const cumRupee = mobMthCum[m].rupee;
+    const openC   = (openByMonth[m] || []).length;
     const pnlCls  = mPnl >= 0 ? 'var(--bull)' : 'var(--bear)';
+    const cumCls  = _pnlColor(cumPnl);
     const wrCls   = mWR >= 55 ? 'var(--bull)' : mWR >= 45 ? 'var(--gold)' : 'var(--bear)';
     const avgCls  = mAvg >= 0 ? 'var(--bull)' : 'var(--bear)';
 
@@ -13368,7 +13771,10 @@ function _buildMobMonthly(trades, fmtPct, fmtPrice) {
       <div class="mob-month-block">
         <div class="mob-month-header">
           <span class="mob-month-name">${monthName}</span>
-          <span class="mob-month-pnl" style="color:${pnlCls};">${fmtPct(mPnl)}</span>
+          <div style="text-align:right;line-height:1.3;">
+            <span class="mob-month-pnl" style="color:${pnlCls};">${fmtPct(mPnl)}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);margin-left:5px;white-space:nowrap;">Cum:<span style="color:${cumCls};font-weight:700;font-size:11px;"> ${_pnlSign(cumPnl)}${cumPnl.toFixed(1)}% / ${_pnlSign(cumRupee)}₹${(Math.abs(cumRupee)/100000).toFixed(1)}L</span></span>
+          </div>
         </div>
         <div class="mob-cal-grid">${calCells}</div>
         <div class="mob-month-stats">
@@ -13389,6 +13795,12 @@ function _buildMobMonthly(trades, fmtPct, fmtPrice) {
             <div class="mob-month-stat-val" style="color:${avgCls};font-size:11px;">${fmtPct(mAvg)}</div>
           </div>
         </div>
+        ${openC ? `<div onclick="showOpenPositionsModal('${m}')"
+          style="background:rgba(200,80,10,0.08);border-top:1px solid var(--border);
+            padding:8px 12px;cursor:pointer;text-align:center;
+            font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);font-weight:600;">
+          ◉ ${openC} open position${openC>1?'s':''} — tap to view
+        </div>` : ''}
       </div>`;
   }).join('');
 }
@@ -13926,5 +14338,15 @@ window.addEventListener('DOMContentLoaded', () => { if (isMobile()) { initMobile
 </script>
 
 
+<!-- Calendar day / open positions modal — lives at body level so it works on both desktop and mobile -->
+<div id="calDayModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);overflow-y:auto;" onclick="if(event.target===this)closeCalModal()">
+  <div style="background:var(--surface);border-radius:14px;max-width:640px;margin:40px auto 40px;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,0.3);position:relative;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div id="calModalTitle" style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;"></div>
+      <button onclick="closeCalModal()" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);cursor:pointer;font-size:13px;">✕ Close</button>
+    </div>
+    <div id="calModalBody"></div>
+  </div>
+</div>
 </body>
 </html>
