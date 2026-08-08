@@ -1867,6 +1867,18 @@ def get_gap_settings():
 # and /gap-orders/exit at 3:15 PM the next trading day. Both are safe to
 # call manually too — e.g. for a dry run via /gap-scan first.
 
+def get_scan_symbols():
+    """
+    Returns every symbol with a CSV currently on disk in DATA_DIR, rather
+    than the hardcoded ALL_SYMBOLS list — restore_data_from_github() pulls
+    down every CSV present in the GitHub data branch regardless of
+    ALL_SYMBOLS, so ALL_SYMBOLS can silently drift out of sync (e.g.
+    CGPOWER was missing from it despite having live data). This keeps the
+    Gap automation scanning the same universe the frontend actually uses.
+    """
+    return sorted(p.stem for p in DATA_DIR.glob("*.csv"))
+
+
 @app.route("/gap-scan", methods=["GET", "OPTIONS"])
 def gap_scan_endpoint():
     """
@@ -1886,7 +1898,7 @@ def gap_scan_endpoint():
     scan_date = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
     verbose = request.args.get("verbose") == "1"
     try:
-        result = gap_scan.scan_gap_signals(DATA_DIR, ALL_SYMBOLS, scan_date, settings)
+        result = gap_scan.scan_gap_signals(DATA_DIR, get_scan_symbols(), scan_date, settings)
     except Exception as e:
         return cors_response({"error": str(e)}, 500)
 
@@ -1924,7 +1936,7 @@ def gap_orders_enter():
     scan_date = today.isoformat()
 
     try:
-        scan_result = gap_scan.scan_gap_signals(DATA_DIR, ALL_SYMBOLS, scan_date, settings)
+        scan_result = gap_scan.scan_gap_signals(DATA_DIR, get_scan_symbols(), scan_date, settings)
     except Exception as e:
         return cors_response({"error": f"scan failed: {e}"}, 500)
 
