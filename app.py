@@ -1884,17 +1884,22 @@ def gap_scan_endpoint():
         return cors_response({"error": "no_gap_settings_synced"}, 400)
 
     scan_date = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
+    verbose = request.args.get("verbose") == "1"
     try:
         result = gap_scan.scan_gap_signals(DATA_DIR, ALL_SYMBOLS, scan_date, settings)
     except Exception as e:
         return cors_response({"error": str(e)}, 500)
 
-    return cors_response({
+    resp = {
         "scanDate": scan_date,
         "settingsUsed": settings,
         "longsCount": len(result["longs"]), "shortsCount": len(result["shorts"]),
         "selected": result["selected"],
-    })
+    }
+    if verbose:
+        resp["longs"] = result["longs"]
+        resp["shorts"] = result["shorts"]
+    return cors_response(resp)
 
 
 @app.route("/gap-orders/enter", methods=["POST", "OPTIONS"])
