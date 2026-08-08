@@ -223,20 +223,19 @@ def _signal_sort_key(s: dict, ranking_mode: str) -> tuple:
 # ── runScanner() port — Overnight Gap branch only ───────────────────────────
 
 def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
-                      settings: dict, lookback_days: int | None = None) -> dict:
+                      settings: dict) -> dict:
     """
     Faithful port of the Overnight branch of runScanner(). Returns:
       {"longs": [...], "shorts": [...], "selected": [...]}
     "selected" is longs+shorts after WR/PnL filtering, sorted, and capped
     to maxSignalsDay (== 1 for the automation job per current settings).
 
-    lookback_days=None (default) uses ALL available history in each
-    symbol's CSV, matching the app's own behaviour when its backtest
-    "From" date is set well in the past (e.g. Jul 2024) rather than a
-    rolling 365-day window — an earlier version of this function
-    incorrectly hardcoded 365 days, which undercounted historical trades
-    relative to the app. Pass an explicit value only if you specifically
-    want a shorter window than what's on disk.
+    Historical WR/expectancy is computed over settings['fromDate']..
+    settings['toDate'] (or ..scan_date if toDate is blank/absent) — the
+    exact same backtest window the app itself is configured with, synced
+    via /gap-settings. No lookback-days guessing here: every parameter
+    except maxSignalsDay (fixed at 1 for automation, per Raja) comes
+    straight from the synced settings.
     """
     params = {
         "minGap":      settings["minGap"],
@@ -258,6 +257,9 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
     pnl_threshold = settings.get("pnlThreshold", 0) or 0
     ranking_mode = settings.get("rankingMode", "expectancy")
     max_per_day = int(settings.get("maxSignalsDay", 0) or 0)
+
+    from_date = settings.get("fromDate") or None
+    to_date = settings.get("toDate") or scan_date
 
     longs, shorts = [], []
 
@@ -304,12 +306,12 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
             tp_pct = params["tpPct"] / 100
             tp_level = today["close"] * (1 + tp_pct) if gap_dir == "UP" else today["close"] * (1 - tp_pct)
 
-        # Historical WR/expectancy — uses the full available CSV history up
-        # to scan_date by default (matches the app's typical multi-year
-        # "From" date), or a truncated window if lookback_days is explicitly set.
-        hist_ohlc = [c for c in ohlc if c["date"] <= scan_date]
-        if lookback_days is not None:
-            hist_ohlc = hist_ohlc[-(lookback_days + 5):]
+        # Historical WR/expectancy over the app's own configured backtest
+        # window (settings['fromDate']..settings['toDate']), synced from
+        # the frontend — not a guessed lookback period.
+        hist_ohlc = [c for c in ohlc if c["date"] <= to_date]
+        if from_date:
+            hist_ohlc = [c for c in hist_ohlc if c["date"] >= from_date]
         all_hist_trades = backtest_overnight(hist_ohlc, sym, params)
         hist_trades = [t for t in all_hist_trades if t["side"] == side and t["outcome"] != "SKIP"]
         hist_total = len(hist_trades)

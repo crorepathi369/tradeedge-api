@@ -6540,6 +6540,12 @@ function saveStrategyDefaults() {
       capitalPerTrade:+document.getElementById('capitalPerTrade').value,
       rankingMode:     document.getElementById('rankingMode').value,
       direction:       _direction,
+      // Included so the server-side automation job's historical WR/expectancy
+      // window matches the app's own backtest range exactly, rather than
+      // guessing at a lookback period.
+      fromDate:        document.getElementById('fromDate').value,
+      toDate:           document.getElementById('toDate').value,
+      closeFilter:      document.getElementById('closeFilter').value,
     };
     localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
     _syncGapSettingsToServer(saved);
@@ -6736,6 +6742,11 @@ function saveMobDefaults() {
       capitalPerTrade: capital,
       rankingMode:   document.getElementById('rankingMode')?.value || 'expectancy',
       direction:     _mobDir || 'both',
+      // Shared hidden/desktop fields — mobFromDate/mobToDate mirror these,
+      // but read the canonical ones directly to avoid any sync-timing gap.
+      fromDate:      document.getElementById('fromDate')?.value || '',
+      toDate:        document.getElementById('toDate')?.value || '',
+      closeFilter:   document.getElementById('closeFilter')?.value || 'strict',
     };
     localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
     _syncGapSettingsToServer(saved);
