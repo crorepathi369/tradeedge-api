@@ -233,7 +233,12 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
     params = {
         "minGap":      settings["minGap"],
         "maxGap":      settings["maxGap"],
-        "closeFilter": settings.get("closeFilter"),
+        # closeFilter is a hidden, hardcoded 'strict' field in TradeEdge.html
+        # (<input type="hidden" id="closeFilter" value="strict">) — it's a
+        # fixed rule of the Overnight Gap strategy (gap up must close green,
+        # gap down must close red), not a user setting, so it's never part
+        # of the synced settings payload. Default to 'strict' to match.
+        "closeFilter": settings.get("closeFilter", "strict"),
         "slType":      settings.get("slType", "pct"),
         "slPct":       settings["slPct"],
         "tpType":      settings.get("tpType", "d2_close"),
