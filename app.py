@@ -49,6 +49,9 @@ try:
 except ImportError:
     KiteConnect = None
 
+import gap_scan
+import kite_orders
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
@@ -1857,3 +1860,104 @@ def get_gap_settings():
             return _json.load(f)
     except (FileNotFoundError, ValueError):
         return None
+
+
+# ── Gap automation — scan, entry, exit ──────────────────────────────────────
+# Wiring order: cron-job.org hits /gap-orders/enter at 3:15 PM (signal day)
+# and /gap-orders/exit at 3:15 PM the next trading day. Both are safe to
+# call manually too — e.g. for a dry run via /gap-scan first.
+
+@app.route("/gap-scan", methods=["GET", "OPTIONS"])
+def gap_scan_endpoint():
+    """
+    Dry-run — runs the headless scan for a given date (default: today) and
+    returns the ranked/filtered signal(s) WITHOUT placing any order. Use
+    this to sanity-check against the app's own Scanner tab before trusting
+    /gap-orders/enter.
+    Usage: /gap-scan?date=2026-08-08
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    settings = get_gap_settings()
+    if settings is None:
+        return cors_response({"error": "no_gap_settings_synced"}, 400)
+
+    scan_date = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
+    try:
+        result = gap_scan.scan_gap_signals(DATA_DIR, ALL_SYMBOLS, scan_date, settings)
+    except Exception as e:
+        return cors_response({"error": str(e)}, 500)
+
+    return cors_response({
+        "scanDate": scan_date,
+        "settingsUsed": settings,
+        "longsCount": len(result["longs"]), "shortsCount": len(result["shorts"]),
+        "selected": result["selected"],
+    })
+
+
+@app.route("/gap-orders/enter", methods=["POST", "OPTIONS"])
+def gap_orders_enter():
+    """
+    Called by cron-job.org at 3:15 PM IST on scan days. Runs the scan for
+    today, places entry + GTT-SL for the selected signal(s) (normally just
+    one, since Max/day is fixed at 1 for automation).
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    kite = get_kite_client()
+    if kite is None:
+        return cors_response({"error": "not_logged_in — visit /kite/login first"}, 401)
+
+    settings = get_gap_settings()
+    if settings is None:
+        return cors_response({"error": "no_gap_settings_synced"}, 400)
+
+    today = datetime.now().date()
+    scan_date = today.isoformat()
+
+    try:
+        scan_result = gap_scan.scan_gap_signals(DATA_DIR, ALL_SYMBOLS, scan_date, settings)
+    except Exception as e:
+        return cors_response({"error": f"scan failed: {e}"}, 500)
+
+    selected = scan_result["selected"]
+    if not selected:
+        return cors_response({"scanDate": scan_date, "msg": "No qualifying signal today", "results": []})
+
+    results = []
+    for signal in selected:
+        res = kite_orders.place_entry_order(kite, DATA_DIR, signal, today)
+        res["sym"] = signal["sym"]
+        results.append(res)
+        print(f"[gap-orders/enter] {signal['sym']}: {res}")
+
+    return cors_response({"scanDate": scan_date, "results": results})
+
+
+@app.route("/gap-orders/exit", methods=["POST", "OPTIONS"])
+def gap_orders_exit():
+    """
+    Called by cron-job.org at 3:15 PM IST the day AFTER entry. Closes any
+    position still open (i.e. not already stopped out by its GTT).
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    kite = get_kite_client()
+    if kite is None:
+        return cors_response({"error": "not_logged_in — visit /kite/login first"}, 401)
+
+    results = kite_orders.close_open_positions(kite, DATA_DIR)
+    print(f"[gap-orders/exit] {results}")
+    return cors_response({"results": results})
+
+
+@app.route("/gap-orders/status", methods=["GET", "OPTIONS"])
+def gap_orders_status():
+    """Returns current gap_positions.json contents — for a quick manual check."""
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    return cors_response(kite_orders.load_positions(DATA_DIR))
