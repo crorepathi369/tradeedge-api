@@ -3486,6 +3486,20 @@ const YF_TICKER_MAP = {
 // ── TradeEdge Cloud API ───────────────────────────────────────────────────────
 const TRADEEDGE_API_URL = 'https://tradeedge-api.onrender.com';
 
+// ── Sync Gap (Overnight) settings to server for the Kite automation job ───────
+// Fire-and-forget, mirrors the Breeze token sync pattern above. The
+// automation job on Render reads /gap-settings so it always uses whatever
+// values are currently configured here — no hardcoding, no manual step.
+function _syncGapSettingsToServer(saved) {
+  fetch(`${TRADEEDGE_API_URL}/gap-settings`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(saved),
+  }).then(r => r.json())
+    .then(j => console.log('[GapSettings] Synced to server:', j))
+    .catch(e => console.warn('[GapSettings] Could not sync to server:', e));
+}
+
 
 // Nifty 50 stocks (54 constituents, Mar 2026) — used when universeMode = 'nifty50'
 const NIFTY50_STOCKS = [
@@ -6528,6 +6542,7 @@ function saveStrategyDefaults() {
       direction:       _direction,
     };
     localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
+    _syncGapSettingsToServer(saved);
     _showSaveToast('Overnight Gap defaults saved ✓');
   } else if (_strategy === 'intraday') {
     const entryType = document.getElementById('idEntryType').value;
@@ -6723,6 +6738,7 @@ function saveMobDefaults() {
       direction:     _mobDir || 'both',
     };
     localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
+    _syncGapSettingsToServer(saved);
     _showSaveToast('Overnight Gap defaults saved ✓');
   } else if (_mobStrategy === 'intraday') {
     const entryType = document.getElementById('mobIdEntryType')?.value || 'd2_open';

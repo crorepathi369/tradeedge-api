@@ -692,6 +692,14 @@ _KITE_TOKEN_TS_FILE = "/tmp/kite_token_ts.txt"
 
 _kite = KiteConnect(api_key=KITE_API_KEY) if (KiteConnect and KITE_API_KEY) else None
 
+# ── Gap Settings sync ────────────────────────────────────────────────────────
+# TradeEdge.html POSTs here whenever "Save" is hit on Gap (Overnight) settings
+# in the browser (localStorage is the source of truth on the frontend; this
+# is a mirror so the headless automation job always reads the same values
+# without any hardcoding or manual sync step). Persisted in DATA_DIR so it
+# rides along with the existing GitHub data-branch backup/restore.
+GAP_SETTINGS_FILE = DATA_DIR / "gap_settings.json"
+
 try:
     from breeze_connect import BreezeConnect
     _BREEZE_AVAILABLE = True
@@ -1794,4 +1802,58 @@ def get_kite_client():
         _kite.set_access_token(token)
         return _kite
     except FileNotFoundError:
+        return None
+
+
+@app.route("/gap-settings", methods=["POST", "OPTIONS"])
+def save_gap_settings():
+    """
+    Called from TradeEdge.html's saveStrategyDefaults() / saveMobDefaults()
+    on Save, for the Overnight Gap strategy only. Mirrors TE_OVERNIGHT_DEFAULTS
+    from localStorage server-side so the headless automation job stays in
+    sync with whatever's configured in the app — no manual step, no
+    hardcoded values.
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    body = request.get_json(force=True) or {}
+    if not body:
+        return cors_response({"error": "empty_body"}, 400)
+
+    try:
+        body["_syncedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(GAP_SETTINGS_FILE, "w") as f:
+            import json as _json
+            _json.dump(body, f, indent=2)
+        print(f"[gap-settings] Synced: {body}")
+        return cors_response({"ok": True, "msg": "Gap settings stored"})
+    except Exception as e:
+        return cors_response({"error": str(e)}, 500)
+
+
+@app.route("/gap-settings", methods=["GET", "OPTIONS"])
+def get_gap_settings_endpoint():
+    """Returns the last-synced Gap settings. Used by the automation job and,
+    optionally, the frontend to confirm what's currently live server-side."""
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    settings = get_gap_settings()
+    if settings is None:
+        return cors_response({"error": "no_settings_synced_yet"}, 404)
+    return cors_response(settings)
+
+
+def get_gap_settings():
+    """
+    Returns the current Gap Settings dict as last synced from the frontend,
+    or None if nothing's been synced yet. The automation job (once built)
+    calls this instead of hardcoding minGap/maxGap/slPct/etc, so any
+    backtest-driven setting change in the app is picked up automatically.
+    """
+    try:
+        import json as _json
+        with open(GAP_SETTINGS_FILE) as f:
+            return _json.load(f)
+    except (FileNotFoundError, ValueError):
         return None
