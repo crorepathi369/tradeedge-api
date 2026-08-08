@@ -44,6 +44,11 @@ try:
 except ImportError:
     YFTzMissingError = None
 
+try:
+    from kiteconnect import KiteConnect
+except ImportError:
+    KiteConnect = None
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
@@ -673,6 +678,19 @@ import time as _time
 _BREEZE_TOKEN_FILE    = "/tmp/breeze_session.txt"
 _BREEZE_TOKEN_TS_FILE = "/tmp/breeze_session_ts.txt"
 _BREEZE_TOKEN_MAX_AGE_SEC = 20 * 60 * 60  # 20h — mirrors TradeEdge's client-side freshness window
+
+# ── Kite Connect config ─────────────────────────────────────────────────────
+# Access token is re-generated each morning via manual /kite/login tap (no
+# credentials stored). Persisted to /tmp so it survives across requests —
+# same file-based pattern as the Breeze token above. A Render restart clears
+# /tmp, which just means a fresh login is needed that day — expected, since
+# Kite tokens expire nightly anyway.
+KITE_API_KEY    = os.environ.get("KITE_API_KEY", "")
+KITE_API_SECRET = os.environ.get("KITE_API_SECRET", "")
+_KITE_TOKEN_FILE    = "/tmp/kite_access_token.txt"
+_KITE_TOKEN_TS_FILE = "/tmp/kite_token_ts.txt"
+
+_kite = KiteConnect(api_key=KITE_API_KEY) if (KiteConnect and KITE_API_KEY) else None
 
 try:
     from breeze_connect import BreezeConnect
@@ -1692,3 +1710,88 @@ def breeze_cancel():
         _fetch_status["cancelled"] = True
         return cors_response({"ok": True, "msg": "Cancel signal sent"})
     return cors_response({"ok": False, "msg": "No fetch running"})
+
+
+# ── /kite/* — Gap strategy order placement auth ────────────────────────────
+# Daily flow: Raja visits /kite/login each morning -> Kite login page ->
+# redirected to /kite/callback with a request_token -> exchanged here for
+# an access_token, stored in /tmp for the rest of the day.
+
+from flask import redirect as _redirect
+
+
+@app.route("/kite/login", methods=["GET"])
+def kite_login():
+    if _kite is None:
+        return cors_response(
+            {"error": "KITE_API_KEY not configured on server"}, 500
+        )
+    return _redirect(_kite.login_url())
+
+
+@app.route("/kite/callback", methods=["GET"])
+def kite_callback():
+    if _kite is None:
+        return cors_response(
+            {"error": "KITE_API_KEY not configured on server"}, 500
+        )
+
+    request_token = request.args.get("request_token", "")
+    if not request_token:
+        return cors_response({"error": "missing_request_token"}, 400)
+
+    try:
+        session_data = _kite.generate_session(
+            request_token, api_secret=KITE_API_SECRET
+        )
+        access_token = session_data["access_token"]
+        with open(_KITE_TOKEN_FILE, "w") as f:
+            f.write(access_token)
+        with open(_KITE_TOKEN_TS_FILE, "w") as f:
+            f.write(str(_time.time()))
+        print("[kite/callback] Access token stored for today")
+        return "Kite login successful — token stored for today \u2705"
+    except Exception as e:
+        print(f"[kite/callback] auth failed: {e}")
+        return cors_response({"error": str(e)}, 500)
+
+
+@app.route("/kite/token-status", methods=["GET", "OPTIONS"])
+def kite_token_status():
+    """Check if a Kite access token is stored and still same-day fresh."""
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    try:
+        with open(_KITE_TOKEN_FILE) as f:
+            token = f.read().strip()
+        with open(_KITE_TOKEN_TS_FILE) as f:
+            token_date = datetime.fromtimestamp(float(f.read().strip())).strftime("%Y-%m-%d")
+        today = datetime.now().strftime("%Y-%m-%d")
+        return cors_response({
+            "hasToken": bool(token),
+            "valid":    bool(token) and token_date == today,
+            "date":     token_date,
+        })
+    except FileNotFoundError:
+        return cors_response({"hasToken": False, "valid": False, "date": None})
+
+
+def get_kite_client():
+    """
+    Returns a KiteConnect instance with today's access_token set, or None
+    if not configured / not logged in yet today. Use this from the Gap
+    scan-to-order bridge once it's built.
+    """
+    if _kite is None:
+        return None
+    try:
+        with open(_KITE_TOKEN_FILE) as f:
+            token = f.read().strip()
+        with open(_KITE_TOKEN_TS_FILE) as f:
+            token_date = datetime.fromtimestamp(float(f.read().strip())).strftime("%Y-%m-%d")
+        if not token or token_date != datetime.now().strftime("%Y-%m-%d"):
+            return None
+        _kite.set_access_token(token)
+        return _kite
+    except FileNotFoundError:
+        return None
