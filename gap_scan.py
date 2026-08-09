@@ -15,8 +15,35 @@ Reads OHLC from the same CSVs app.py already maintains in DATA_DIR
 """
 from __future__ import annotations
 import csv
+import math
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from datetime import datetime
+
+
+def js_round(x: float, ndigits: int = 0) -> float:
+    """
+    Matches JS rounding — NOT Python's built-in round(), which is
+    round-half-to-even (banker's rounding) and silently disagreed with the
+    frontend on any value landing on a .5 tie (e.g. bare round(62.5) gives
+    62 in Python vs 63 in JS).
+
+    ndigits=0 mirrors Math.round() (used for wilsonPct/histWR): always
+    rounds .5 up, i.e. floor(x + 0.5).
+
+    ndigits>0 mirrors .toFixed() (used for entry/slLevel/prices etc.):
+    NOT the same tie-breaking as Math.round — toFixed rounds the *exact*
+    binary value of the float, and floor(x*100+0.5)/100 introduces its own
+    scaling error that can disagree right at a tie (e.g. 4923.5*1.03 is
+    stored as 5071.204999999999927... — toFixed(2) correctly gives
+    "5071.20", but floor(x*100+0.5)/100 overshoots to 5071.21). Decimal(x)
+    (not Decimal(str(x))) captures that exact binary value, so quantizing
+    it with ROUND_HALF_UP reproduces toFixed()'s result exactly.
+    """
+    if ndigits == 0:
+        return int(math.floor(x + 0.5))
+    quantum = Decimal(1).scaleb(-ndigits)
+    return float(Decimal(x).quantize(quantum, rounding=ROUND_HALF_UP))
 
 
 # ── OHLC loading ─────────────────────────────────────────────────────────────
@@ -190,9 +217,9 @@ def backtest_overnight(ohlc: list[dict], sym_id: str, params: dict) -> list[dict
 
         trades.append({
             "sym": sym_id, "signalDate": today["date"], "tradeDate": tomorrow["date"],
-            "side": side, "gapPct": round(gap_pct, 2), "entry": round(entry, 2),
-            "sl": round(sl, 2), "exit": round(exit_price, 2), "exitNote": exit_note,
-            "slHit": sl_hit, "outcome": outcome, "pnlPct": round(pnl_pct, 2),
+            "side": side, "gapPct": js_round(gap_pct, 2), "entry": js_round(entry, 2),
+            "sl": js_round(sl, 2), "exit": js_round(exit_price, 2), "exitNote": exit_note,
+            "slHit": sl_hit, "outcome": outcome, "pnlPct": js_round(pnl_pct, 2),
         })
 
     return trades
@@ -256,7 +283,9 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
     wr_threshold = settings.get("wrThreshold", 0) or 0
     pnl_threshold = settings.get("pnlThreshold", 0) or 0
     ranking_mode = settings.get("rankingMode", "expectancy")
-    max_per_day = int(settings.get("maxSignalsDay", 0) or 0)
+    # Fixed at 1 for automation, per Raja — deliberately ignores whatever
+    # maxSignalsDay happens to be synced from the browser's UI settings.
+    max_per_day = 1
 
     from_date = settings.get("fromDate") or None
     to_date = settings.get("toDate") or scan_date
@@ -319,20 +348,20 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
         score = score_from_trades(hist_trades)
 
         signal = {
-            "sym": sym, "gapPct": round(gap_pct, 2), "entry": round(today["close"], 2),
-            "slLevel": round(sl_level, 2), "tpLevel": round(tp_level, 2) if tp_level else None,
+            "sym": sym, "gapPct": js_round(gap_pct, 2), "entry": js_round(today["close"], 2),
+            "slLevel": js_round(sl_level, 2), "tpLevel": js_round(tp_level, 2) if tp_level else None,
             "gapDir": gap_dir, "side": side,
-            "histWR": round(hist_wins / hist_total * 100) if hist_total >= 5 else None,
+            "histWR": js_round(hist_wins / hist_total * 100) if hist_total >= 5 else None,
             "histWins": hist_wins, "histCount": hist_total,
             "histExpectancy": score["expectancy"],
             "histAvgPnl": (sum(t["pnlPct"] for t in hist_trades) / hist_total) if hist_total else 0,
-            "d1Open": round(today["open"], 2), "d1High": round(today["high"], 2),
-            "d1Low": round(today["low"], 2), "d1Close": round(today["close"], 2),
-            "prevClose": round(prev_ref, 2),
+            "d1Open": js_round(today["open"], 2), "d1High": js_round(today["high"], 2),
+            "d1Low": js_round(today["low"], 2), "d1Close": js_round(today["close"], 2),
+            "prevClose": js_round(prev_ref, 2),
         }
 
         has_backtest = hist_total > 0
-        wilson_pct = round((hist_wins + 1) / (hist_total + 2) * 100) if hist_total > 0 else 50
+        wilson_pct = js_round((hist_wins + 1) / (hist_total + 2) * 100) if hist_total > 0 else 50
         signal["wilsonPct"] = wilson_pct
         passes = not (has_backtest and (
             (wr_threshold > 0 and wilson_pct < wr_threshold) or

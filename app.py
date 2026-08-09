@@ -200,7 +200,6 @@ YAHOO_TICKER_MAP = {
     "DEEPAKNITR":   "DEEPAKNTR.NS",
     "ICICIPRULIFE": "ICICIPRULI.NS",
     "MCDOWELL-N":   "UNITDSPR.NS",
-    "TATAMOTORS":   "TMPV.NS",
     "ZOMATO":       "ETERNAL.NS",
 }
 
@@ -235,7 +234,7 @@ ALL_SYMBOLS = [
     "RADICO","RBLBANK","RECLTD","RELIANCE","RPOWER",
     "SAIL","SBICARD","SBILIFE","SBIN","SHREECEM","SIEMENS","SJVN",
     "SRF","STAR","SUNPHARMA","SUZLON",
-    "TATACHEM","TATACOMM","TATACONSUM","TATAELXSI","TATAMOTORS",
+    "TATACHEM","TATACOMM","TATACONSUM","TATAELXSI","TMPV",
     "TATAPOWER","TATASTEEL","TCS","TECHM","TIINDIA","TITAN",
     "TORNTPHARM","TORNTPOWER","TRENT",
     "UBL","ULTRACEMCO","UNIONBANK","UPL",
@@ -281,7 +280,7 @@ STOCK_SECTOR_MAP = {
     "COLPAL":"SECTOR_FMCG","GODREJCP":"SECTOR_FMCG","TATACONSUM":"SECTOR_FMCG",
     "VBL":"SECTOR_FMCG","KALYANKJIL":"SECTOR_FMCG","TITAN":"SECTOR_FMCG",
     "TRENT":"SECTOR_FMCG","PAGEIND":"SECTOR_FMCG","DMART":"SECTOR_FMCG",
-    "JUBLFOOD":"SECTOR_FMCG","NYKAA":"SECTOR_FMCG","ETERNAL":"SECTOR_FMCG",
+    "JUBLFOOD":"SECTOR_FMCG","NYKAA":"SECTOR_FMCG","ZOMATO":"SECTOR_FMCG",
     "ASIANPAINT":"SECTOR_FMCG","BERGEPAINT":"SECTOR_FMCG","EMAMILTD":"SECTOR_FMCG",
     "UBL":"SECTOR_FMCG","MCDOWELL-N":"SECTOR_FMCG","RADICO":"SECTOR_FMCG",
     "INDHOTEL":"SECTOR_FMCG","PVRINOX":"SECTOR_FMCG","STAR":"SECTOR_FMCG",
@@ -310,7 +309,7 @@ STOCK_SECTOR_MAP = {
     "IRFC":"SECTOR_PSU","LICI":"SECTOR_PSU","TATACHEM":"SECTOR_PHARMA",
     "COROMANDEL":"SECTOR_PHARMA","CHAMBLFERT":"SECTOR_PHARMA",
     "PAYTM":"SECTOR_FINANCE","INDIAMART":"SECTOR_IT","BSE":"SECTOR_FINANCE",
-    "CAMS":"SECTOR_FINANCE","IIFL":"SECTOR_FINANCE","TATAMOTORS":"SECTOR_AUTO",
+    "CAMS":"SECTOR_FINANCE","IIFL":"SECTOR_FINANCE","TMPV":"SECTOR_AUTO",
     "TATACOMM":"SECTOR_IT",
 }
 
@@ -1946,7 +1945,10 @@ def gap_orders_enter():
 
     results = []
     for signal in selected:
-        res = kite_orders.place_entry_order(kite, DATA_DIR, signal, today)
+        res = kite_orders.place_entry_order(
+            kite, DATA_DIR, signal, today,
+            sl_pct=settings["slPct"], sl_type=settings.get("slType", "pct"),
+        )
         res["sym"] = signal["sym"]
         results.append(res)
         print(f"[gap-orders/enter] {signal['sym']}: {res}")

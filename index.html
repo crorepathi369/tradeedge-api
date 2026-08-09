@@ -2569,6 +2569,7 @@
     <button class="desk-icon-btn" onclick="showCacheStatus()" title="Cache status">🗄</button>
     <button class="desk-icon-btn" onclick="purgeAllCache()" title="Clear cache" style="color:var(--bear);">🗑</button>
     <button class="desk-icon-btn" id="watchlistBarBtn" onclick="openWatchlistPage()" title="Watchlist · Trigger Tracker">📋</button>
+    <button class="desk-icon-btn" id="kiteLoginBtn" onclick="openKiteLogin()" title="Kite Login — authorize today's Gap Strategy automation">🔐</button>
     <div style="width:1px;height:20px;background:rgba(255,255,255,0.15);margin:0 4px;"></div>
     <div class="header-status">
       <div class="status-dot" id="statusDot"></div>
@@ -3411,6 +3412,8 @@ const SYMBOLS = {
     'COCHINSHIP','COFORGE','COLPAL','CONCOR','CROMPTON','CUMMINSIND',
     // D
     'DABUR','DALBHARAT','DELHIVERY','DIVISLAB','DIXON','DLF','DMART','DRREDDY',
+    // E
+    'EICHERMOT',
     // G
     'GAIL','GLENMARK','GMRAIRPORT','GODREJCP','GODREJPROP','GRASIM',
     // H
@@ -3499,6 +3502,63 @@ function _syncGapSettingsToServer(saved) {
     .then(j => console.log('[GapSettings] Synced to server:', j))
     .catch(e => console.warn('[GapSettings] Could not sync to server:', e));
 }
+
+// ── Kite login — daily token authorization for the Gap automation ──────────
+// Access tokens expire every day (Zerodha platform constraint, no refresh
+// token) — this just opens the login flow in a new tab so it doesn't lose
+// whatever's loaded here. Button turns green with a ✓ badge once
+// /kite/token-status confirms today's login went through. The actual
+// Zerodha login (password + TOTP) takes longer than any single delayed
+// check could reliably catch, so after a click we poll every 5s for up
+// to ~3 minutes rather than checking once.
+function _setKiteBtnState(el, valid) {
+  el.style.position = 'relative';
+  el.style.background = valid ? 'rgba(46,204,113,0.25)' : 'rgba(220,60,60,0.18)';
+  el.style.color = valid ? '#2ecc71' : 'var(--bear)';
+  el.title = valid
+    ? 'Kite Login — authorized for today ✓'
+    : 'Kite Login — click to authorize today\'s Gap Strategy automation';
+  let badge = el.querySelector('.kite-ok-badge');
+  if (valid && !badge) {
+    badge = document.createElement('span');
+    badge.className = 'kite-ok-badge';
+    badge.textContent = '✓';
+    badge.style.cssText = 'position:absolute;top:-4px;right:-4px;background:#2ecc71;color:#fff;'
+      + 'border-radius:50%;width:14px;height:14px;font-size:9px;line-height:14px;'
+      + 'text-align:center;font-weight:700;box-shadow:0 0 0 2px var(--bg,#1a1a1a);pointer-events:none;';
+    el.appendChild(badge);
+  } else if (!valid && badge) {
+    badge.remove();
+  }
+}
+
+function refreshKiteLoginStatus() {
+  return fetch(`${TRADEEDGE_API_URL}/kite/token-status`)
+    .then(r => r.json())
+    .then(j => {
+      const valid = !!j.valid;
+      ['kiteLoginBtn', 'mobKiteLoginBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) _setKiteBtnState(el, valid);
+      });
+      return valid;
+    })
+    .catch(e => { console.warn('[KiteLogin] Could not check token status:', e); return false; });
+}
+
+let _kitePollTimer = null;
+function openKiteLogin() {
+  window.open(`${TRADEEDGE_API_URL}/kite/login`, '_blank');
+  if (_kitePollTimer) clearInterval(_kitePollTimer);
+  let attempts = 0;
+  const MAX_ATTEMPTS = 36; // ~3 minutes at 5s intervals — covers a slow TOTP entry
+  _kitePollTimer = setInterval(async () => {
+    attempts++;
+    const valid = await refreshKiteLoginStatus();
+    if (valid || attempts >= MAX_ATTEMPTS) { clearInterval(_kitePollTimer); _kitePollTimer = null; }
+  }, 5000);
+}
+document.addEventListener('DOMContentLoaded', refreshKiteLoginStatus);
 
 
 // Nifty 50 stocks (54 constituents, Mar 2026) — used when universeMode = 'nifty50'
@@ -7072,6 +7132,10 @@ async function runScanner() {
   // Sort using active ranking mode (Wilson or Expectancy)
   longs.sort(_signalSortFn);
   shorts.sort(_signalSortFn);
+
+  // Verification hook — exposes the raw (uncapped, unfiltered) scan candidates
+  // for the automated backend-parity check. Read-only, no UI/behavioural effect.
+  window.__lastRawScan = { scanDate, longs: longs.map(s => ({ ...s })), shorts: shorts.map(s => ({ ...s })) };
 
   const maxTotal = +_maxDayEl().value || 0;
 let longsOut, shortsOut;
@@ -11350,6 +11414,7 @@ renderWatchlist();
     <button id="mobBreezeFetchBtn" class="mob-icon-btn" onclick="runBreezeFetch()" title="Fetch today's data from Breeze">📡</button>
     <button id="mobCloudBtn" class="mob-icon-btn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
     <button id="mobLocalBtn" class="mob-icon-btn" onclick="loadFromCSV()" title="Load daily CSVs from a local folder (tradeedge_data)">📂</button>
+    <button id="mobKiteLoginBtn" class="mob-icon-btn" onclick="openKiteLogin()" title="Kite Login — authorize today's Gap Strategy automation">🔐</button>
     <button class="mob-icon-btn" onclick="mobClearCache()" title="Clear IDB cache" style="background:rgba(220,60,60,0.18);color:var(--bear);">🗑</button>
   </div>
 

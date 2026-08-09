@@ -17,6 +17,7 @@ backup, same as the CSVs).
 """
 from __future__ import annotations
 import json
+import time
 from pathlib import Path
 from datetime import date, datetime, timedelta
 
@@ -108,11 +109,44 @@ def save_positions(data_dir: Path, positions: dict) -> None:
 
 # ── Entry ────────────────────────────────────────────────────────────────────
 
-def place_entry_order(kite, data_dir: Path, signal: dict, today: date) -> dict:
+def _wait_for_fill(kite, order_id: str, attempts: int = 6, delay_sec: float = 1.0) -> float | None:
+    """
+    Polls the order book for order_id's average fill price. NFO futures
+    market orders during market hours normally fill within a second or two;
+    a few short retries covers that without blocking the request for long.
+    Returns None if it never shows COMPLETE within the retry budget —
+    caller falls back to the signal's slLevel rather than blocking the
+    entry entirely on a slow order-book update.
+    """
+    for _ in range(attempts):
+        try:
+            for o in kite.orders():
+                if o.get("order_id") == order_id and o.get("status") == "COMPLETE":
+                    return o.get("average_price")
+        except Exception:
+            pass
+        time.sleep(delay_sec)
+    return None
+
+
+def place_entry_order(kite, data_dir: Path, signal: dict, today: date,
+                       sl_pct: float, sl_type: str = "pct") -> dict:
     """
     Places a market order for `signal` (from gap_scan.scan_gap_signals'
     "selected" list) in the correct current/next-month future contract,
     then a GTT stop-loss order, then records the position.
+
+    The signal's slLevel is computed off the STOCK's cash-market close
+    (that's what the scan/backtest uses to decide WR/expectancy), but we
+    trade the FUTURE — its price differs from spot by the futures basis,
+    and the market order itself may fill a bit away from the last-seen
+    price. Per Raja: SL must be sl_pct% from the future's own actual entry
+    fill price, not the cash-market slLevel. If the fill price can't be
+    read back in time, falls back to slLevel (better than no SL) and
+    flags it in the result so the morning check can catch it.
+
+    sl_pct/sl_type come from the live Gap Settings at call time (not
+    baked into signal), since they can change independently.
 
     Returns a result dict — either {"ok": True, "position": {...}} or
     {"ok": False, "error": "..."}. Never raises — callers (the cron
@@ -120,7 +154,6 @@ def place_entry_order(kite, data_dir: Path, signal: dict, today: date) -> dict:
     """
     symbol = signal["sym"]
     side = signal["side"]  # LONG / SHORT
-    sl_price = signal["slLevel"]
 
     existing = load_positions(data_dir).get(symbol)
     if existing and existing.get("status") == "open":
@@ -145,6 +178,26 @@ def place_entry_order(kite, data_dir: Path, signal: dict, today: date) -> dict:
         )
     except Exception as e:
         return {"ok": False, "error": f"Entry order failed: {e}"}
+
+    # Read back the future's actual fill price — this, not the signal's
+    # cash-market slLevel, is what the SL% must be measured from.
+    fill_price = _wait_for_fill(kite, order_id)
+    sl_price_source = "actual_fill"
+    if fill_price:
+        if sl_type == "gap_fill":
+            sl_price = fill_price
+        else:
+            sl_price = (fill_price * (1 - sl_pct / 100) if side == "LONG"
+                        else fill_price * (1 + sl_pct / 100))
+        sl_price = round(sl_price, 2)
+    else:
+        # Couldn't confirm the fill in time — fall back to the signal's
+        # cash-market slLevel rather than leaving the position unprotected.
+        fill_price = None
+        sl_price = signal["slLevel"]
+        sl_price_source = "fallback_signal_slLevel"
+        print(f"[gap-orders] {symbol}: could not read back fill price for "
+              f"order {order_id} — GTT SL falls back to signal slLevel {sl_price}")
 
     # GTT stop-loss — single-leg trigger that fires a market order on the
     # opposite side if price crosses sl_price, independent of anything
@@ -172,7 +225,11 @@ def place_entry_order(kite, data_dir: Path, signal: dict, today: date) -> dict:
     positions[symbol] = {
         "direction": side, "entry_date": today.isoformat(),
         "entry_order_id": order_id, "tradingsymbol": tradingsymbol,
-        "lot_size": lot_size, "sl_price": sl_price,
+        "lot_size": lot_size,
+        "entry_price": fill_price,           # actual futures fill (None if unread)
+        "signal_slLevel": signal["slLevel"],  # cash-market reference, for comparison
+        "sl_price": sl_price,
+        "sl_price_source": sl_price_source,
         "gtt_id": gtt_id, "status": "open",
     }
     save_positions(data_dir, positions)
