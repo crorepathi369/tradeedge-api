@@ -1,0 +1,152 @@
+{
+  "SBICARD": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-27",
+      "entry_order_id": null,
+      "tradingsymbol": "SBICARD26AUGFUT",
+      "lot_size": 800,
+      "entry_price": 643.2,
+      "signal_entry": 645.0,
+      "signal_slLevel": 625.65,
+      "sl_price": 623.9,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 623.9,
+      "exit_date": "2026-07-27",
+      "pnl_pct": -3.0,
+      "pnl_amount": -15440.0
+    }
+  ],
+  "COFORGE": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-28",
+      "entry_order_id": null,
+      "tradingsymbol": "COFORGE26AUGFUT",
+      "lot_size": 475,
+      "entry_price": 1689.5,
+      "signal_entry": 1682.14,
+      "signal_slLevel": 1631.68,
+      "sl_price": 1638.82,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 1638.82,
+      "exit_date": "2026-07-28",
+      "pnl_pct": -3.0,
+      "pnl_amount": -24073.0
+    }
+  ],
+  "HCLTECH": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-29",
+      "entry_order_id": null,
+      "tradingsymbol": "HCLTECH26AUGFUT",
+      "lot_size": 400,
+      "entry_price": 1347.4,
+      "signal_entry": 1344.3,
+      "signal_slLevel": 1303.97,
+      "sl_price": 1306.98,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1357.8,
+      "exit_date": "2026-07-30",
+      "pnl_pct": 0.77,
+      "pnl_amount": 4160.0
+    }
+  ],
+  "HYUNDAI": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-31",
+      "entry_order_id": null,
+      "tradingsymbol": "HYUNDAI26AUGFUT",
+      "lot_size": 275,
+      "entry_price": 2164.2,
+      "signal_entry": 2160.07,
+      "signal_slLevel": 2095.27,
+      "sl_price": 2099.27,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 2099.27,
+      "exit_date": "2026-07-31",
+      "pnl_pct": -3.0,
+      "pnl_amount": -17855.75
+    }
+  ],
+  "NATIONALUM": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-08-03",
+      "entry_order_id": null,
+      "tradingsymbol": "NATIONALUM26AUGFUT",
+      "lot_size": 1875,
+      "entry_price": 364.9,
+      "signal_entry": 369.0,
+      "signal_slLevel": 357.93,
+      "sl_price": 353.95,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 353.95,
+      "exit_date": "2026-08-03",
+      "pnl_pct": -3.0,
+      "pnl_amount": -20531.25
+    }
+  ],
+  "CGPOWER": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-08-04",
+      "entry_order_id": null,
+      "tradingsymbol": "CGPOWER26AUGFUT",
+      "lot_size": 850,
+      "entry_price": 882.3,
+      "signal_entry": 880.05,
+      "signal_slLevel": 853.65,
+      "sl_price": 855.83,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 855.83,
+      "exit_date": "2026-08-04",
+      "pnl_pct": -3.0,
+      "pnl_amount": -22499.5
+    }
+  ],
+  "BRITANNIA": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-08-07",
+      "entry_order_id": null,
+      "tradingsymbol": "BRITANNIA26AUGFUT",
+      "lot_size": 125,
+      "entry_price": 5549.5,
+      "signal_entry": 5510.0,
+      "signal_slLevel": 5344.7,
+      "sl_price": 5383.01,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "open"
+    }
+  ]
+}
