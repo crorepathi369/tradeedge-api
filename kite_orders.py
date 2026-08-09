@@ -510,6 +510,24 @@ def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
     it correctly the next time it runs, exactly as it would for a same-day
     live paper entry (kite.ohlc() covers "today" either way).
 
+    Expired contracts are flushed from kite.instruments("NFO") the moment
+    they expire — the exchange doesn't keep old instrument_tokens resolvable
+    at all, confirmed against Kite's own forum docs, not just observed
+    behaviour. So for any entry_date older than the *current* contract
+    cycle, find_future_instrument(entry_date's own expiry) would always
+    return None. Instead: resolve the CURRENT live contract (whatever
+    month that is today) purely to get an instrument_token, then call
+    historical_data(..., continuous=True) — Kite's continuous-futures mode
+    stitches daily candles across expired contracts using a live contract's
+    token as the anchor, so the actual historical date range works
+    regardless of which specific contract was live back then. The DISPLAY
+    tradingsymbol is still the historically-correct one (built from the
+    live contract's own name + entry_date's real expiry month), so it
+    reads as "RELIANCE26JUNFUT" for a June signal, not this month's
+    contract. lot_size is taken from the current live contract as an
+    approximation — exact historical lot sizes aren't recoverable this
+    way, but they rarely change.
+
     Idempotent — a (symbol, entry_date) pair already backfilled is skipped,
     so re-running a backfill request doesn't duplicate trades. Never
     raises; returns {"ok": False, "error": ...} on any failure so a bad
@@ -523,17 +541,18 @@ def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
     if _already_backfilled(positions, symbol, entry_date_str):
         return {"ok": False, "error": f"{symbol} {entry_date_str} already backfilled — skipping"}
 
-    expiry = resolve_expiry(entry_date)
-    inst = find_future_instrument(kite, symbol, expiry)
-    if inst is None:
-        return {"ok": False, "error": f"No NFO future found for {symbol} exp {expiry}"}
+    live_inst = find_future_instrument(kite, symbol, resolve_expiry(date.today()))
+    if live_inst is None:
+        return {"ok": False, "error": f"No currently-live NFO future found for {symbol} "
+                                       f"(needed as the continuous-mode anchor token)"}
 
-    tradingsymbol = inst["tradingsymbol"]
-    lot_size = inst["lot_size"]
-    token = inst["instrument_token"]
+    token = live_inst["instrument_token"]
+    lot_size = live_inst["lot_size"]
+    hist_expiry = resolve_expiry(entry_date)
+    tradingsymbol = f"{live_inst['name']}{hist_expiry.strftime('%y%b').upper()}FUT"
 
     try:
-        entry_candles = kite.historical_data(token, entry_date_str, entry_date_str, "day")
+        entry_candles = kite.historical_data(token, entry_date_str, entry_date_str, "day", continuous=True)
     except Exception as e:
         return {"ok": False, "error": f"historical_data failed for {tradingsymbol} on {entry_date_str}: {e}"}
     if not entry_candles:
@@ -565,7 +584,7 @@ def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
     if exit_check_date is not None:
         exit_date_str = exit_check_date.isoformat()
         try:
-            exit_candles = kite.historical_data(token, exit_date_str, exit_date_str, "day")
+            exit_candles = kite.historical_data(token, exit_date_str, exit_date_str, "day", continuous=True)
         except Exception as e:
             exit_candles = []
             print(f"[gap-orders/backfill] historical_data failed for {tradingsymbol} on {exit_date_str}: {e}")

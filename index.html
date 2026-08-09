@@ -3416,6 +3416,15 @@ let _tradesTakenData   = [];
 let _tradesTakenSort   = { field: 'entry_date', dir: 'desc' };
 let _tradesTakenFilter = { status: 'all', side: 'all' };
 
+// Mobile Auto Trades tab's own strategy sub-tab — automation only exists for
+// Gap, but the picker itself mirrors the Stats tab's Gap/Momentum/Pullback
+// pills so the UI stays consistent even though only Gap has real data.
+let _mobLiveTradesStrat = 'overnight';
+function mobSwitchLiveTradesStrat(strat) {
+  _mobLiveTradesStrat = strat;
+  renderMobLiveTrades();
+}
+
 async function loadTradesTaken() {
   const badge = document.getElementById('tradesTakenBadge');
   if (badge) badge.textContent = 'Loading…';
@@ -3679,7 +3688,45 @@ function renderTradesTaken() {
 function renderMobLiveTrades() {
   const statsEl = document.getElementById('mobTtStats');
   const inner   = document.getElementById('mobTtInner');
+  const hdr     = document.getElementById('mobTtStratHdr');
+  const gapControls = document.getElementById('mobTtGapControls');
   if (!statsEl || !inner) return; // mobile shell not built yet
+
+  // Strategy pills — same colours/labels as the Stats tab's own picker
+  const stratColors = { overnight: 'var(--accent)', intraday: '#7c5cfc', pullback: '#2b8a6e' };
+  const stratLabels = { overnight: '📈 Gap', intraday: '⚡ Momentum', pullback: '↩️ Pullback' };
+  if (hdr) {
+    hdr.innerHTML = `
+      <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px;">
+        ${['overnight', 'intraday', 'pullback'].map((strat, i) => {
+          const active = _mobLiveTradesStrat === strat;
+          return `<button onclick="mobSwitchLiveTradesStrat('${strat}')"
+            style="flex:1;padding:8px 2px;border:none;font-family:'Syne',sans-serif;font-weight:700;
+              font-size:11px;cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap;
+              overflow:hidden;text-overflow:ellipsis;
+              ${i > 0 ? 'border-left:1px solid var(--border);' : ''}
+              background:${active ? stratColors[strat] : 'var(--surface2)'};color:${active ? '#fff' : 'var(--text2)'};">
+            ${stratLabels[strat]}
+          </button>`;
+        }).join('')}
+      </div>`;
+  }
+
+  // Automation only exists for Gap — Momentum/Pullback show a clear
+  // explanation instead of an empty table that looks like a bug.
+  if (_mobLiveTradesStrat !== 'overnight') {
+    if (gapControls) gapControls.style.display = 'none';
+    statsEl.innerHTML = '';
+    const label = _mobLiveTradesStrat === 'intraday' ? 'Intraday Momentum' : 'Pullback';
+    inner.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;
+      color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;text-align:center;gap:10px;">
+      <div style="font-size:36px;opacity:0.35;">🤖</div>
+      <div>Automation is Gap Strategy only</div>
+      <div style="font-size:10px;">${label} has no live/paper trade execution — switch to the Gap tab above to see automated trades</div>
+    </div>`;
+    return;
+  }
+  if (gapControls) gapControls.style.display = '';
 
   const { open, winRate, netPnl, avgSlip } = _ttStats();
   statsEl.innerHTML = `
@@ -5970,6 +6017,10 @@ function setStrategy(s) {
   document.getElementById('overnightParams').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('intradayParams').style.display  = s === 'intraday'  ? '' : 'none';
   document.getElementById('pullbackParams').style.display  = s === 'pullback'  ? '' : 'none';
+  // Automation only exists for the Gap (Overnight) strategy — hide the whole
+  // section rather than show it empty/irrelevant under Momentum or Pullback.
+  const tradesTakenSection = document.getElementById('msTradesTaken');
+  if (tradesTakenSection) tradesTakenSection.style.display = s === 'overnight' ? '' : 'none';
   const idDesc = document.getElementById('idStratDesc');
   const onDesc = document.getElementById('onStratDesc');
   if (idDesc) idDesc.style.display = s === 'intraday'  ? '' : 'none';
@@ -11323,31 +11374,34 @@ loadSavedDefaults();
 
   <!-- Live Trades Tab content — real Kite-executed trades, sibling of mobScannerContent / mobTradesTab -->
   <div id="mobLiveTradesTab" style="display:none;flex-direction:column;min-height:0;flex:1;">
-    <div id="mobTtStats" style="display:flex;gap:8px;padding:10px 12px 4px;overflow-x:auto;"></div>
-    <div style="display:flex;gap:6px;padding:8px 12px;">
-      <select id="mobTtFilterStatus" onchange="setTradesTakenFilter('status',this.value)"
-        style="flex:1;min-width:0;padding:7px 6px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
-        <option value="all">All statuses</option>
-        <option value="open">Open</option>
-        <option value="closed_by_sl">SL Hit</option>
-        <option value="closed_eod">Closed EOD</option>
-      </select>
-      <select id="mobTtFilterSide" onchange="setTradesTakenFilter('side',this.value)"
-        style="flex:1;min-width:0;padding:7px 6px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
-        <option value="all">Long + Short</option>
-        <option value="LONG">▲ Long</option>
-        <option value="SHORT">▼ Short</option>
-      </select>
-      <button onclick="loadTradesTaken()" style="flex-shrink:0;padding:7px 12px;border:1px solid var(--border);border-radius:7px;
-        font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);">↻</button>
-    </div>
-    <div style="display:flex;gap:6px;padding:0 12px 8px;">
-      <button id="mobTtBackfillBtn" onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 1 year of real market data"
-        style="flex:1;padding:7px 6px;border:1px solid var(--accent);border-radius:7px;
-        font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);">⏪ Backfill 1yr</button>
-      <button onclick="clearBackfilledTrades()" title="Remove all backfilled trades — use after a logic fix, before re-running Backfill"
-        style="flex:1;padding:7px 6px;border:1px solid var(--border);border-radius:7px;
-        font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--bear);">🗑 Clear Backfilled</button>
+    <div id="mobTtStratHdr" style="padding:10px 12px 0;"></div>
+    <div id="mobTtGapControls">
+      <div id="mobTtStats" style="display:flex;gap:8px;padding:10px 12px 4px;overflow-x:auto;"></div>
+      <div style="display:flex;gap:6px;padding:8px 12px;">
+        <select id="mobTtFilterStatus" onchange="setTradesTakenFilter('status',this.value)"
+          style="flex:1;min-width:0;padding:7px 6px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
+          <option value="all">All statuses</option>
+          <option value="open">Open</option>
+          <option value="closed_by_sl">SL Hit</option>
+          <option value="closed_eod">Closed EOD</option>
+        </select>
+        <select id="mobTtFilterSide" onchange="setTradesTakenFilter('side',this.value)"
+          style="flex:1;min-width:0;padding:7px 6px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
+          <option value="all">Long + Short</option>
+          <option value="LONG">▲ Long</option>
+          <option value="SHORT">▼ Short</option>
+        </select>
+        <button onclick="loadTradesTaken()" style="flex-shrink:0;padding:7px 12px;border:1px solid var(--border);border-radius:7px;
+          font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);">↻</button>
+      </div>
+      <div style="display:flex;gap:6px;padding:0 12px 8px;">
+        <button id="mobTtBackfillBtn" onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 1 year of real market data"
+          style="flex:1;padding:7px 6px;border:1px solid var(--accent);border-radius:7px;
+          font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);">⏪ Backfill 1yr</button>
+        <button onclick="clearBackfilledTrades()" title="Remove all backfilled trades — use after a logic fix, before re-running Backfill"
+          style="flex:1;padding:7px 6px;border:1px solid var(--border);border-radius:7px;
+          font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--bear);">🗑 Clear Backfilled</button>
+      </div>
     </div>
     <div id="mobTtInner" style="flex:1;overflow-y:auto;min-height:0;padding:4px 0 80px;-webkit-overflow-scrolling:touch;"></div>
   </div>
@@ -11358,13 +11412,13 @@ loadSavedDefaults();
       <span class="mob-tab-icon">📡</span>
       Scanner
     </button>
-    <button class="mob-tab-btn" id="mobTabTradesBtn" onclick="mobSwitchTab('trades')">
-      <span class="mob-tab-icon">🏆</span>
-      Stats
-    </button>
     <button class="mob-tab-btn" id="mobTabLiveTradesBtn" onclick="mobSwitchTab('liveTrades')">
       <span class="mob-tab-icon">🤖</span>
       Auto Trades
+    </button>
+    <button class="mob-tab-btn" id="mobTabTradesBtn" onclick="mobSwitchTab('trades')">
+      <span class="mob-tab-icon">🏆</span>
+      Stats
     </button>
   </div>
 
