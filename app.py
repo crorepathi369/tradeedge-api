@@ -2050,22 +2050,33 @@ def gap_orders_exit():
 def gap_orders_backfill_paper():
     """
     Retroactively populates paper trades for the past `days` calendar days
-    (default 30), so Paper mode can be sanity-checked against real market
-    history immediately instead of waiting for it to accumulate forward
-    day by day. Always paper — backfilling a 'live' trade for a past date
-    makes no sense, so this ignores settings['tradingMode'] entirely.
+    (default 365 — this is a one-time activity, so default to the full
+    year rather than making the caller ask twice), so Paper mode can be
+    sanity-checked against real market history immediately instead of
+    waiting for it to accumulate forward day by day. Always paper —
+    backfilling a 'live' trade for a past date makes no sense, so this
+    ignores settings['tradingMode'] entirely.
 
     For each trading day in the window (oldest to newest, using whatever
     dates actually have CSV data — same universe as the live scan), runs
     the exact same gap_scan.scan_gap_signals() the live automation would
     have, then backfills each selected signal via
     kite_orders.backfill_paper_trade(), checking for an SL cross against
-    the entry day's own daily range first, then the NEXT date in this same
-    sequence (not a naive +1 calendar day). The most recent date in the
-    window has no "next" date yet, so it's left open for the regular
-    /gap-orders/exit job to finish naturally.
+    the NEXT date in this same sequence (not a naive +1 calendar day —
+    and NOT the entry day's own range, which would wrongly compare the SL
+    to price action from before the position existed). The most recent
+    date in the window has no "next" date yet, so it's left open for the
+    regular /gap-orders/exit job to finish naturally.
 
-    Usage: POST /gap-orders/backfill-paper?days=30
+    A year's worth of signals can mean a couple hundred sequential
+    kite.historical_data() calls, which may outrun a single HTTP request's
+    timeout — but kite_orders.backfill_paper_trade() saves after every
+    individual trade, not just at the end, and skips (symbol, date) pairs
+    already done (idempotent). So a timed-out request has still made real
+    progress; just call this again with the same `days` and it picks up
+    where it left off rather than starting over.
+
+    Usage: POST /gap-orders/backfill-paper?days=365
     """
     if request.method == "OPTIONS":
         return cors_response({"ok": True})
@@ -2079,10 +2090,10 @@ def gap_orders_backfill_paper():
         return cors_response({"error": "no_gap_settings_synced"}, 400)
 
     try:
-        days_back = int(request.args.get("days", 30))
+        days_back = int(request.args.get("days", 365))
     except ValueError:
         return cors_response({"error": "invalid 'days' param"}, 400)
-    days_back = max(1, min(days_back, 90))  # sane bounds — this is a backfill, not a full re-scan
+    days_back = max(1, min(days_back, 400))  # sane bounds — this is a backfill, not a full re-scan
 
     symbols = get_scan_symbols()
     window_start = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")

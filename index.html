@@ -2814,9 +2814,9 @@
         </select>
         <button onclick="loadTradesTaken()" style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;
           font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);cursor:pointer;">↻ Refresh</button>
-        <button id="ttBackfillBtn" onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 30 days of real market data"
+        <button id="ttBackfillBtn" onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 1 year of real market data — a one-time activity, so it defaults to the full year"
           style="padding:6px 12px;border:1px solid var(--accent);border-radius:7px;
-          font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);cursor:pointer;">⏪ Backfill 30 days (Paper)</button>
+          font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);cursor:pointer;">⏪ Backfill 1 year (Paper)</button>
         <button id="ttClearBackfillBtn" onclick="clearBackfilledTrades()" title="Remove all backfilled trades (real paper/live trades are untouched) — use after a logic fix, before re-running Backfill"
           style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;
           font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--bear);cursor:pointer;">🗑 Clear Backfilled</button>
@@ -2828,7 +2828,6 @@
             <tr>
               <th style="cursor:pointer;" onclick="sortTradesTaken('sym')">Symbol</th>
               <th>Side</th>
-              <th>Status</th>
               <th style="cursor:pointer;" onclick="sortTradesTaken('entry_date')">Entry Date</th>
               <th style="cursor:pointer;" onclick="sortTradesTaken('lot_size')">Qty (Lot)</th>
               <th>Entry (Fut.)</th>
@@ -2839,6 +2838,7 @@
               <th>Exit (Fut.)</th>
               <th style="cursor:pointer;" onclick="sortTradesTaken('pnl_pct')">P&amp;L %</th>
               <th style="cursor:pointer;" onclick="sortTradesTaken('pnl_amount')">P&amp;L ₹</th>
+              <th style="width:110px;max-width:110px;">Status</th>
             </tr>
           </thead>
           <tbody id="tradesTakenTbody"></tbody>
@@ -3450,7 +3450,7 @@ async function clearBackfilledTrades() {
   }
 }
 
-async function backfillPaperTrades(days = 30) {
+async function backfillPaperTrades(days = 365) {
   const btn = document.getElementById('ttBackfillBtn');
   const original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Backfilling…'; }
@@ -3515,10 +3515,22 @@ function _ttSlippagePct(r) {
 function _ttStatusBadge(status, mode, backfilled) {
   // mode defaults to 'live' for pre-existing positions saved before the
   // mode field existed — never silently label a real trade as paper.
-  const tag = (mode === 'paper' ? '🧪 PAPER · ' : '') + (backfilled ? '⏪ BACKFILLED · ' : '');
-  if (status === 'open')        return `<span class="outcome-badge win" style="background:var(--accent-light);color:var(--accent);">${tag}OPEN</span>`;
-  if (status === 'closed_by_sl') return `<span class="outcome-badge sl">${tag}SL HIT</span>`;
-  return `<span class="outcome-badge flat">${tag}CLOSED EOD</span>`;
+  // Icons sit on their own compact line above the status pill (hover for
+  // what they mean) rather than spelling out "PAPER"/"BACKFILLED" inline —
+  // that text made "CLOSED EOD" wrap to 3 lines in a narrow column.
+  const icons = [];
+  if (mode === 'paper') icons.push('🧪');
+  if (backfilled) icons.push('⏪');
+  const tagTitle = [mode === 'paper' ? 'Paper mode' : '', backfilled ? 'Backfilled' : ''].filter(Boolean).join(' · ');
+  const tagRow = icons.length
+    ? `<div title="${tagTitle}" style="font-size:11px;line-height:1.2;margin-bottom:2px;">${icons.join(' ')}</div>`
+    : '';
+  const badge = status === 'open'
+    ? `<span class="outcome-badge win" style="background:var(--accent-light);color:var(--accent);">OPEN</span>`
+    : status === 'closed_by_sl'
+    ? `<span class="outcome-badge sl">SL HIT</span>`
+    : `<span class="outcome-badge flat">CLOSED EOD</span>`;
+  return tagRow + badge;
 }
 
 function _ttSlHTML(r) {
@@ -3580,7 +3592,6 @@ function renderTradesTaken() {
     return `<tr>
       <td><b>${r.sym}</b><div style="font-size:10px;color:var(--text3);">${r.tradingsymbol || ''}</div></td>
       <td><span class="outcome-badge ${r.direction === 'LONG' ? 'win' : 'loss'}" style="font-size:9px;">${r.direction === 'LONG' ? '▲ LONG' : '▼ SHORT'}</span></td>
-      <td>${_ttStatusBadge(r.status, r.mode, r.backfilled)}</td>
       <td>${r.entry_date || '—'}</td>
       <td>${r.lot_size != null ? r.lot_size.toLocaleString('en-IN') : '—'}</td>
       <td>${r.entry_price != null ? r.entry_price.toFixed(2) : '—'}</td>
@@ -3590,7 +3601,8 @@ function renderTradesTaken() {
       <td>${r.exit_date || '—'}</td>
       <td>${r.exit_price != null ? r.exit_price.toFixed(2) : '—'}</td>
       <td style="color:${r.pnl_pct != null ? _pnlColor(r.pnl_pct) : 'var(--text3)'};font-weight:600;">${r.pnl_pct != null ? _pnlSign(r.pnl_pct) + r.pnl_pct.toFixed(2) + '%' : (r.status === 'open' ? 'unrealized' : '—')}</td>
-      <td style="color:${r.pnl_amount != null ? _pnlColor(r.pnl_amount) : 'var(--text3)'};font-weight:600;">${r.pnl_amount != null ? _pnlSign(r.pnl_amount) + '₹' + Math.abs(r.pnl_amount).toLocaleString('en-IN') : '—'}</td>
+      <td style="color:${r.pnl_amount != null ? _pnlColor(r.pnl_amount) : 'var(--text3)'};font-weight:600;">${r.pnl_amount != null ? _pnlSign(r.pnl_amount) + '₹' + Math.abs(r.pnl_amount).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}</td>
+      <td style="width:110px;max-width:110px;white-space:normal;line-height:1.6;">${_ttStatusBadge(r.status, r.mode, r.backfilled)}</td>
     </tr>`;
   }).join('');
 }
@@ -3634,7 +3646,7 @@ function renderMobLiveTrades() {
   inner.innerHTML = rows.map(r => {
     const slip = _ttSlippagePct(r);
     const pnlLine = r.pnl_pct != null
-      ? `<div><div style="font-family:'DM Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:0.3px;color:var(--text3);margin-bottom:2px;">P&amp;L</div><div style="font-family:'DM Mono',monospace;font-size:10.5px;font-weight:600;color:${_pnlColor(r.pnl_pct)}">${_pnlSign(r.pnl_pct)}${r.pnl_pct.toFixed(2)}% · ${_pnlSign(r.pnl_amount)}₹${Math.abs(r.pnl_amount).toLocaleString('en-IN')}</div></div>`
+      ? `<div><div style="font-family:'DM Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:0.3px;color:var(--text3);margin-bottom:2px;">P&amp;L</div><div style="font-family:'DM Mono',monospace;font-size:10.5px;font-weight:600;color:${_pnlColor(r.pnl_pct)}">${_pnlSign(r.pnl_pct)}${r.pnl_pct.toFixed(2)}% · ${_pnlSign(r.pnl_amount)}₹${Math.abs(r.pnl_amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div></div>`
       : `<div><div style="font-family:'DM Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:0.3px;color:var(--text3);margin-bottom:2px;">SL</div><div style="font-family:'DM Mono',monospace;font-size:10.5px;font-weight:600;">${_ttSlHTML(r)}</div></div>`;
     return `<div class="signal-card ${r.direction === 'LONG' ? 'bull-card' : 'bear-card'}" style="padding:12px 14px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
@@ -11259,6 +11271,14 @@ loadSavedDefaults();
       </select>
       <button onclick="loadTradesTaken()" style="flex-shrink:0;padding:7px 12px;border:1px solid var(--border);border-radius:7px;
         font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);">↻</button>
+    </div>
+    <div style="display:flex;gap:6px;padding:0 12px 8px;">
+      <button onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 1 year of real market data"
+        style="flex:1;padding:7px 6px;border:1px solid var(--accent);border-radius:7px;
+        font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);">⏪ Backfill 1yr</button>
+      <button onclick="clearBackfilledTrades()" title="Remove all backfilled trades — use after a logic fix, before re-running Backfill"
+        style="flex:1;padding:7px 6px;border:1px solid var(--border);border-radius:7px;
+        font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--bear);">🗑 Clear Backfilled</button>
     </div>
     <div id="mobTtInner" style="flex:1;overflow-y:auto;min-height:0;padding:4px 0 80px;-webkit-overflow-scrolling:touch;"></div>
   </div>
