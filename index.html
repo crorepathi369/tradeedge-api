@@ -3450,8 +3450,13 @@ async function clearBackfilledTrades() {
   }
 }
 
-// Splits the last `daysTotal` calendar days into ~30-day chunks, oldest
+// Splits the last `daysTotal` calendar days into ~30-day chunks, NEWEST
 // first, as explicit {from, to} date strings (half-open: from <= d < to).
+// Newest-first on purpose: NFO futures contracts expire and drop out of
+// kite.instruments("NFO") entirely once they're no longer current, so the
+// months most likely to actually resolve are the recent ones — front-load
+// those rather than burning through a year of oldest-first requests that
+// may never succeed for contract-resolution reasons alone.
 function _monthlyChunks(daysTotal) {
   const chunks = [];
   let chunkEnd = new Date();
@@ -3460,7 +3465,7 @@ function _monthlyChunks(daysTotal) {
     const span = Math.min(30, remaining);
     const chunkStart = new Date(chunkEnd);
     chunkStart.setDate(chunkStart.getDate() - span);
-    chunks.unshift({ from: chunkStart.toISOString().slice(0, 10), to: chunkEnd.toISOString().slice(0, 10) });
+    chunks.push({ from: chunkStart.toISOString().slice(0, 10), to: chunkEnd.toISOString().slice(0, 10) });
     chunkEnd = chunkStart;
     remaining -= span;
   }
@@ -3486,6 +3491,12 @@ async function backfillPaperTrades(days = 365) {
   let totalBackfilled = 0;
   const errors = [];
 
+  // Tallies WHY individual signals failed to backfill (e.g. "No NFO future
+  // found" for an expired/delisted contract) — a chunk can come back
+  // HTTP-200 with backfilled:0 while still containing per-signal failures
+  // buried in its results[], which previously went completely unsurfaced.
+  const signalErrorCounts = {};
+
   for (let i = 0; i < chunks.length; i++) {
     const { from, to } = chunks[i];
     setLabel(`⏳ ${i + 1}/${chunks.length} (${totalBackfilled} so far)`);
@@ -3496,7 +3507,13 @@ async function backfillPaperTrades(days = 365) {
         errors.push(`${from}..${to}: ${data.error}`);
       } else {
         totalBackfilled += data.backfilled;
+        (data.results || []).forEach(r => {
+          if (r.ok === false && r.error) {
+            signalErrorCounts[r.error] = (signalErrorCounts[r.error] || 0) + 1;
+          }
+        });
       }
+      console.log(`[backfill] ${from}..${to}:`, data);
     } catch (e) {
       errors.push(`${from}..${to}: ${e.message}`);
     }
@@ -3504,10 +3521,19 @@ async function backfillPaperTrades(days = 365) {
   }
 
   btns.forEach((b, i) => { b.disabled = false; b.textContent = originals[i]; });
-  if (errors.length) {
-    alert(`Backfill finished with ${errors.length} month(s) that had issues:\n\n${errors.join('\n')}\n\n`
-      + `${totalBackfilled} trade(s) backfilled successfully. Click Backfill again to retry just the failed months — `
-      + `completed ones are automatically skipped, not redone.`);
+
+  const errorSummary = Object.entries(signalErrorCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([msg, count]) => `  ${count}× ${msg}`)
+    .join('\n');
+
+  if (errors.length || errorSummary) {
+    alert(
+      (errors.length ? `${errors.length} month(s) failed outright:\n${errors.join('\n')}\n\n` : '')
+      + (errorSummary ? `Individual signals that couldn't be backfilled:\n${errorSummary}\n\n` : '')
+      + `${totalBackfilled} trade(s) backfilled successfully. Full per-date detail logged to the browser console. `
+      + `Click Backfill again to retry — completed work is skipped, not redone.`
+    );
   } else {
     _showSaveToast(`Backfilled ${totalBackfilled} paper trade(s) across ${chunks.length} month(s)`);
   }
