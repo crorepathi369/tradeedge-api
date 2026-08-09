@@ -2046,9 +2046,96 @@ def gap_orders_exit():
     return cors_response({"results": results})
 
 
-@app.route("/gap-orders/status", methods=["GET", "OPTIONS"])
-def gap_orders_status():
-    """Returns current gap_positions.json contents — for a quick manual check."""
+@app.route("/gap-orders/backfill-paper", methods=["POST", "OPTIONS"])
+def gap_orders_backfill_paper():
+    """
+    Retroactively populates paper trades for the past `days` calendar days
+    (default 30), so Paper mode can be sanity-checked against real market
+    history immediately instead of waiting for it to accumulate forward
+    day by day. Always paper — backfilling a 'live' trade for a past date
+    makes no sense, so this ignores settings['tradingMode'] entirely.
+
+    For each trading day in the window (oldest to newest, using whatever
+    dates actually have CSV data — same universe as the live scan), runs
+    the exact same gap_scan.scan_gap_signals() the live automation would
+    have, then backfills each selected signal via
+    kite_orders.backfill_paper_trade(), checking for an SL cross against
+    the entry day's own daily range first, then the NEXT date in this same
+    sequence (not a naive +1 calendar day). The most recent date in the
+    window has no "next" date yet, so it's left open for the regular
+    /gap-orders/exit job to finish naturally.
+
+    Usage: POST /gap-orders/backfill-paper?days=30
+    """
     if request.method == "OPTIONS":
         return cors_response({"ok": True})
-    return cors_response(kite_orders.load_positions(DATA_DIR))
+
+    kite = get_kite_client()
+    if kite is None:
+        return cors_response({"error": "not_logged_in — visit /kite/login first"}, 401)
+
+    settings = get_gap_settings()
+    if settings is None:
+        return cors_response({"error": "no_gap_settings_synced"}, 400)
+
+    try:
+        days_back = int(request.args.get("days", 30))
+    except ValueError:
+        return cors_response({"error": "invalid 'days' param"}, 400)
+    days_back = max(1, min(days_back, 90))  # sane bounds — this is a backfill, not a full re-scan
+
+    symbols = get_scan_symbols()
+    window_start = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    window_end = datetime.now().strftime("%Y-%m-%d")
+
+    dates = set()
+    for sym in symbols:
+        for c in gap_scan.load_ohlc(DATA_DIR, sym):
+            if window_start <= c["date"] < window_end:  # exclude today — the normal enter job owns it
+                dates.add(c["date"])
+    dates = sorted(dates)
+    if not dates:
+        return cors_response({"error": "no trading days with data in that window"}, 400)
+
+    results = []
+    for i, scan_date in enumerate(dates):
+        try:
+            scan_result = gap_scan.scan_gap_signals(DATA_DIR, symbols, scan_date, settings)
+        except Exception as e:
+            results.append({"date": scan_date, "ok": False, "error": f"scan failed: {e}"})
+            continue
+
+        next_date_str = dates[i + 1] if i + 1 < len(dates) else None
+        next_date = datetime.strptime(next_date_str, "%Y-%m-%d").date() if next_date_str else None
+        entry_date = datetime.strptime(scan_date, "%Y-%m-%d").date()
+
+        for signal in scan_result["selected"]:
+            res = kite_orders.backfill_paper_trade(
+                kite, DATA_DIR, signal, entry_date,
+                sl_pct=settings["slPct"], sl_type=settings.get("slType", "pct"),
+                exit_check_date=next_date,
+            )
+            res["date"] = scan_date
+            res["sym"] = signal["sym"]
+            results.append(res)
+            print(f"[gap-orders/backfill] {scan_date} {signal['sym']}: {res}")
+
+    push_positions_to_github()
+    backfilled = sum(1 for r in results if r.get("ok"))
+    return cors_response({
+        "datesScanned": len(dates), "window": f"{window_start}..{window_end}",
+        "backfilled": backfilled, "results": results,
+    })
+
+
+@app.route("/gap-orders/status", methods=["GET", "OPTIONS"])
+def gap_orders_status():
+    """
+    Returns every trade ever recorded — a flat array, each item carrying
+    its own 'sym' — for the Automated Trades UI to render directly.
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    positions = kite_orders.load_positions(DATA_DIR)
+    flat = [{"sym": sym, **trade} for sym, trades in positions.items() for trade in trades]
+    return cors_response(flat)

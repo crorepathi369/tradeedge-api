@@ -102,6 +102,11 @@ def _instrument_token(kite, tradingsymbol: str) -> int | None:
 
 
 # ── Position state (gap_positions.json) ─────────────────────────────────────
+# Format: {symbol: [trade_record, trade_record, ...]} — a LIST per symbol,
+# chronological, not a single record. A symbol can trade more than once
+# (e.g. within a backfilled month, or simply a second real trade weeks
+# later); a plain {symbol: record} shape would silently overwrite the
+# earlier one the moment that symbol traded again, losing its history.
 
 def _positions_file(data_dir: Path) -> Path:
     return data_dir / "gap_positions.json"
@@ -113,14 +118,22 @@ def load_positions(data_dir: Path) -> dict:
         return {}
     try:
         with open(path) as f:
-            return json.load(f)
+            raw = json.load(f)
     except (ValueError, FileNotFoundError):
         return {}
+    # Defensive migration from the old {symbol: single_record} shape —
+    # harmless no-op once everything's already list-shaped.
+    return {sym: (rec if isinstance(rec, list) else [rec]) for sym, rec in raw.items()}
 
 
 def save_positions(data_dir: Path, positions: dict) -> None:
     with open(_positions_file(data_dir), "w") as f:
         json.dump(positions, f, indent=2, default=str)
+
+
+def _last_trade(positions: dict, symbol: str) -> dict | None:
+    trades = positions.get(symbol)
+    return trades[-1] if trades else None
 
 
 # ── Entry ────────────────────────────────────────────────────────────────────
@@ -277,7 +290,7 @@ def place_entry_order(kite, data_dir: Path, signal: dict, today: date,
     symbol = signal["sym"]
     side = signal["side"]  # LONG / SHORT
 
-    existing = load_positions(data_dir).get(symbol)
+    existing = _last_trade(load_positions(data_dir), symbol)
     if existing and existing.get("status") == "open":
         return {"ok": False, "error": f"{symbol} already has an open position from {existing.get('entry_date')} — skipping"}
 
@@ -348,7 +361,7 @@ def place_entry_order(kite, data_dir: Path, signal: dict, today: date,
             print(f"[gap-orders] GTT placement failed for {symbol}: {e}")
 
     positions = load_positions(data_dir)
-    positions[symbol] = {
+    new_trade = {
         "mode": mode,  # 'paper' or 'live' — drives how close_open_positions() handles this one
         "direction": side, "entry_date": today.isoformat(),
         "entry_order_id": order_id, "tradingsymbol": tradingsymbol,
@@ -360,9 +373,10 @@ def place_entry_order(kite, data_dir: Path, signal: dict, today: date,
         "sl_price_source": sl_price_source,
         "gtt_id": gtt_id, "status": "open",
     }
+    positions.setdefault(symbol, []).append(new_trade)
     save_positions(data_dir, positions)
 
-    return {"ok": True, "position": positions[symbol]}
+    return {"ok": True, "position": new_trade}
 
 
 # ── Exit ─────────────────────────────────────────────────────────────────────
@@ -383,7 +397,11 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
     if not positions:
         return []
 
-    open_items = {s: p for s, p in positions.items() if p.get("status") == "open"}
+    # Only the LAST trade per symbol can ever be 'open' — place_entry_order()
+    # refuses a new entry while the last one is still open, so there's no
+    # scenario where an earlier, non-last entry is open underneath a closed
+    # or newer one.
+    open_items = {s: pl[-1] for s, pl in positions.items() if pl and pl[-1].get("status") == "open"}
     if not open_items:
         return []
 
@@ -458,3 +476,108 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
 
     save_positions(data_dir, positions)
     return results
+
+
+# ── Backfill ─────────────────────────────────────────────────────────────────
+# Retroactively populates paper trades for past signal days, so Paper mode's
+# mechanics can be validated against a month of real market history without
+# waiting for it to run forward day by day. Uses the same day-granularity SL
+# check as the live paper path (kite.historical_data(), 'day' interval) —
+# just for a specific past date instead of "today".
+
+def _already_backfilled(positions: dict, symbol: str, entry_date: str) -> bool:
+    return any(t.get("backfilled") and t.get("entry_date") == entry_date
+               for t in positions.get(symbol, []))
+
+
+def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
+                          sl_pct: float, sl_type: str, exit_check_date: date | None) -> dict:
+    """
+    Creates one backfilled paper trade for a past `signal` (from
+    gap_scan.scan_gap_signals' "selected" list for that historical date).
+
+    entry_date: the historical signal day being backfilled.
+    exit_check_date: the next date in the caller's own backfill date
+    sequence — not a naive +1 calendar day, so it always lines up with an
+    actual trading day the caller already knows has data. If None (this is
+    the most recent date in the backfill window, with no "next day" data
+    available yet), the trade is left status='open' and un-exited — the
+    regular /gap-orders/exit → close_open_positions() paper path finishes
+    it correctly the next time it runs, exactly as it would for a same-day
+    live paper entry (kite.ohlc() covers "today" either way).
+
+    Idempotent — a (symbol, entry_date) pair already backfilled is skipped,
+    so re-running a backfill request doesn't duplicate trades. Never
+    raises; returns {"ok": False, "error": ...} on any failure so a bad
+    symbol/date doesn't abort the whole batch.
+    """
+    symbol = signal["sym"]
+    side = signal["side"]
+    entry_date_str = entry_date.isoformat()
+
+    positions = load_positions(data_dir)
+    if _already_backfilled(positions, symbol, entry_date_str):
+        return {"ok": False, "error": f"{symbol} {entry_date_str} already backfilled — skipping"}
+
+    expiry = resolve_expiry(entry_date)
+    inst = find_future_instrument(kite, symbol, expiry)
+    if inst is None:
+        return {"ok": False, "error": f"No NFO future found for {symbol} exp {expiry}"}
+
+    tradingsymbol = inst["tradingsymbol"]
+    lot_size = inst["lot_size"]
+    token = inst["instrument_token"]
+
+    try:
+        entry_candles = kite.historical_data(token, entry_date_str, entry_date_str, "day")
+    except Exception as e:
+        return {"ok": False, "error": f"historical_data failed for {tradingsymbol} on {entry_date_str}: {e}"}
+    if not entry_candles:
+        return {"ok": False, "error": f"No historical data for {tradingsymbol} on {entry_date_str} "
+                                       f"(contract may not have been listed yet)"}
+
+    entry_candle = entry_candles[0]
+    fill_price = entry_candle["close"]
+
+    if sl_type == "gap_fill":
+        sl_price = fill_price
+    else:
+        sl_price = (fill_price * (1 - sl_pct / 100) if side == "LONG"
+                    else fill_price * (1 + sl_pct / 100))
+    sl_price = round(sl_price, 2)
+
+    def _hit(low, high):
+        return (low <= sl_price) if side == "LONG" else (high >= sl_price)
+
+    status, exit_price, exit_date_str = "open", None, None
+    if _hit(entry_candle["low"], entry_candle["high"]):
+        status, exit_price, exit_date_str = "closed_by_sl", sl_price, entry_date_str
+    elif exit_check_date is not None:
+        exit_date_str = exit_check_date.isoformat()
+        try:
+            exit_candles = kite.historical_data(token, exit_date_str, exit_date_str, "day")
+        except Exception as e:
+            exit_candles = []
+            print(f"[gap-orders/backfill] historical_data failed for {tradingsymbol} on {exit_date_str}: {e}")
+        if exit_candles:
+            ec = exit_candles[0]
+            status, exit_price = ("closed_by_sl", sl_price) if _hit(ec["low"], ec["high"]) else ("closed_eod", ec["close"])
+        # else: no data for the next date either — leave open rather than guess
+
+    pnl_pct, pnl_amount = (None, None) if status == "open" else _compute_pnl(side, fill_price, exit_price, lot_size)
+
+    new_trade = {
+        "mode": "paper", "backfilled": True,
+        "direction": side, "entry_date": entry_date_str,
+        "entry_order_id": None, "tradingsymbol": tradingsymbol, "lot_size": lot_size,
+        "entry_price": fill_price,
+        "signal_entry": signal["entry"], "signal_slLevel": signal["slLevel"],
+        "sl_price": sl_price, "sl_price_source": "paper_simulated_fill",
+        "gtt_id": None, "status": status,
+    }
+    if status != "open":
+        new_trade.update(exit_price=exit_price, exit_date=exit_date_str, pnl_pct=pnl_pct, pnl_amount=pnl_amount)
+
+    positions.setdefault(symbol, []).append(new_trade)
+    save_positions(data_dir, positions)
+    return {"ok": True, "position": new_trade}

@@ -2814,6 +2814,9 @@
         </select>
         <button onclick="loadTradesTaken()" style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;
           font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);cursor:pointer;">↻ Refresh</button>
+        <button id="ttBackfillBtn" onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 30 days of real market data"
+          style="padding:6px 12px;border:1px solid var(--accent);border-radius:7px;
+          font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);cursor:pointer;">⏪ Backfill 30 days (Paper)</button>
       </div>
 
       <div style="overflow-x:auto;">
@@ -3415,8 +3418,9 @@ async function loadTradesTaken() {
   if (badge) badge.textContent = 'Loading…';
   try {
     const res  = await fetch(`${TRADEEDGE_API_URL}/gap-orders/status`);
-    const data = await res.json();
-    _tradesTakenData = Object.entries(data).map(([sym, pos]) => ({ sym, ...pos }));
+    // Flat array, each item already carries its own 'sym' — a symbol can
+    // appear more than once (every trade it ever made), not one row per symbol.
+    _tradesTakenData = await res.json();
   } catch (e) {
     console.warn('[TradesTaken] Could not load positions:', e);
     _tradesTakenData = [];
@@ -3424,6 +3428,26 @@ async function loadTradesTaken() {
   }
   renderTradesTaken();
   renderMobLiveTrades();
+}
+
+async function backfillPaperTrades(days = 30) {
+  const btn = document.getElementById('ttBackfillBtn');
+  const original = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Backfilling…'; }
+  try {
+    const res = await fetch(`${TRADEEDGE_API_URL}/gap-orders/backfill-paper?days=${days}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.error) {
+      alert('Backfill failed: ' + data.error);
+    } else {
+      _showSaveToast(`Backfilled ${data.backfilled} paper trade(s) across ${data.datesScanned} days (${data.window})`);
+    }
+  } catch (e) {
+    alert('Backfill request failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = original; }
+    loadTradesTaken();
+  }
 }
 
 function setTradesTakenFilter(kind, val) {
@@ -3468,10 +3492,10 @@ function _ttSlippagePct(r) {
   return (r.entry_price != null && r.signal_entry) ? (r.entry_price - r.signal_entry) / r.signal_entry * 100 : null;
 }
 
-function _ttStatusBadge(status, mode) {
+function _ttStatusBadge(status, mode, backfilled) {
   // mode defaults to 'live' for pre-existing positions saved before the
   // mode field existed — never silently label a real trade as paper.
-  const tag = mode === 'paper' ? '🧪 PAPER · ' : '';
+  const tag = (mode === 'paper' ? '🧪 PAPER · ' : '') + (backfilled ? '⏪ BACKFILLED · ' : '');
   if (status === 'open')        return `<span class="outcome-badge win" style="background:var(--accent-light);color:var(--accent);">${tag}OPEN</span>`;
   if (status === 'closed_by_sl') return `<span class="outcome-badge sl">${tag}SL HIT</span>`;
   return `<span class="outcome-badge flat">${tag}CLOSED EOD</span>`;
@@ -3531,7 +3555,7 @@ function renderTradesTaken() {
     return `<tr>
       <td><b>${r.sym}</b><div style="font-size:10px;color:var(--text3);">${r.tradingsymbol || ''}</div></td>
       <td><span class="outcome-badge ${r.direction === 'LONG' ? 'win' : 'loss'}" style="font-size:9px;">${r.direction === 'LONG' ? '▲ LONG' : '▼ SHORT'}</span></td>
-      <td>${_ttStatusBadge(r.status, r.mode)}</td>
+      <td>${_ttStatusBadge(r.status, r.mode, r.backfilled)}</td>
       <td>${r.entry_date || '—'}</td>
       <td>${r.lot_size != null ? r.lot_size.toLocaleString('en-IN') : '—'}</td>
       <td>${r.entry_price != null ? r.entry_price.toFixed(2) : '—'}</td>
@@ -3591,7 +3615,7 @@ function renderMobLiveTrades() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <div><span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">${r.sym}</span>
           <div style="font-family:'DM Mono',monospace;font-size:9.5px;color:var(--text3);">${r.tradingsymbol || ''}${r.lot_size != null ? ' · qty ' + r.lot_size.toLocaleString('en-IN') : ''}${r.exit_date ? ' · ' + r.entry_date + '→' + r.exit_date : ''}</div></div>
-        ${_ttStatusBadge(r.status, r.mode)}
+        ${_ttStatusBadge(r.status, r.mode, r.backfilled)}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-family:'DM Mono',monospace;font-size:10.5px;">
         <div><div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.3px;color:var(--text3);margin-bottom:2px;">Entry (Fut)</div><div style="font-weight:600;">${r.entry_price != null ? r.entry_price.toFixed(2) : '—'}</div></div>
