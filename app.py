@@ -2128,6 +2128,22 @@ def gap_orders_backfill_paper():
     })
 
 
+@app.route("/gap-orders/clear-backfill", methods=["POST", "OPTIONS"])
+def gap_orders_clear_backfill():
+    """
+    Removes every backfilled=True trade, leaving real paper/live trades
+    untouched. Needed after any fix to the backfill/paper SL logic —
+    otherwise re-running /gap-orders/backfill-paper would just skip every
+    (symbol, date) the buggy run already covered, permanently stranding
+    the bad records under the idempotency check.
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    removed = kite_orders.clear_backfilled_trades(DATA_DIR)
+    push_positions_to_github()
+    return cors_response({"removed": removed})
+
+
 @app.route("/gap-orders/status", methods=["GET", "OPTIONS"])
 def gap_orders_status():
     """

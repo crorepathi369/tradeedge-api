@@ -94,13 +94,6 @@ def get_nfo_instruments(kite) -> list[dict]:
     return raw
 
 
-def _instrument_token(kite, tradingsymbol: str) -> int | None:
-    for inst in get_nfo_instruments(kite):
-        if inst["tradingsymbol"] == tradingsymbol:
-            return inst["instrument_token"]
-    return None
-
-
 # ── Position state (gap_positions.json) ─────────────────────────────────────
 # Format: {symbol: [trade_record, trade_record, ...]} — a LIST per symbol,
 # chronological, not a single record. A symbol can trade more than once
@@ -134,6 +127,27 @@ def save_positions(data_dir: Path, positions: dict) -> None:
 def _last_trade(positions: dict, symbol: str) -> dict | None:
     trades = positions.get(symbol)
     return trades[-1] if trades else None
+
+
+def clear_backfilled_trades(data_dir: Path) -> int:
+    """
+    Removes every trade tagged backfilled=True, leaving real paper/live
+    trades untouched. For re-running a backfill after a logic fix — the
+    (symbol, entry_date) idempotency check in backfill_paper_trade()
+    would otherwise skip every date already covered by the buggy run,
+    permanently stranding the bad records. Returns the count removed.
+    """
+    positions = load_positions(data_dir)
+    removed = 0
+    for symbol in list(positions.keys()):
+        kept = [t for t in positions[symbol] if not t.get("backfilled")]
+        removed += len(positions[symbol]) - len(kept)
+        if kept:
+            positions[symbol] = kept
+        else:
+            del positions[symbol]
+    save_positions(data_dir, positions)
+    return removed
 
 
 # ── Entry ────────────────────────────────────────────────────────────────────
@@ -208,42 +222,32 @@ def _paper_entry_price(kite, tradingsymbol: str) -> float | None:
         return None
 
 
-def _paper_check_sl_and_exit(kite, tradingsymbol: str, direction: str, sl_price: float,
-                              entry_date: str) -> tuple[float, str, bool, str]:
+def _paper_check_sl_and_exit(kite, tradingsymbol: str, direction: str, sl_price: float) -> tuple[float, str, bool, str]:
     """
     Simulates what a real GTT would have done, using real market data
-    instead of a live order — day-granularity, not minute-level, to avoid
-    depending on Kite's separately-licensed minute Historical Data API:
+    instead of a live order. Only ever checks the exit-check day (today) —
+    NOT the entry day's own range. The entry itself happens at ~3:15 PM,
+    right near the close that sl_price is computed FROM, so checking that
+    same day's full daily low/high against it is comparing the SL to price
+    action that happened mostly BEFORE the position existed — it isn't an
+    approximation of real exposure, it's simply wrong, and would flag SL
+    hits constantly on any day with normal intraday range. The real
+    backtest engine (backtest_overnight()) never checks the entry day's
+    own range either — only "tomorrow" — and this now matches that:
 
-      1. Entry day: did the daily high/low (from kite.historical_data(),
-         'day' interval — the lightest historical call available) cross
-         sl_price? Entry happens near EOD (~3:15 PM, market closes 3:30),
-         so a few minutes of pre-entry data folding into "the whole day"
-         is a small, accepted approximation, not a minute-precise replay.
-      2. Exit-check day (today): did the LIVE so-far high/low (kite.ohlc()
+      1. Exit-check day (today): did the LIVE so-far high/low (kite.ohlc()
          — a free real-time call, no Historical API needed) cross sl_price?
-      3. Neither: exits at today's current LTP, same as a real EOD close
+      2. Not hit: exits at today's current LTP, same as a real EOD close
          would.
 
     Returns (exit_price, exit_date, sl_hit, note). Never raises — on any
     data-fetch failure, falls through to "exit at current LTP" rather than
     leaving a paper position stuck open forever.
     """
-    token = _instrument_token(kite, tradingsymbol)
     today_str = date.today().isoformat()
 
     def _hit(low, high):
         return (low <= sl_price) if direction == "LONG" else (high >= sl_price)
-
-    if token is not None:
-        try:
-            candles = kite.historical_data(token, entry_date, entry_date, "day")
-            if candles:
-                c = candles[0]
-                if _hit(c["low"], c["high"]):
-                    return sl_price, entry_date, True, "paper SL hit (entry-day daily range)"
-        except Exception as e:
-            print(f"[gap-orders/paper] historical_data failed for {tradingsymbol}: {e}")
 
     try:
         ohlc = kite.ohlc(f"NFO:{tradingsymbol}")[f"NFO:{tradingsymbol}"]["ohlc"]
@@ -423,7 +427,7 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
 
         if mode == "paper":
             exit_price, exit_date, sl_hit, note = _paper_check_sl_and_exit(
-                kite, pos["tradingsymbol"], pos["direction"], pos["sl_price"], pos["entry_date"])
+                kite, pos["tradingsymbol"], pos["direction"], pos["sl_price"])
             pnl_pct, pnl_amount = _compute_pnl(pos["direction"], pos.get("entry_price"), exit_price, pos["lot_size"])
             pos["status"] = "closed_by_sl" if sl_hit else "closed_eod"
             pos["exit_price"] = exit_price
@@ -536,6 +540,14 @@ def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
         return {"ok": False, "error": f"No historical data for {tradingsymbol} on {entry_date_str} "
                                        f"(contract may not have been listed yet)"}
 
+    # Entry fill = entry day's close, same close sl_price is measured from —
+    # only used here to get that price, NOT to check for an SL cross. See
+    # _paper_check_sl_and_exit()'s docstring: checking the entry day's own
+    # range against an SL computed from that same day's close compares the
+    # SL to price action that happened mostly before the position existed
+    # (entry is ~3:15 PM), and would flag false hits on any normal-range day.
+    # SL exposure only starts the day AFTER entry — exactly what
+    # backtest_overnight() itself checks ("tomorrow", never "today").
     entry_candle = entry_candles[0]
     fill_price = entry_candle["close"]
 
@@ -550,9 +562,7 @@ def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
         return (low <= sl_price) if side == "LONG" else (high >= sl_price)
 
     status, exit_price, exit_date_str = "open", None, None
-    if _hit(entry_candle["low"], entry_candle["high"]):
-        status, exit_price, exit_date_str = "closed_by_sl", sl_price, entry_date_str
-    elif exit_check_date is not None:
+    if exit_check_date is not None:
         exit_date_str = exit_check_date.isoformat()
         try:
             exit_candles = kite.historical_data(token, exit_date_str, exit_date_str, "day")
