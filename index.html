@@ -3861,18 +3861,12 @@ function switchTTTab(tab, el) {
   if (tab === 'stockwise') renderTTStockwise();
 }
 
-function renderTTDayCards() {
-  const container = document.getElementById('ttDayCards');
-  const emptyEl   = document.getElementById('ttDayCardsEmpty');
-  if (!container) return;
-  const rows = _ttFilteredSorted();
-  if (!rows.length) {
-    container.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'block';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
-
+// Pure builder — groups rows by entry_date and returns day-card HTML. Shared
+// by the desktop pane and the mobile "Day-wise" sub-tab; idPrefix keeps the
+// generated element ids unique between the two so toggleDay() targets the
+// right one when both DOMs exist (only one is ever visible at a time).
+function _ttDayCardsHTML(rows, idPrefix) {
+  if (!rows.length) return '';
   const byDay = {};
   rows.forEach(r => {
     const key = r.entry_date || 'Unknown';
@@ -3880,7 +3874,7 @@ function renderTTDayCards() {
   });
   const days = Object.keys(byDay).sort((a, b) => b.localeCompare(a));
 
-  container.innerHTML = days.map((date, idx) => {
+  return days.map((date, idx) => {
     const dayRows   = byDay[date];
     const closed    = dayRows.filter(r => r.status !== 'open');
     const wins      = closed.filter(r => (r.pnl_pct ?? 0) > 0).length;
@@ -3898,7 +3892,7 @@ function renderTTDayCards() {
     const dirParts = [];
     if (longCount)  dirParts.push(`<span class="mini-badge gap-up">▲ ${longCount} Long</span>`);
     if (shortCount) dirParts.push(`<span class="mini-badge gap-down">▼ ${shortCount} Short</span>`);
-    const dayId = 'ttDay_' + idx;
+    const dayId = idPrefix + '_' + idx;
 
     return `
     <div class="day-card" id="${dayId}">
@@ -3940,42 +3934,45 @@ function renderTTDayCards() {
   }).join('');
 }
 
+function renderTTDayCards() {
+  const container = document.getElementById('ttDayCards');
+  const emptyEl   = document.getElementById('ttDayCardsEmpty');
+  if (!container) return;
+  const html = _ttDayCardsHTML(_ttFilteredSorted(), 'ttDay');
+  container.innerHTML = html;
+  if (emptyEl) emptyEl.style.display = html ? 'none' : 'block';
+}
+
 function ttCalNavYear(dir) {
   _ttCalYear = (_ttCalYear || new Date().getFullYear()) + dir;
   renderTTCalendar();
+  renderMobTtCalendar();
 }
 
-function renderTTCalendar() {
-  const gridEl = document.getElementById('ttCalYearGrid');
-  if (!gridEl) return;
-  const rows = _ttFilteredSorted();
+// Pure builder — groups rows by entry_date within `year` and returns the
+// {yearLabel, summaryHTML, gridHTML} pieces. Shared by the desktop pane and
+// the mobile "Calendar" sub-tab so the month-grid logic isn't duplicated.
+function _ttCalendarBuild(rows, year) {
   const byDay = {};
   rows.forEach(r => {
     if (!r.entry_date) return;
     (byDay[r.entry_date] = byDay[r.entry_date] || []).push(r);
   });
   const dates = Object.keys(byDay).sort();
-  if (!dates.length) {
-    document.getElementById('ttCalYearLabel').textContent = '—';
-    document.getElementById('ttCalYearSummary').textContent = 'No trades yet';
-    gridEl.innerHTML = '';
-    return;
-  }
-  if (!_ttCalYear) _ttCalYear = +dates[dates.length - 1].slice(0, 4);
-  const year = _ttCalYear;
-  document.getElementById('ttCalYearLabel').textContent = year;
+  if (!dates.length) return { year: null, summaryHTML: 'No trades yet', gridHTML: '', byDay, dates };
+  if (!year) year = +dates[dates.length - 1].slice(0, 4);
 
   const yearRows = dates.filter(d => d.startsWith(String(year))).flatMap(d => byDay[d]);
   const yClosed = yearRows.filter(r => r.status !== 'open');
   const yWins   = yClosed.filter(r => (r.pnl_pct ?? 0) > 0).length;
   const ySL     = yClosed.filter(r => r.status === 'closed_by_sl').length;
   const yPnl    = yClosed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
-  document.getElementById('ttCalYearSummary').innerHTML = yearRows.length
+  const summaryHTML = yearRows.length
     ? `${yearRows.length} trades · ${yWins}W ${yClosed.length - yWins - ySL}L ${ySL}SL · <span style="color:${_pnlColor(yPnl)};font-weight:700;">${_pnlSign(yPnl)}${yPnl.toFixed(2)}%</span>`
     : 'No trades this year';
 
   const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-  let html = '';
+  let gridHTML = '';
   for (let m = 12; m >= 1; m--) {
     const monthPfx  = `${year}-${String(m).padStart(2,'0')}`;
     const monthName = new Date(year, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
@@ -4018,7 +4015,7 @@ function renderTTCalendar() {
       </div>`;
     }
 
-    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+    gridHTML += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px 8px;">
         <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">${monthName}</span>
         ${mClosed.length ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${mPnlCls};">${_pnlSign(mPnl)}${mPnl.toFixed(2)}%</span>` : ''}
@@ -4042,25 +4039,26 @@ function renderTTCalendar() {
       </div>
     </div>`;
   }
-  gridEl.innerHTML = html || '<div style="text-align:center;padding:24px;font-family:\'DM Mono\',monospace;font-size:12px;color:var(--text3);">No trades this year</div>';
+  return { year, summaryHTML, gridHTML, byDay, dates };
 }
 
-function renderTTStockwise() {
-  const tbody   = document.getElementById('ttSymTableBody');
-  const emptyEl = document.getElementById('ttSymTableEmpty');
-  if (!tbody) return;
-  const rows = _ttFilteredSorted();
-  if (!rows.length) {
-    tbody.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'block';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
+function renderTTCalendar() {
+  const gridEl = document.getElementById('ttCalYearGrid');
+  if (!gridEl) return;
+  const b = _ttCalendarBuild(_ttFilteredSorted(), _ttCalYear);
+  if (b.year) _ttCalYear = b.year;
+  document.getElementById('ttCalYearLabel').textContent = b.year || '—';
+  document.getElementById('ttCalYearSummary').innerHTML = b.summaryHTML;
+  gridEl.innerHTML = b.gridHTML || '<div style="grid-column:1/-1;text-align:center;padding:24px;font-family:\'DM Mono\',monospace;font-size:12px;color:var(--text3);">No trades this year</div>';
+}
 
+// Pure builder — per-symbol aggregation shared by the desktop table and the
+// mobile compact card list.
+function _ttStockwiseRows(rows) {
   const bySym = {};
   rows.forEach(r => (bySym[r.sym] = bySym[r.sym] || []).push(r));
 
-  const symRows = Object.entries(bySym).map(([sym, rs]) => {
+  return Object.entries(bySym).map(([sym, rs]) => {
     const closed   = rs.filter(r => r.status !== 'open');
     const wins     = closed.filter(r => (r.pnl_pct ?? 0) > 0).length;
     const slHits   = closed.filter(r => r.status === 'closed_by_sl').length;
@@ -4076,7 +4074,21 @@ function renderTTStockwise() {
     const bestDir  = longPnl >= shortPnl ? 'LONG' : 'SHORT';
     return { sym, trades: rs.length, closed: closed.length, wins, losses, slHits, wr, netPnl, netRupee, avg, bestDir };
   }).sort((a, b) => b.netPnl - a.netPnl);
+}
 
+function renderTTStockwise() {
+  const tbody   = document.getElementById('ttSymTableBody');
+  const emptyEl = document.getElementById('ttSymTableEmpty');
+  if (!tbody) return;
+  const rows = _ttFilteredSorted();
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const symRows = _ttStockwiseRows(rows);
   tbody.innerHTML = symRows.map(r => {
     const wrCls = r.wr >= 60 ? '' : r.wr >= 45 ? 'mid' : 'low';
     return `<tr>
@@ -4093,11 +4105,85 @@ function renderTTStockwise() {
   }).join('');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE — same 4 sub-tabs (All / Day-wise / Calendar / Stockwise), rendered
+// into the single #mobTtInner container and switched via a pill bar.
+// ─────────────────────────────────────────────────────────────────────────────
+let _mobTtSubTab = 'all';
+
+function mobSwitchTtSubTab(tab) {
+  _mobTtSubTab = tab;
+  renderMobLiveTrades();
+}
+
+function _renderMobTtSubTabBar() {
+  const bar = document.getElementById('mobTtSubTabBar');
+  if (!bar) return;
+  const tabs = [['all','All Trades'], ['daywise','📅 Day-wise'], ['calendar','📅 Calendar'], ['stockwise','📊 Stockwise']];
+  bar.innerHTML = `<div class="mob-subtab-bar">
+    ${tabs.map(([key, label]) => `<button class="mob-subtab-btn ${_mobTtSubTab === key ? 'active' : ''}" onclick="mobSwitchTtSubTab('${key}')">${label}</button>`).join('')}
+  </div>`;
+}
+
+function renderMobTtDayCards() {
+  const inner = document.getElementById('mobTtInner');
+  if (!inner) return;
+  const html = _ttDayCardsHTML(_ttFilteredSorted(), 'mobTtDay');
+  inner.innerHTML = html || `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;
+    color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;text-align:center;gap:10px;">
+    <div style="font-size:36px;opacity:0.35;">📅</div><div>No trades match the current filter</div></div>`;
+}
+
+function renderMobTtCalendar() {
+  const inner = document.getElementById('mobTtInner');
+  if (!inner || _mobTtSubTab !== 'calendar') return;
+  const b = _ttCalendarBuild(_ttFilteredSorted(), _ttCalYear);
+  if (b.year) _ttCalYear = b.year;
+  inner.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 12px 10px;">
+      <button onclick="ttCalNavYear(-1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text2);font-family:'DM Mono',monospace;">‹</button>
+      <div style="text-align:center;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">${b.year || '—'}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">${b.summaryHTML}</div>
+      </div>
+      <button onclick="ttCalNavYear(1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text2);font-family:'DM Mono',monospace;">›</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;padding:0 12px 12px;">
+      ${b.gridHTML || '<div style="text-align:center;padding:24px;font-family:\'DM Mono\',monospace;font-size:12px;color:var(--text3);">No trades this year</div>'}
+    </div>`;
+}
+
+function renderMobTtStockwise() {
+  const inner = document.getElementById('mobTtInner');
+  if (!inner) return;
+  const symRows = _ttStockwiseRows(_ttFilteredSorted());
+  if (!symRows.length) {
+    inner.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;
+      color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;text-align:center;gap:10px;">
+      <div style="font-size:36px;opacity:0.35;">📊</div><div>No trades match the current filter</div></div>`;
+    return;
+  }
+  inner.innerHTML = symRows.map(r => `
+    <div class="signal-card" style="margin:0 12px 8px;padding:10px 14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">${r.sym}</span>
+        <span class="mini-badge ${r.bestDir === 'LONG' ? 'gap-up' : 'gap-down'}">${r.bestDir}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-family:'DM Mono',monospace;font-size:10.5px;">
+        <div><div style="font-size:8.5px;text-transform:uppercase;color:var(--text3);margin-bottom:2px;">Trades</div><div style="font-weight:600;">${r.trades}</div></div>
+        <div><div style="font-size:8.5px;text-transform:uppercase;color:var(--text3);margin-bottom:2px;">Win Rate</div><div style="font-weight:600;color:${r.wr>=55?'var(--bull)':r.wr>=45?'var(--gold)':'var(--bear)'};">${r.wr.toFixed(1)}%</div></div>
+        <div><div style="font-size:8.5px;text-transform:uppercase;color:var(--text3);margin-bottom:2px;">Net PnL</div><div style="font-weight:600;color:${r.netPnl>=0?'var(--bull)':'var(--bear)'};">${r.netPnl>=0?'+':''}${r.netPnl.toFixed(2)}%</div></div>
+        <div><div style="font-size:8.5px;text-transform:uppercase;color:var(--text3);margin-bottom:2px;">Net ₹</div><div style="font-weight:600;color:${r.netRupee>=0?'var(--bull)':'var(--bear)'};">${r.netRupee>=0?'+':''}₹${Math.abs(r.netRupee).toLocaleString('en-IN',{maximumFractionDigits:0})}</div></div>
+      </div>
+    </div>`).join('');
+}
+
 function renderMobLiveTrades() {
   const statsEl = document.getElementById('mobTtStats');
   const inner   = document.getElementById('mobTtInner');
   const hdr     = document.getElementById('mobTtStratHdr');
   const gapControls = document.getElementById('mobTtGapControls');
+  const subTabBar   = document.getElementById('mobTtSubTabBar');
   if (!statsEl || !inner) return; // mobile shell not built yet
 
   // Strategy pills — same colours/labels as the Stats tab's own picker
@@ -4124,6 +4210,7 @@ function renderMobLiveTrades() {
   // explanation instead of an empty table that looks like a bug.
   if (_mobLiveTradesStrat !== 'overnight') {
     if (gapControls) gapControls.style.display = 'none';
+    if (subTabBar) subTabBar.style.display = 'none';
     statsEl.innerHTML = '';
     const label = _mobLiveTradesStrat === 'intraday' ? 'Intraday Momentum' : 'Pullback';
     inner.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;
@@ -4135,6 +4222,8 @@ function renderMobLiveTrades() {
     return;
   }
   if (gapControls) gapControls.style.display = '';
+  if (subTabBar) subTabBar.style.display = '';
+  _renderMobTtSubTabBar();
 
   const { open, winRate, netPnl, avgSlip } = _ttStats();
   statsEl.innerHTML = `
@@ -4155,6 +4244,10 @@ function renderMobLiveTrades() {
       <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;margin-top:2px;">${avgSlip == null ? '—' : (avgSlip >= 0 ? '+' : '') + avgSlip.toFixed(2) + '%'}</div>
     </div>
   `;
+
+  if (_mobTtSubTab === 'daywise')   { renderMobTtDayCards();   return; }
+  if (_mobTtSubTab === 'calendar')  { renderMobTtCalendar();   return; }
+  if (_mobTtSubTab === 'stockwise') { renderMobTtStockwise();  return; }
 
   const rows = _ttFilteredSorted();
   if (!rows.length) {
