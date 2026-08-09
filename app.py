@@ -2049,34 +2049,41 @@ def gap_orders_exit():
 @app.route("/gap-orders/backfill-paper", methods=["POST", "OPTIONS"])
 def gap_orders_backfill_paper():
     """
-    Retroactively populates paper trades for the past `days` calendar days
-    (default 365 — this is a one-time activity, so default to the full
-    year rather than making the caller ask twice), so Paper mode can be
-    sanity-checked against real market history immediately instead of
-    waiting for it to accumulate forward day by day. Always paper —
+    Retroactively populates paper trades for a date window, so Paper mode
+    can be sanity-checked against real market history immediately instead
+    of waiting for it to accumulate forward day by day. Always paper —
     backfilling a 'live' trade for a past date makes no sense, so this
     ignores settings['tradingMode'] entirely.
+
+    Window: pass explicit `from`/`to` (YYYY-MM-DD) for a specific slice —
+    this is what the frontend uses to backfill in monthly chunks, so it can
+    show real progress and keep each request small enough to not time out.
+    Falls back to `days` calendar days back from today (default 365) if
+    `from`/`to` aren't given, for direct/manual calls.
 
     For each trading day in the window (oldest to newest, using whatever
     dates actually have CSV data — same universe as the live scan), runs
     the exact same gap_scan.scan_gap_signals() the live automation would
     have, then backfills each selected signal via
     kite_orders.backfill_paper_trade(), checking for an SL cross against
-    the NEXT date in this same sequence (not a naive +1 calendar day —
-    and NOT the entry day's own range, which would wrongly compare the SL
-    to price action from before the position existed). The most recent
-    date in the window has no "next" date yet, so it's left open for the
+    the NEXT trading day (not a naive +1 calendar day, and NOT the entry
+    day's own range, which would wrongly compare the SL to price action
+    from before the position existed). Critically, "next trading day" is
+    looked up against the FULL date history on disk, not just the dates
+    inside this one request's window — otherwise the last day of every
+    chunk would wrongly look like "no next day yet" and get left open,
+    even though the real next day's data already exists in an adjacent
+    chunk. Only the actual most-recent date in the whole backfillable
+    history has no next day, and that one is correctly left open for the
     regular /gap-orders/exit job to finish naturally.
 
-    A year's worth of signals can mean a couple hundred sequential
-    kite.historical_data() calls, which may outrun a single HTTP request's
-    timeout — but kite_orders.backfill_paper_trade() saves after every
-    individual trade, not just at the end, and skips (symbol, date) pairs
-    already done (idempotent). So a timed-out request has still made real
-    progress; just call this again with the same `days` and it picks up
-    where it left off rather than starting over.
+    kite_orders.backfill_paper_trade() saves after every individual trade,
+    not just at the end, and skips (symbol, date) pairs already done
+    (idempotent) — so a timed-out or retried request never duplicates or
+    loses work, whether retried whole or chunk-by-chunk.
 
-    Usage: POST /gap-orders/backfill-paper?days=365
+    Usage: POST /gap-orders/backfill-paper?from=2025-08-01&to=2025-08-31
+       or: POST /gap-orders/backfill-paper?days=365
     """
     if request.method == "OPTIONS":
         return cors_response({"ok": True})
@@ -2089,34 +2096,43 @@ def gap_orders_backfill_paper():
     if settings is None:
         return cors_response({"error": "no_gap_settings_synced"}, 400)
 
-    try:
-        days_back = int(request.args.get("days", 365))
-    except ValueError:
-        return cors_response({"error": "invalid 'days' param"}, 400)
-    days_back = max(1, min(days_back, 400))  # sane bounds — this is a backfill, not a full re-scan
+    from_param = request.args.get("from")
+    to_param = request.args.get("to")
+    if from_param and to_param:
+        window_start, window_end = from_param, to_param
+    else:
+        try:
+            days_back = int(request.args.get("days", 365))
+        except ValueError:
+            return cors_response({"error": "invalid 'days' param"}, 400)
+        days_back = max(1, min(days_back, 400))  # sane bounds — this is a backfill, not a full re-scan
+        window_start = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+        window_end = datetime.now().strftime("%Y-%m-%d")
 
     symbols = get_scan_symbols()
-    window_start = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-    window_end = datetime.now().strftime("%Y-%m-%d")
 
-    dates = set()
+    # Full history, not window-scoped — needed so "next trading day" resolves
+    # correctly even for the last date of a chunked (sub-window) request.
+    all_dates = set()
     for sym in symbols:
         for c in gap_scan.load_ohlc(DATA_DIR, sym):
-            if window_start <= c["date"] < window_end:  # exclude today — the normal enter job owns it
-                dates.add(c["date"])
-    dates = sorted(dates)
+            all_dates.add(c["date"])
+    all_dates = sorted(all_dates)
+
+    dates = [d for d in all_dates if window_start <= d < window_end]  # exclude window_end itself — today's own date is the live enter job's, and chunk boundaries shouldn't double-count
     if not dates:
         return cors_response({"error": "no trading days with data in that window"}, 400)
 
     results = []
-    for i, scan_date in enumerate(dates):
+    for scan_date in dates:
         try:
             scan_result = gap_scan.scan_gap_signals(DATA_DIR, symbols, scan_date, settings)
         except Exception as e:
             results.append({"date": scan_date, "ok": False, "error": f"scan failed: {e}"})
             continue
 
-        next_date_str = dates[i + 1] if i + 1 < len(dates) else None
+        idx = all_dates.index(scan_date)
+        next_date_str = all_dates[idx + 1] if idx + 1 < len(all_dates) else None
         next_date = datetime.strptime(next_date_str, "%Y-%m-%d").date() if next_date_str else None
         entry_date = datetime.strptime(scan_date, "%Y-%m-%d").date()
 

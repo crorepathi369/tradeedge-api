@@ -3450,23 +3450,66 @@ async function clearBackfilledTrades() {
   }
 }
 
+// Splits the last `daysTotal` calendar days into ~30-day chunks, oldest
+// first, as explicit {from, to} date strings (half-open: from <= d < to).
+function _monthlyChunks(daysTotal) {
+  const chunks = [];
+  let chunkEnd = new Date();
+  let remaining = daysTotal;
+  while (remaining > 0) {
+    const span = Math.min(30, remaining);
+    const chunkStart = new Date(chunkEnd);
+    chunkStart.setDate(chunkStart.getDate() - span);
+    chunks.unshift({ from: chunkStart.toISOString().slice(0, 10), to: chunkEnd.toISOString().slice(0, 10) });
+    chunkEnd = chunkStart;
+    remaining -= span;
+  }
+  return chunks;
+}
+
+// Backfills in monthly chunks rather than one single request — a full
+// year is a couple hundred sequential Kite calls (only for symbols that
+// actually get selected, but still one-at-a-time over HTTP), easily
+// enough to outrun a single request's timeout with zero feedback until
+// it either finishes or silently fails. Chunking gives real per-month
+// progress and keeps each individual request small and reliable. The
+// backend resolves "next trading day" against its full date history, not
+// just the current chunk, so a signal on the last day of a chunk still
+// exits correctly using the following chunk's data — no artificial gaps
+// at month boundaries.
 async function backfillPaperTrades(days = 365) {
-  const btn = document.getElementById('ttBackfillBtn');
-  const original = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Backfilling…'; }
-  try {
-    const res = await fetch(`${TRADEEDGE_API_URL}/gap-orders/backfill-paper?days=${days}`, { method: 'POST' });
-    const data = await res.json();
-    if (data.error) {
-      alert('Backfill failed: ' + data.error);
-    } else {
-      _showSaveToast(`Backfilled ${data.backfilled} paper trade(s) across ${data.datesScanned} days (${data.window})`);
+  const btns = [document.getElementById('ttBackfillBtn'), document.getElementById('mobTtBackfillBtn')].filter(Boolean);
+  const originals = btns.map(b => b.textContent);
+  const setLabel = (text) => btns.forEach(b => { b.disabled = true; b.textContent = text; });
+
+  const chunks = _monthlyChunks(days);
+  let totalBackfilled = 0;
+  const errors = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const { from, to } = chunks[i];
+    setLabel(`⏳ ${i + 1}/${chunks.length} (${totalBackfilled} so far)`);
+    try {
+      const res = await fetch(`${TRADEEDGE_API_URL}/gap-orders/backfill-paper?from=${from}&to=${to}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.error) {
+        errors.push(`${from}..${to}: ${data.error}`);
+      } else {
+        totalBackfilled += data.backfilled;
+      }
+    } catch (e) {
+      errors.push(`${from}..${to}: ${e.message}`);
     }
-  } catch (e) {
-    alert('Backfill request failed: ' + e.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = original; }
-    loadTradesTaken();
+    await loadTradesTaken(); // refresh after every chunk — trades visibly appear as it runs, not just at the very end
+  }
+
+  btns.forEach((b, i) => { b.disabled = false; b.textContent = originals[i]; });
+  if (errors.length) {
+    alert(`Backfill finished with ${errors.length} month(s) that had issues:\n\n${errors.join('\n')}\n\n`
+      + `${totalBackfilled} trade(s) backfilled successfully. Click Backfill again to retry just the failed months — `
+      + `completed ones are automatically skipped, not redone.`);
+  } else {
+    _showSaveToast(`Backfilled ${totalBackfilled} paper trade(s) across ${chunks.length} month(s)`);
   }
 }
 
@@ -11273,7 +11316,7 @@ loadSavedDefaults();
         font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);">↻</button>
     </div>
     <div style="display:flex;gap:6px;padding:0 12px 8px;">
-      <button onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 1 year of real market data"
+      <button id="mobTtBackfillBtn" onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 1 year of real market data"
         style="flex:1;padding:7px 6px;border:1px solid var(--accent);border-radius:7px;
         font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);">⏪ Backfill 1yr</button>
       <button onclick="clearBackfilledTrades()" title="Remove all backfilled trades — use after a logic fix, before re-running Backfill"
