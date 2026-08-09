@@ -223,6 +223,26 @@
       "exit_date": "2026-04-01",
       "pnl_pct": 4.2,
       "pnl_amount": 30375.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-01-16",
+      "entry_order_id": null,
+      "tradingsymbol": "NATIONALUM26JANFUT",
+      "lot_size": 1875,
+      "entry_price": 362.7,
+      "signal_entry": 355.36,
+      "signal_slLevel": 366.02,
+      "sl_price": 373.58,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 368.55,
+      "exit_date": "2026-01-19",
+      "pnl_pct": -1.61,
+      "pnl_amount": -10968.75
     }
   ],
   "CGPOWER": [
@@ -535,6 +555,26 @@
       "exit_date": "2026-04-23",
       "pnl_pct": 2.86,
       "pnl_amount": 24540.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-02-04",
+      "entry_order_id": null,
+      "tradingsymbol": "TECHM26FEBFUT",
+      "lot_size": 600,
+      "entry_price": 1606.3,
+      "signal_entry": 1645.3,
+      "signal_slLevel": 1694.66,
+      "sl_price": 1654.49,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1611.3,
+      "exit_date": "2026-02-05",
+      "pnl_pct": -0.31,
+      "pnl_amount": -3000.0
     }
   ],
   "MARUTI": [
@@ -767,6 +807,26 @@
       "exit_date": "2026-05-07",
       "pnl_pct": -3.0,
       "pnl_amount": -10971.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-01-27",
+      "entry_order_id": null,
+      "tradingsymbol": "VEDL26FEBFUT",
+      "lot_size": 1150,
+      "entry_price": 369.4,
+      "signal_entry": 693.86,
+      "signal_slLevel": 673.04,
+      "sl_price": 358.32,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 387.05,
+      "exit_date": "2026-01-28",
+      "pnl_pct": 4.78,
+      "pnl_amount": 20297.5
     }
   ],
   "ZYDUSLIFE": [
@@ -939,6 +999,26 @@
       "exit_date": "2026-04-20",
       "pnl_pct": 0.28,
       "pnl_amount": 1710.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-01-19",
+      "entry_order_id": null,
+      "tradingsymbol": "WIPRO26JANFUT",
+      "lot_size": 3000,
+      "entry_price": 239.75,
+      "signal_entry": 239.76,
+      "signal_slLevel": 246.95,
+      "sl_price": 246.94,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 234.2,
+      "exit_date": "2026-01-20",
+      "pnl_pct": 2.31,
+      "pnl_amount": 16650.0
     }
   ],
   "ADANIGREEN": [
@@ -1133,6 +1213,26 @@
       "exit_date": "2026-04-09",
       "pnl_pct": 0.37,
       "pnl_amount": 2020.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-02-03",
+      "entry_order_id": null,
+      "tradingsymbol": "TIINDIA26FEBFUT",
+      "lot_size": 200,
+      "entry_price": 2509.6,
+      "signal_entry": 2501.18,
+      "signal_slLevel": 2426.14,
+      "sl_price": 2434.31,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2642.7,
+      "exit_date": "2026-02-04",
+      "pnl_pct": 5.3,
+      "pnl_amount": 26620.0
     }
   ],
   "OFSS": [
@@ -1241,6 +1341,66 @@
       "exit_date": "2026-02-16",
       "pnl_pct": -0.24,
       "pnl_amount": -1260.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-01-28",
+      "entry_order_id": null,
+      "tradingsymbol": "MCX26FEBFUT",
+      "lot_size": 225,
+      "entry_price": 2605,
+      "signal_entry": 2593.0,
+      "signal_slLevel": 2515.21,
+      "sl_price": 2526.85,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2700,
+      "exit_date": "2026-01-29",
+      "pnl_pct": 3.65,
+      "pnl_amount": 21375
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-01-29",
+      "entry_order_id": null,
+      "tradingsymbol": "MCX26FEBFUT",
+      "lot_size": 225,
+      "entry_price": 2700,
+      "signal_entry": 2686.0,
+      "signal_slLevel": 2605.42,
+      "sl_price": 2619.0,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 2619.0,
+      "exit_date": "2026-01-30",
+      "pnl_pct": -3.0,
+      "pnl_amount": -18225.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-02-05",
+      "entry_order_id": null,
+      "tradingsymbol": "MCX26FEBFUT",
+      "lot_size": 225,
+      "entry_price": 2422.1,
+      "signal_entry": 2410.4,
+      "signal_slLevel": 2482.71,
+      "sl_price": 2494.76,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2389.8,
+      "exit_date": "2026-02-06",
+      "pnl_pct": 1.33,
+      "pnl_amount": 7267.5
     }
   ],
   "OIL": [
@@ -1307,6 +1467,116 @@
       "exit_date": "2026-03-04",
       "pnl_pct": 2.94,
       "pnl_amount": 17190.0
+    }
+  ],
+  "IREDA": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-01-12",
+      "entry_order_id": null,
+      "tradingsymbol": "IREDA26JANFUT",
+      "lot_size": 4525,
+      "entry_price": 140.94,
+      "signal_entry": 140.75,
+      "signal_slLevel": 136.53,
+      "sl_price": 136.71,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 136.71,
+      "exit_date": "2026-01-13",
+      "pnl_pct": -3.0,
+      "pnl_amount": -19140.75
+    }
+  ],
+  "DRREDDY": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-01-22",
+      "entry_order_id": null,
+      "tradingsymbol": "DRREDDY26JANFUT",
+      "lot_size": 625,
+      "entry_price": 1221.3,
+      "signal_entry": 1217.5,
+      "signal_slLevel": 1180.97,
+      "sl_price": 1184.66,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1236.1,
+      "exit_date": "2026-01-23",
+      "pnl_pct": 1.21,
+      "pnl_amount": 9250.0
+    }
+  ],
+  "HINDPETRO": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-02-02",
+      "entry_order_id": null,
+      "tradingsymbol": "HINDPETRO26FEBFUT",
+      "lot_size": 2025,
+      "entry_price": 454.1,
+      "signal_entry": 453.25,
+      "signal_slLevel": 439.65,
+      "sl_price": 440.48,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 452.7,
+      "exit_date": "2026-02-03",
+      "pnl_pct": -0.31,
+      "pnl_amount": -2835.0
+    }
+  ],
+  "NYKAA": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-02-06",
+      "entry_order_id": null,
+      "tradingsymbol": "NYKAA26FEBFUT",
+      "lot_size": 3125,
+      "entry_price": 278,
+      "signal_entry": 276.99,
+      "signal_slLevel": 268.68,
+      "sl_price": 269.66,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 278.72,
+      "exit_date": "2026-02-09",
+      "pnl_pct": 0.26,
+      "pnl_amount": 2250.0
+    }
+  ],
+  "TATASTEEL": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-02-09",
+      "entry_order_id": null,
+      "tradingsymbol": "TATASTEEL26FEBFUT",
+      "lot_size": 2750,
+      "entry_price": 202.33,
+      "signal_entry": 202.0,
+      "signal_slLevel": 195.94,
+      "sl_price": 196.26,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 208.09,
+      "exit_date": "2026-02-10",
+      "pnl_pct": 2.85,
+      "pnl_amount": 15840.0
     }
   ]
 }
