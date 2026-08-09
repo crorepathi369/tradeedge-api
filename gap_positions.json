@@ -1755,6 +1755,26 @@
       "exit_date": "2026-02-09",
       "pnl_pct": 0.26,
       "pnl_amount": 2250.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-13",
+      "entry_order_id": null,
+      "tradingsymbol": "NYKAA25AUGFUT",
+      "lot_size": 3125,
+      "entry_price": 213.55,
+      "signal_entry": 215.04,
+      "signal_slLevel": 208.59,
+      "sl_price": 207.14,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 213.55,
+      "exit_date": "2025-08-14",
+      "pnl_pct": 0.0,
+      "pnl_amount": 0.0
     }
   ],
   "TATASTEEL": [
