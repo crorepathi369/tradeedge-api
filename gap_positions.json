@@ -183,6 +183,46 @@
       "sl_price_source": "paper_simulated_fill",
       "gtt_id": null,
       "status": "open"
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-03-20",
+      "entry_order_id": null,
+      "tradingsymbol": "NATIONALUM26MARFUT",
+      "lot_size": 1875,
+      "entry_price": 368.25,
+      "signal_entry": 366.67,
+      "signal_slLevel": 377.67,
+      "sl_price": 379.3,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 350.35,
+      "exit_date": "2026-03-23",
+      "pnl_pct": 4.86,
+      "pnl_amount": 33562.5
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-03-30",
+      "entry_order_id": null,
+      "tradingsymbol": "NATIONALUM26APRFUT",
+      "lot_size": 1875,
+      "entry_price": 385.85,
+      "signal_entry": 384.19,
+      "signal_slLevel": 372.66,
+      "sl_price": 374.27,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 402.05,
+      "exit_date": "2026-04-01",
+      "pnl_pct": 4.2,
+      "pnl_amount": 30375.0
     }
   ],
   "CGPOWER": [
@@ -265,6 +305,26 @@
       "exit_date": "2026-07-13",
       "pnl_pct": 7.29,
       "pnl_amount": 46912.5
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-04-01",
+      "entry_order_id": null,
+      "tradingsymbol": "KALYANKJIL26APRFUT",
+      "lot_size": 1350,
+      "entry_price": 389.35,
+      "signal_entry": 387.1,
+      "signal_slLevel": 375.49,
+      "sl_price": 377.67,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 377.67,
+      "exit_date": "2026-04-02",
+      "pnl_pct": -3.0,
+      "pnl_amount": -15768.0
     }
   ],
   "MANAPPURAM": [
@@ -287,6 +347,26 @@
       "exit_date": "2026-07-14",
       "pnl_pct": 1.1,
       "pnl_amount": 10950.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-03-23",
+      "entry_order_id": null,
+      "tradingsymbol": "MANAPPURAM26MARFUT",
+      "lot_size": 3000,
+      "entry_price": 252.45,
+      "signal_entry": 251.9,
+      "signal_slLevel": 259.46,
+      "sl_price": 260.02,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 252.85,
+      "exit_date": "2026-03-24",
+      "pnl_pct": -0.16,
+      "pnl_amount": -1200.0
     }
   ],
   "BAJAJ-AUTO": [
@@ -887,6 +967,136 @@
       "exit_date": "2026-04-30",
       "pnl_pct": 2.71,
       "pnl_amount": 15592.5
+    }
+  ],
+  "IOC": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-03-16",
+      "entry_order_id": null,
+      "tradingsymbol": "IOC26MARFUT",
+      "lot_size": 4875,
+      "entry_price": 149.4,
+      "signal_entry": 148.96,
+      "signal_slLevel": 153.43,
+      "sl_price": 153.88,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 147.04,
+      "exit_date": "2026-03-17",
+      "pnl_pct": 1.58,
+      "pnl_amount": 11505.0
+    }
+  ],
+  "FINNIFTY": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-03-19",
+      "entry_order_id": null,
+      "tradingsymbol": "FINNIFTY26MARFUT",
+      "lot_size": 60,
+      "entry_price": 25009.4,
+      "signal_entry": 24951.8,
+      "signal_slLevel": 25700.35,
+      "sl_price": 25759.68,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 24830.1,
+      "exit_date": "2026-03-20",
+      "pnl_pct": 0.72,
+      "pnl_amount": 10758.0
+    }
+  ],
+  "TIINDIA": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-03-24",
+      "entry_order_id": null,
+      "tradingsymbol": "TIINDIA26MARFUT",
+      "lot_size": 200,
+      "entry_price": 2575.8,
+      "signal_entry": 2568.6,
+      "signal_slLevel": 2491.54,
+      "sl_price": 2498.53,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2689.3,
+      "exit_date": "2026-03-25",
+      "pnl_pct": 4.41,
+      "pnl_amount": 22700.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-04-08",
+      "entry_order_id": null,
+      "tradingsymbol": "TIINDIA26APRFUT",
+      "lot_size": 200,
+      "entry_price": 2742,
+      "signal_entry": 2727.1,
+      "signal_slLevel": 2645.29,
+      "sl_price": 2659.74,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2752.1,
+      "exit_date": "2026-04-09",
+      "pnl_pct": 0.37,
+      "pnl_amount": 2020.0
+    }
+  ],
+  "OFSS": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-03-27",
+      "entry_order_id": null,
+      "tradingsymbol": "OFSS26MARFUT",
+      "lot_size": 100,
+      "entry_price": 6756,
+      "signal_entry": 6753.52,
+      "signal_slLevel": 6550.91,
+      "sl_price": 6553.32,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 6553.32,
+      "exit_date": "2026-03-30",
+      "pnl_pct": -3.0,
+      "pnl_amount": -20268.0
+    }
+  ],
+  "DMART": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-04-06",
+      "entry_order_id": null,
+      "tradingsymbol": "DMART26APRFUT",
+      "lot_size": 150,
+      "entry_price": 4538,
+      "signal_entry": 4551.3,
+      "signal_slLevel": 4414.76,
+      "sl_price": 4401.86,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 4474.5,
+      "exit_date": "2026-04-07",
+      "pnl_pct": -1.4,
+      "pnl_amount": -9525.0
     }
   ]
 }
