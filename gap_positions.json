@@ -1319,6 +1319,26 @@
       "exit_date": "2026-03-06",
       "pnl_pct": -0.63,
       "pnl_amount": -3480.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-11-12",
+      "entry_order_id": null,
+      "tradingsymbol": "BSE25NOVFUT",
+      "lot_size": 200,
+      "entry_price": 2788.7,
+      "signal_entry": 2775.4,
+      "signal_slLevel": 2692.14,
+      "sl_price": 2705.04,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2767.9,
+      "exit_date": "2025-11-13",
+      "pnl_pct": -0.75,
+      "pnl_amount": -4160.0
     }
   ],
   "MCX": [
