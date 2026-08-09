@@ -385,6 +385,57 @@ def place_entry_order(kite, data_dir: Path, signal: dict, today: date,
 
 # ── Exit ─────────────────────────────────────────────────────────────────────
 
+def _reconcile_missing_exit_prices(kite, data_dir: Path) -> list[dict]:
+    """
+    Sweeps every already-closed trade whose exit_price never got confirmed —
+    the rare case where _wait_for_fill()'s ~6s polling window closed before
+    Kite's order book caught up, even though the real exit already happened
+    (real order, real fill, just not confirmed in time to log). Re-checks
+    for the real average_price and backfills it retroactively, so a blank
+    exit_price/pnl doesn't stay blank forever. Runs automatically at the
+    start of every close_open_positions() call — i.e. every daily exit-cron
+    run — so this self-heals within a day or two without needing its own
+    schedule. One quick check per sweep (not the full 6-attempt retry used
+    right after placing an order) — if still not found, it just tries again
+    next time this runs.
+    """
+    positions = load_positions(data_dir)
+    results = []
+    changed = False
+    for symbol, trades in positions.items():
+        for pos in trades:
+            if pos.get("status") not in ("closed_eod", "closed_by_sl") or pos.get("exit_price") is not None:
+                continue
+            if pos.get("mode") == "paper":
+                continue  # paper exits are simulated, never unconfirmed — nothing to reconcile
+
+            exit_price = None
+            if pos.get("exit_order_id"):
+                try:
+                    for o in kite.orders():
+                        if o.get("order_id") == pos["exit_order_id"] and o.get("status") == "COMPLETE":
+                            exit_price = o.get("average_price")
+                            break
+                except Exception as e:
+                    print(f"[gap-orders/reconcile] orders() lookup failed for {symbol}: {e}")
+            if exit_price is None:
+                exit_txn_type = kite.TRANSACTION_TYPE_SELL if pos["direction"] == "LONG" else kite.TRANSACTION_TYPE_BUY
+                exit_price = _find_last_fill(kite, pos["tradingsymbol"], exit_txn_type, attempts=1, delay_sec=0)
+
+            if exit_price is not None:
+                pnl_pct, pnl_amount = _compute_pnl(pos["direction"], pos.get("entry_price"), exit_price, pos["lot_size"])
+                pos["exit_price"] = exit_price
+                pos["pnl_pct"] = pnl_pct
+                pos["pnl_amount"] = pnl_amount
+                changed = True
+                results.append({"sym": symbol, "ok": True, "action": "reconciled_exit_price", "exit_price": exit_price})
+                print(f"[gap-orders/reconcile] {symbol}: backfilled exit_price={exit_price}")
+
+    if changed:
+        save_positions(data_dir, positions)
+    return results
+
+
 def close_open_positions(kite, data_dir: Path) -> list[dict]:
     """
     For every position with status 'open', closes it the way appropriate
@@ -394,12 +445,16 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
     _paper_check_sl_and_exit() instead, no real orders anywhere. Mode is
     read per-position, not passed in globally, so a Paper→Live toggle
     mid-flight never changes how an already-open paper position gets
-    closed. Returns a list of per-symbol result dicts. Called by the
-    next-day 3:15 PM job.
+    closed. Also sweeps for any already-closed trade still missing its
+    exit_price (see _reconcile_missing_exit_prices()) before processing
+    today's closes. Returns a list of per-symbol result dicts (reconciled
+    ones first). Called by the next-day 3:15 PM job.
     """
+    reconciled = _reconcile_missing_exit_prices(kite, data_dir)
+
     positions = load_positions(data_dir)
     if not positions:
-        return []
+        return reconciled
 
     # Only the LAST trade per symbol can ever be 'open' — place_entry_order()
     # refuses a new entry while the last one is still open, so there's no
@@ -407,7 +462,7 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
     # or newer one.
     open_items = {s: pl[-1] for s, pl in positions.items() if pl and pl[-1].get("status") == "open"}
     if not open_items:
-        return []
+        return reconciled
 
     # Only live positions need Kite's real position book — skip the call
     # entirely (and don't let its failure block paper closes) if there
@@ -479,7 +534,7 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
             results.append({"sym": symbol, "ok": False, "error": str(e)})
 
     save_positions(data_dir, positions)
-    return results
+    return reconciled + results
 
 
 # ── Backfill ─────────────────────────────────────────────────────────────────

@@ -2796,55 +2796,102 @@
       <span id="tradesTakenBadge" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></span>
     </div>
     <div id="tradesTakenBody" style="padding:16px;">
-      <div class="summary-grid" id="tradesTakenStats" style="grid-template-columns:repeat(5,1fr);"></div>
+      <div class="summary-grid" id="tradesTakenStatsExtended" style="margin-bottom:0;"></div>
 
-      <div style="display:flex;align-items:center;gap:8px;margin:4px 0 12px;flex-wrap:wrap;">
-        <select id="ttFilterStatus" onchange="setTradesTakenFilter('status',this.value)"
-          style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
-          <option value="all">All statuses</option>
-          <option value="open">Open</option>
-          <option value="closed_by_sl">SL Hit</option>
-          <option value="closed_eod">Closed EOD</option>
-        </select>
-        <select id="ttFilterSide" onchange="setTradesTakenFilter('side',this.value)"
-          style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
-          <option value="all">Long + Short</option>
-          <option value="LONG">▲ Long</option>
-          <option value="SHORT">▼ Short</option>
-        </select>
-        <button onclick="loadTradesTaken()" style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;
-          font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);cursor:pointer;">↻ Refresh</button>
-        <button id="ttBackfillBtn" onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 1 year of real market data — a one-time activity, so it defaults to the full year"
-          style="padding:6px 12px;border:1px solid var(--accent);border-radius:7px;
-          font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);cursor:pointer;">⏪ Backfill 1 year (Paper)</button>
-        <button id="ttClearBackfillBtn" onclick="clearBackfilledTrades()" title="Remove all backfilled trades (real paper/live trades are untouched) — use after a logic fix, before re-running Backfill"
-          style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;
-          font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--bear);cursor:pointer;">🗑 Clear Backfilled</button>
+      <div class="tabs-wrap" style="margin:4px 0 0;">
+        <div class="tabs">
+          <div class="tab active" id="ttTab_all" onclick="switchTTTab('all',this)">All Trades</div>
+          <div class="tab" id="ttTab_daywise" onclick="switchTTTab('daywise',this)">Day-wise Trades</div>
+          <div class="tab" id="ttTab_calendar" onclick="switchTTTab('calendar',this)">📅 Calendar View</div>
+          <div class="tab" id="ttTab_stockwise" onclick="switchTTTab('stockwise',this)">Stockwise</div>
+        </div>
       </div>
 
-      <div style="overflow-x:auto;">
-        <table class="trade-table" id="tradesTakenTable">
-          <thead>
-            <tr>
-              <th style="cursor:pointer;" onclick="sortTradesTaken('sym')">Symbol</th>
-              <th>Side</th>
-              <th style="cursor:pointer;" onclick="sortTradesTaken('entry_date')">Entry Date</th>
-              <th style="cursor:pointer;" onclick="sortTradesTaken('lot_size')">Qty (Lot)</th>
-              <th>Entry (Fut.)</th>
-              <th>Signal Ref (Cash)</th>
-              <th>Slippage</th>
-              <th>SL</th>
-              <th>Exit Date</th>
-              <th>Exit (Fut.)</th>
-              <th style="cursor:pointer;" onclick="sortTradesTaken('pnl_pct')">P&amp;L %</th>
-              <th style="cursor:pointer;" onclick="sortTradesTaken('pnl_amount')">P&amp;L ₹</th>
-              <th style="width:110px;max-width:110px;">Status</th>
-            </tr>
-          </thead>
-          <tbody id="tradesTakenTbody"></tbody>
-        </table>
-        <div id="tradesTakenEmpty" style="display:none;text-align:center;padding:24px 0;font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">
-          No trades placed yet. The Gap automation records here the moment its first entry order fires.
+      <div class="tab-content active" id="ttPane_all">
+        <div style="display:flex;align-items:center;gap:8px;margin:12px 0 12px;flex-wrap:wrap;">
+          <select id="ttFilterStatus" onchange="setTradesTakenFilter('status',this.value)"
+            style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
+            <option value="all">All statuses</option>
+            <option value="open">Open</option>
+            <option value="closed_by_sl">SL Hit</option>
+            <option value="closed_eod">Closed EOD</option>
+          </select>
+          <select id="ttFilterSide" onchange="setTradesTakenFilter('side',this.value)"
+            style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
+            <option value="all">Long + Short</option>
+            <option value="LONG">▲ Long</option>
+            <option value="SHORT">▼ Short</option>
+          </select>
+          <button onclick="loadTradesTaken()" style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;
+            font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--text2);cursor:pointer;">↻ Refresh</button>
+          <button id="ttBackfillBtn" onclick="backfillPaperTrades()" title="Simulate Paper mode against the last 1 year of real market data — a one-time activity, so it defaults to the full year"
+            style="padding:6px 12px;border:1px solid var(--accent);border-radius:7px;
+            font-family:'DM Mono',monospace;font-size:11px;background:var(--accent-light);color:var(--accent);cursor:pointer;">⏪ Backfill 1 year (Paper)</button>
+          <button id="ttClearBackfillBtn" onclick="clearBackfilledTrades()" title="Remove all backfilled trades (real paper/live trades are untouched) — use after a logic fix, before re-running Backfill"
+            style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;
+            font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);color:var(--bear);cursor:pointer;">🗑 Clear Backfilled</button>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="trade-table" id="tradesTakenTable">
+            <thead>
+              <tr>
+                <th style="cursor:pointer;" onclick="sortTradesTaken('sym')">Symbol</th>
+                <th>Side</th>
+                <th style="cursor:pointer;" onclick="sortTradesTaken('entry_date')">Entry Date</th>
+                <th style="cursor:pointer;" onclick="sortTradesTaken('lot_size')">Qty (Lot)</th>
+                <th>Entry (Fut.)</th>
+                <th>Signal Ref (Cash)</th>
+                <th>Slippage</th>
+                <th>SL</th>
+                <th>Exit Date</th>
+                <th>Exit (Fut.)</th>
+                <th style="cursor:pointer;" onclick="sortTradesTaken('pnl_pct')">P&amp;L %</th>
+                <th style="cursor:pointer;" onclick="sortTradesTaken('pnl_amount')">P&amp;L ₹</th>
+                <th style="width:110px;max-width:110px;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="tradesTakenTbody"></tbody>
+          </table>
+          <div id="tradesTakenEmpty" style="display:none;text-align:center;padding:24px 0;font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">
+            No trades placed yet. The Gap automation records here the moment its first entry order fires.
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="ttPane_daywise" style="padding-top:12px;">
+        <div id="ttDayCards"></div>
+        <div id="ttDayCardsEmpty" style="display:none;text-align:center;padding:24px 0;font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">
+          No trades match the current filter.
+        </div>
+      </div>
+
+      <div class="tab-content" id="ttPane_calendar" style="padding-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <button onclick="ttCalNavYear(-1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text2);cursor:pointer;font-family:'DM Mono',monospace;">‹</button>
+          <div style="text-align:center;">
+            <div id="ttCalYearLabel" style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;"></div>
+            <div id="ttCalYearSummary" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></div>
+          </div>
+          <button onclick="ttCalNavYear(1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text2);cursor:pointer;font-family:'DM Mono',monospace;">›</button>
+        </div>
+        <div id="ttCalYearGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-items:start;"></div>
+      </div>
+
+      <div class="tab-content" id="ttPane_stockwise" style="padding-top:12px;">
+        <div style="overflow-x:auto;">
+          <table class="trade-table" id="ttSymTable">
+            <thead>
+              <tr>
+                <th>Symbol</th><th>Trades</th><th>Wins</th><th>SL</th><th>Win Rate</th>
+                <th>Net PnL %</th><th>Net PnL ₹</th><th>Avg / Trade</th><th>Best Dir</th>
+              </tr>
+            </thead>
+            <tbody id="ttSymTableBody"></tbody>
+          </table>
+          <div id="ttSymTableEmpty" style="display:none;text-align:center;padding:24px 0;font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">
+            No trades match the current filter.
+          </div>
         </div>
       </div>
     </div>
@@ -3637,23 +3684,129 @@ function _ttStats() {
   return { all, open, closed, wins, winRate, netPnl, avgSlip };
 }
 
+// Same shape as the backtest's computeTradeStats()/buildSummaryCards(), but
+// computed from real trades (_tradesTakenData) — closed trades only, since
+// an open position has no realized outcome yet. pnl_amount here is REAL
+// lot-size-based P&L already (kite_orders.py's _compute_pnl), not a
+// capital-normalized simulation like the backtest's ₹-per-trade figures,
+// so the rupee card is labelled accordingly rather than implying the two
+// are on the same basis.
+function _ttStatsExtended() {
+  const all    = _tradesTakenData;
+  const closed = all.filter(r => r.status !== 'open');
+  const open   = all.filter(r => r.status === 'open');
+  const longs  = all.filter(r => r.direction === 'LONG');
+  const shorts = all.filter(r => r.direction === 'SHORT');
+
+  const wins    = closed.filter(r => (r.pnl_pct ?? 0) > 0);
+  const losses  = closed.filter(r => (r.pnl_pct ?? 0) <= 0);
+  const slHits  = closed.filter(r => r.status === 'closed_by_sl');
+  const total   = closed.length;
+  const winRate = total ? wins.length / total * 100 : 0;
+  const slRate  = total ? slHits.length / total * 100 : 0;
+
+  const longClosed  = closed.filter(r => r.direction === 'LONG');
+  const shortClosed = closed.filter(r => r.direction === 'SHORT');
+  const longWins  = longClosed.filter(r => (r.pnl_pct ?? 0) > 0);
+  const shortWins = shortClosed.filter(r => (r.pnl_pct ?? 0) > 0);
+  const longWR  = longClosed.length  ? longWins.length  / longClosed.length  * 100 : 0;
+  const shortWR = shortClosed.length ? shortWins.length / shortClosed.length * 100 : 0;
+
+  const totalWinPnl  = wins.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+  const totalLossPnl = losses.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+  const totalPnl = closed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+  const avgPnl  = total ? totalPnl / total : 0;
+  const avgWin  = wins.length   ? totalWinPnl  / wins.length   : 0;
+  const avgLoss = losses.length ? totalLossPnl / losses.length : 0;
+  const wr01 = winRate / 100;
+  const expectancy = (wr01 * avgWin) + ((1 - wr01) * avgLoss);
+
+  const totalRupee = closed.reduce((s, r) => s + (r.pnl_amount || 0), 0);
+  const winRupee   = wins.reduce((s, r) => s + (r.pnl_amount || 0), 0);
+  const lossRupee  = losses.reduce((s, r) => s + (r.pnl_amount || 0), 0);
+
+  // Best/worst day — grouped by EXIT date (when the P&L was actually realized)
+  const byExitDay = {};
+  closed.forEach(r => { if (r.exit_date) (byExitDay[r.exit_date] = byExitDay[r.exit_date] || []).push(r); });
+  const dayPnlVals   = Object.values(byExitDay).map(rs => rs.reduce((s, r) => s + (r.pnl_pct || 0), 0));
+  const dayRupeeVals = Object.values(byExitDay).map(rs => rs.reduce((s, r) => s + (r.pnl_amount || 0), 0));
+  const bestDayPct    = dayPnlVals.length   ? Math.max(...dayPnlVals)   : 0;
+  const worstDayPct   = dayPnlVals.length   ? Math.min(...dayPnlVals)   : 0;
+  const bestDayRupee  = dayRupeeVals.length ? Math.max(...dayRupeeVals) : 0;
+  const worstDayRupee = dayRupeeVals.length ? Math.min(...dayRupeeVals) : 0;
+
+  return {
+    all, closed, open, longs, shorts, wins, losses, slHits, total, winRate, slRate,
+    longWR, shortWR, totalWinPnl, totalLossPnl, totalPnl, avgPnl, avgWin, avgLoss, expectancy,
+    totalRupee, winRupee, lossRupee, bestDayPct, worstDayPct, bestDayRupee, worstDayRupee, byExitDay,
+  };
+}
+
+function renderTradesTakenStatsExtended() {
+  const el = document.getElementById('tradesTakenStatsExtended');
+  if (!el) return;
+  const s = _ttStatsExtended();
+  const cards = [
+    {
+      label: 'Total Trades', val: s.total,
+      sub: `${s.longs.length} Long / ${s.shorts.length} Short · ${s.open.length} open`, cls: 'accent',
+    },
+    {
+      label: 'Win Rate · SL Hit Rate',
+      val: `${s.winRate.toFixed(1)}% · <span style="color:${s.slRate > 20 ? 'var(--bear)' : 'var(--gold)'};font-size:16px;">${s.slRate.toFixed(1)}%</span>`,
+      sub: `${s.wins.length}W · ${s.total - s.wins.length - s.slHits.length}L · ${s.slHits.length}SL`,
+      cls: s.winRate >= 55 ? 'bull' : s.winRate >= 45 ? 'gold' : 'bear',
+    },
+    {
+      label: 'Expectancy / Trade',
+      val: `${s.expectancy >= 0 ? '+' : ''}${s.expectancy.toFixed(3)}%`,
+      sub: `Avg Win +${s.avgWin.toFixed(2)}%  ·  Avg Loss ${s.avgLoss.toFixed(2)}%`,
+      cls: s.expectancy >= 0 ? 'bull' : 'bear',
+    },
+    {
+      label: 'Net ₹ P&amp;L',
+      val: `${s.totalRupee >= 0 ? '+' : ''}₹${Math.abs(s.totalRupee).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+      sub: `Win ₹${s.winRupee.toLocaleString('en-IN', { maximumFractionDigits: 0 })} · Loss ₹${s.lossRupee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+      cls: s.totalRupee >= 0 ? 'bull' : 'bear',
+      tip: 'Real lot-size-based P&L from actual futures fills — not a capital-normalized simulation like the backtest\'s ₹/trade figure, so treat this as the real-money-equivalent number, not a like-for-like ₹ comparison.',
+    },
+    {
+      label: 'Net PnL  ·  Avg / Trade',
+      val: `${s.totalPnl >= 0 ? '+' : ''}${s.totalPnl.toFixed(1)}%  ·  ${s.avgPnl >= 0 ? '+' : ''}${s.avgPnl.toFixed(2)}%`,
+      sub: `Win Σ +${s.totalWinPnl.toFixed(1)}%  ·  Loss Σ ${s.totalLossPnl.toFixed(1)}%`,
+      cls: s.totalPnl >= 0 ? 'bull' : 'bear',
+    },
+    {
+      label: 'Long WR · Short WR',
+      val: `<span style="color:${s.longWR >= 55 ? 'var(--bull)' : s.longWR >= 45 ? 'var(--gold)' : 'var(--bear)'}">▲ ${s.longWR.toFixed(1)}%</span> · <span style="color:${s.shortWR >= 55 ? 'var(--bull)' : s.shortWR >= 45 ? 'var(--gold)' : 'var(--bear)'}">▼ ${s.shortWR.toFixed(1)}%</span>`,
+      sub: `${s.longs.length} long · ${s.shorts.length} short`, cls: '',
+    },
+    {
+      label: 'Best Day ₹ / Worst Day ₹',
+      val: `<span style="color:var(--bull)">+₹${s.bestDayRupee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span> / <span style="color:var(--bear)">₹${s.worstDayRupee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>`,
+      sub: `Best ${s.bestDayPct.toFixed(1)}% · Worst ${s.worstDayPct.toFixed(1)}% (% terms)`, cls: '',
+    },
+    {
+      label: 'Best Day % / Worst Day %',
+      val: `<span style="color:var(--bull)">+${s.bestDayPct.toFixed(1)}%</span> / <span style="color:var(--bear)">${s.worstDayPct.toFixed(1)}%</span>`,
+      sub: 'Sum of all trade PnL% on that exit day', cls: '',
+    },
+  ];
+  el.innerHTML = cards.map(c => `
+    <div class="stat-card ${c.cls}" ${c.tip ? `title="${c.tip}"` : ''}>
+      <div class="stat-label">${c.label}${c.tip ? ' ⓘ' : ''}</div>
+      <div class="stat-val">${c.val}</div>
+      <div class="stat-sub">${c.sub}</div>
+    </div>`).join('');
+}
+
 function renderTradesTaken() {
   const rows = _ttFilteredSorted();
-  const { all, open, closed, wins, winRate, netPnl, avgSlip } = _ttStats();
+  const { all } = _ttStats();
+  renderTradesTakenStatsExtended();
 
   const badge = document.getElementById('tradesTakenBadge');
   if (badge) badge.textContent = all.length ? `${all.length} trade${all.length === 1 ? '' : 's'}` : 'No trades yet';
-
-  const statsEl = document.getElementById('tradesTakenStats');
-  if (statsEl) {
-    statsEl.innerHTML = `
-      <div class="stat-card"><div class="stat-label">Open</div><div class="stat-val">${open.length}</div><div class="stat-sub">position${open.length === 1 ? '' : 's'} live</div></div>
-      <div class="stat-card"><div class="stat-label">Closed</div><div class="stat-val">${closed.length}</div><div class="stat-sub">${wins.length}W · ${closed.length - wins.length}L</div></div>
-      <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-val" style="color:${winRate == null ? 'var(--text3)' : _pnlColor(winRate - 50)}">${winRate == null ? '—' : winRate.toFixed(1) + '%'}</div><div class="stat-sub">of closed trades</div></div>
-      <div class="stat-card"><div class="stat-label">Net P&amp;L</div><div class="stat-val" style="color:${_pnlColor(netPnl)}">${_pnlSign(netPnl)}₹${Math.abs(netPnl).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div><div class="stat-sub">across ${closed.length} closed</div></div>
-      <div class="stat-card"><div class="stat-label">Avg. Slippage</div><div class="stat-val">${avgSlip == null ? '—' : (avgSlip >= 0 ? '+' : '') + avgSlip.toFixed(2) + '%'}</div><div class="stat-sub">futures fill vs signal</div></div>
-    `;
-  }
 
   const tbody   = document.getElementById('tradesTakenTbody');
   const emptyEl = document.getElementById('tradesTakenEmpty');
@@ -3681,6 +3834,261 @@ function renderTradesTaken() {
       <td style="color:${r.pnl_pct != null ? _pnlColor(r.pnl_pct) : 'var(--text3)'};font-weight:600;">${r.pnl_pct != null ? _pnlSign(r.pnl_pct) + r.pnl_pct.toFixed(2) + '%' : (r.status === 'open' ? 'unrealized' : '—')}</td>
       <td style="color:${r.pnl_amount != null ? _pnlColor(r.pnl_amount) : 'var(--text3)'};font-weight:600;">${r.pnl_amount != null ? _pnlSign(r.pnl_amount) + '₹' + Math.abs(r.pnl_amount).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}</td>
       <td style="width:110px;max-width:110px;white-space:normal;line-height:1.6;">${_ttStatusBadge(r.status, r.mode, r.backfilled)}</td>
+    </tr>`;
+  }).join('');
+
+  renderTTDayCards();
+  renderTTCalendar();
+  renderTTStockwise();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTOMATED TRADES — sub-tabs (Day-wise / Calendar / Stockwise), mirroring the
+// backtest's Trade Analysis tabs. All three read from the same filtered set
+// as the All Trades table (_ttFilteredSorted) so every sub-tab always agrees.
+// ─────────────────────────────────────────────────────────────────────────────
+let _ttCalYear = null;
+
+function switchTTTab(tab, el) {
+  document.querySelectorAll('#msTradesTaken .tabs .tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  ['all', 'daywise', 'calendar', 'stockwise'].forEach(t => {
+    const pane = document.getElementById('ttPane_' + t);
+    if (pane) pane.classList.toggle('active', t === tab);
+  });
+  if (tab === 'daywise')   renderTTDayCards();
+  if (tab === 'calendar')  renderTTCalendar();
+  if (tab === 'stockwise') renderTTStockwise();
+}
+
+function renderTTDayCards() {
+  const container = document.getElementById('ttDayCards');
+  const emptyEl   = document.getElementById('ttDayCardsEmpty');
+  if (!container) return;
+  const rows = _ttFilteredSorted();
+  if (!rows.length) {
+    container.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const byDay = {};
+  rows.forEach(r => {
+    const key = r.entry_date || 'Unknown';
+    (byDay[key] = byDay[key] || []).push(r);
+  });
+  const days = Object.keys(byDay).sort((a, b) => b.localeCompare(a));
+
+  container.innerHTML = days.map((date, idx) => {
+    const dayRows   = byDay[date];
+    const closed    = dayRows.filter(r => r.status !== 'open');
+    const wins      = closed.filter(r => (r.pnl_pct ?? 0) > 0).length;
+    const slHits    = closed.filter(r => r.status === 'closed_by_sl').length;
+    const losses    = closed.length - wins - slHits;
+    const dayPnl    = closed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+    const dayRupee  = closed.reduce((s, r) => s + (r.pnl_amount || 0), 0);
+    const openCount = dayRows.length - closed.length;
+    const longCount  = dayRows.filter(r => r.direction === 'LONG').length;
+    const shortCount = dayRows.filter(r => r.direction === 'SHORT').length;
+    const pnlCls = dayPnl > 0.1 ? 'pos' : dayPnl < -0.1 ? 'neg' : 'zero';
+    const dt = date !== 'Unknown' ? new Date(date + 'T00:00:00') : null;
+    const dateStr = dt ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Unknown date';
+    const weekday  = dt ? dt.toLocaleDateString('en-IN', { weekday: 'short' }) : '';
+    const dirParts = [];
+    if (longCount)  dirParts.push(`<span class="mini-badge gap-up">▲ ${longCount} Long</span>`);
+    if (shortCount) dirParts.push(`<span class="mini-badge gap-down">▼ ${shortCount} Short</span>`);
+    const dayId = 'ttDay_' + idx;
+
+    return `
+    <div class="day-card" id="${dayId}">
+      <div class="day-header" onclick="toggleDay('${dayId}')">
+        <div class="day-date" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span class="day-toggle" id="${dayId}_toggle">▶</span>
+          <span style="font-weight:700;">${dateStr}</span>
+          <span class="day-weekday">${weekday}</span>
+          ${dirParts.join('')}
+          ${openCount ? `<span class="mini-badge" style="background:var(--accent-light);color:var(--accent);">${openCount} open</span>` : ''}
+        </div>
+        <div class="day-meta">
+          <span class="day-counts">${dayRows.length} trade${dayRows.length === 1 ? '' : 's'} · <span style="color:var(--bull)">${wins}W</span> / <span style="color:var(--bear)">${losses}L</span>${slHits ? ` / ${slHits}SL` : ''}</span>
+          <span class="day-pnl ${pnlCls}">${dayPnl >= 0 ? '+' : ''}${dayPnl.toFixed(2)}%</span>
+          <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${dayRupee >= 0 ? 'var(--bull)' : 'var(--bear)'};">${dayRupee >= 0 ? '+' : ''}₹${Math.abs(dayRupee).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+        </div>
+      </div>
+      <div class="day-body" id="${dayId}_body">
+        <table class="trade-table" style="width:100%;">
+          <thead><tr>
+            <th style="padding-left:20px;">Symbol</th><th>Side</th><th>Entry</th><th>Exit Date</th>
+            <th>Exit</th><th>P&amp;L %</th><th>P&amp;L ₹</th><th>Status</th>
+          </tr></thead>
+          <tbody>
+            ${dayRows.map(r => `<tr>
+              <td style="padding-left:20px;"><b>${r.sym}</b></td>
+              <td><span class="outcome-badge ${r.direction === 'LONG' ? 'win' : 'loss'}" style="font-size:9px;">${r.direction === 'LONG' ? '▲' : '▼'}</span></td>
+              <td>${r.entry_price != null ? r.entry_price.toFixed(2) : '—'}</td>
+              <td>${r.exit_date || '—'}</td>
+              <td>${r.exit_price != null ? r.exit_price.toFixed(2) : '—'}</td>
+              <td style="color:${r.pnl_pct != null ? _pnlColor(r.pnl_pct) : 'var(--text3)'};font-weight:600;">${r.pnl_pct != null ? _pnlSign(r.pnl_pct) + r.pnl_pct.toFixed(2) + '%' : (r.status === 'open' ? 'unrealized' : '—')}</td>
+              <td style="color:${r.pnl_amount != null ? _pnlColor(r.pnl_amount) : 'var(--text3)'};font-weight:600;">${r.pnl_amount != null ? _pnlSign(r.pnl_amount) + '₹' + Math.abs(r.pnl_amount).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}</td>
+              <td>${_ttStatusBadge(r.status, r.mode, r.backfilled)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function ttCalNavYear(dir) {
+  _ttCalYear = (_ttCalYear || new Date().getFullYear()) + dir;
+  renderTTCalendar();
+}
+
+function renderTTCalendar() {
+  const gridEl = document.getElementById('ttCalYearGrid');
+  if (!gridEl) return;
+  const rows = _ttFilteredSorted();
+  const byDay = {};
+  rows.forEach(r => {
+    if (!r.entry_date) return;
+    (byDay[r.entry_date] = byDay[r.entry_date] || []).push(r);
+  });
+  const dates = Object.keys(byDay).sort();
+  if (!dates.length) {
+    document.getElementById('ttCalYearLabel').textContent = '—';
+    document.getElementById('ttCalYearSummary').textContent = 'No trades yet';
+    gridEl.innerHTML = '';
+    return;
+  }
+  if (!_ttCalYear) _ttCalYear = +dates[dates.length - 1].slice(0, 4);
+  const year = _ttCalYear;
+  document.getElementById('ttCalYearLabel').textContent = year;
+
+  const yearRows = dates.filter(d => d.startsWith(String(year))).flatMap(d => byDay[d]);
+  const yClosed = yearRows.filter(r => r.status !== 'open');
+  const yWins   = yClosed.filter(r => (r.pnl_pct ?? 0) > 0).length;
+  const ySL     = yClosed.filter(r => r.status === 'closed_by_sl').length;
+  const yPnl    = yClosed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+  document.getElementById('ttCalYearSummary').innerHTML = yearRows.length
+    ? `${yearRows.length} trades · ${yWins}W ${yClosed.length - yWins - ySL}L ${ySL}SL · <span style="color:${_pnlColor(yPnl)};font-weight:700;">${_pnlSign(yPnl)}${yPnl.toFixed(2)}%</span>`
+    : 'No trades this year';
+
+  const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let html = '';
+  for (let m = 12; m >= 1; m--) {
+    const monthPfx  = `${year}-${String(m).padStart(2,'0')}`;
+    const monthName = new Date(year, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+    const daysInMonth = new Date(year, m, 0).getDate();
+    const firstDow     = new Date(year, m - 1, 1).getDay();
+    const mRows = dates.filter(d => d.startsWith(monthPfx)).flatMap(d => byDay[d]);
+    if (!mRows.length) continue;
+    const mClosed = mRows.filter(r => r.status !== 'open');
+    const mWins   = mClosed.filter(r => (r.pnl_pct ?? 0) > 0).length;
+    const mSL     = mClosed.filter(r => r.status === 'closed_by_sl').length;
+    const mLoss   = mClosed.length - mWins - mSL;
+    const mPnl    = mClosed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+    const mPnlCls = _pnlColor(mPnl);
+
+    let grid = DOW.map(d => `<div style="text-align:center;font-family:'DM Mono',monospace;font-size:8px;font-weight:600;color:var(--text3);padding:1px 0;">${d}</div>`).join('');
+    for (let i = 0; i < firstDow; i++) grid += '<div></div>';
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${monthPfx}-${String(day).padStart(2,'0')}`;
+      const dow    = new Date(year, m - 1, day).getDay();
+      const isWknd = dow === 0 || dow === 6;
+      const dRows  = byDay[dateStr] || [];
+      if (!dRows.length) {
+        grid += `<div style="text-align:center;padding:3px 1px;border-radius:3px;font-family:'DM Mono',monospace;font-size:9px;color:${isWknd?'var(--text3)':'var(--text2)'};">${day}</div>`;
+        continue;
+      }
+      const dClosed = dRows.filter(r => r.status !== 'open');
+      const dWins   = dClosed.filter(r => (r.pnl_pct ?? 0) > 0).length;
+      const dSL     = dClosed.filter(r => r.status === 'closed_by_sl').length;
+      const dPnl    = dClosed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+      const bg      = dClosed.length ? _pnlBg(dPnl) : 'var(--surface2)';
+      const color   = _pnlColor(dPnl);
+      const pnlStr  = dClosed.length ? _pnlSign(dPnl) + dPnl.toFixed(2) + '%' : '';
+      const wlLabel = dClosed.length ? (dSL > 0 ? `${dWins}W/${dSL}SL` : `${dWins}W/${dClosed.length-dWins}L`) : (dRows.length + ' open');
+      const symList = dRows.map(r => r.sym).join(',');
+      grid += `<div title="${dateStr}: ${dRows.length}T ${symList}"
+        style="text-align:center;padding:3px 1px 4px;border-radius:4px;background:${bg};font-family:'DM Mono',monospace;">
+        <div style="font-size:8px;color:var(--text3);line-height:1.3;">${day}</div>
+        <div style="font-size:9px;font-weight:700;color:${color};line-height:1.3;">${pnlStr}</div>
+        <div style="font-size:7px;color:var(--text3);line-height:1.2;">${wlLabel}</div>
+      </div>`;
+    }
+
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px 8px;">
+        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">${monthName}</span>
+        ${mClosed.length ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${mPnlCls};">${_pnlSign(mPnl)}${mPnl.toFixed(2)}%</span>` : ''}
+      </div>
+      <div style="padding:0 10px 8px;">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;">${grid}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--border);background:var(--surface2);">
+        <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Trades</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--accent);">${mRows.length}</div>
+        </div>
+        <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">W/L/SL</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:11px;color:var(--text);">${mWins}/${mLoss}/${mSL}</div>
+        </div>
+        <div style="text-align:center;padding:6px 4px;">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Net PnL</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:${mPnlCls};">${_pnlSign(mPnl)}${mPnl.toFixed(2)}%</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  gridEl.innerHTML = html || '<div style="text-align:center;padding:24px;font-family:\'DM Mono\',monospace;font-size:12px;color:var(--text3);">No trades this year</div>';
+}
+
+function renderTTStockwise() {
+  const tbody   = document.getElementById('ttSymTableBody');
+  const emptyEl = document.getElementById('ttSymTableEmpty');
+  if (!tbody) return;
+  const rows = _ttFilteredSorted();
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const bySym = {};
+  rows.forEach(r => (bySym[r.sym] = bySym[r.sym] || []).push(r));
+
+  const symRows = Object.entries(bySym).map(([sym, rs]) => {
+    const closed   = rs.filter(r => r.status !== 'open');
+    const wins     = closed.filter(r => (r.pnl_pct ?? 0) > 0).length;
+    const slHits   = closed.filter(r => r.status === 'closed_by_sl').length;
+    const losses   = closed.length - wins - slHits;
+    const wr       = closed.length ? wins / closed.length * 100 : 0;
+    const netPnl   = closed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+    const netRupee = closed.reduce((s, r) => s + (r.pnl_amount || 0), 0);
+    const avg      = closed.length ? netPnl / closed.length : 0;
+    const longs    = rs.filter(r => r.direction === 'LONG');
+    const shorts   = rs.filter(r => r.direction === 'SHORT');
+    const longPnl  = longs.filter(r => r.status !== 'open').reduce((s, r) => s + (r.pnl_pct || 0), 0);
+    const shortPnl = shorts.filter(r => r.status !== 'open').reduce((s, r) => s + (r.pnl_pct || 0), 0);
+    const bestDir  = longPnl >= shortPnl ? 'LONG' : 'SHORT';
+    return { sym, trades: rs.length, closed: closed.length, wins, losses, slHits, wr, netPnl, netRupee, avg, bestDir };
+  }).sort((a, b) => b.netPnl - a.netPnl);
+
+  tbody.innerHTML = symRows.map(r => {
+    const wrCls = r.wr >= 60 ? '' : r.wr >= 45 ? 'mid' : 'low';
+    return `<tr>
+      <td><b>${r.sym}</b></td>
+      <td>${r.trades}</td>
+      <td>${r.wins}</td>
+      <td class="${r.slHits > 0 ? 'neg-val' : ''}">${r.slHits}</td>
+      <td>${r.wr.toFixed(1)}% <span class="wr-bar-bg"><span class="wr-bar-fill ${wrCls}" style="width:${r.wr}%"></span></span></td>
+      <td class="${r.netPnl >= 0 ? 'pos-val' : 'neg-val'}">${r.netPnl >= 0 ? '+' : ''}${r.netPnl.toFixed(2)}%</td>
+      <td style="color:${r.netRupee >= 0 ? 'var(--bull)' : 'var(--bear)'};font-weight:600;">${r.netRupee >= 0 ? '+' : ''}₹${Math.abs(r.netRupee).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+      <td class="${r.avg >= 0 ? 'pos-val' : 'neg-val'}">${r.avg >= 0 ? '+' : ''}${r.avg.toFixed(2)}%</td>
+      <td><span class="mini-badge ${r.bestDir === 'LONG' ? 'gap-up' : 'gap-down'}">${r.bestDir}</span></td>
     </tr>`;
   }).join('');
 }
@@ -11375,6 +11783,7 @@ loadSavedDefaults();
   <!-- Live Trades Tab content — real Kite-executed trades, sibling of mobScannerContent / mobTradesTab -->
   <div id="mobLiveTradesTab" style="display:none;flex-direction:column;min-height:0;flex:1;">
     <div id="mobTtStratHdr" style="padding:10px 12px 0;"></div>
+    <div id="mobTtSubTabBar" style="padding:0 12px 8px;"></div>
     <div id="mobTtGapControls">
       <div id="mobTtStats" style="display:flex;gap:8px;padding:10px 12px 4px;overflow-x:auto;"></div>
       <div style="display:flex;gap:6px;padding:8px 12px;">
