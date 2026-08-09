@@ -101,7 +101,7 @@ def restore_data_from_github():
     files = [
         f["path"] for f in tree.get("tree", [])
         if f["type"] == "blob" and (
-            f["path"].endswith(".csv") or f["path"] == "SECTOR_MAP.json"
+            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json")
         )
     ]
     print(f"[restore] {len(files)} files in data branch")
@@ -1401,7 +1401,7 @@ def _do_pull_from_github():
     files = [
         f["path"] for f in tree.get("tree", [])
         if f["type"] == "blob" and (
-            f["path"].endswith(".csv") or f["path"] == "SECTOR_MAP.json"
+            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json")
         )
     ]
     _log(f"[pull] {len(files)} files found — downloading all (overwrite mode)")
@@ -1865,6 +1865,12 @@ def get_gap_settings():
 # Wiring order: cron-job.org hits /gap-orders/enter at 3:15 PM (signal day)
 # and /gap-orders/exit at 3:15 PM the next trading day. Both are safe to
 # call manually too — e.g. for a dry run via /gap-scan first.
+#
+# Paper vs Live: settings['tradingMode'] (synced from the Overnight Gap
+# config panel, defaults to 'paper' if missing) decides whether
+# place_entry_order() places a real order or simulates one against real
+# market data — see kite_orders.py's module docstring. Still requires
+# today's Kite login either way, since paper mode reads real LTP/OHLC.
 
 def get_scan_symbols():
     """
@@ -1876,6 +1882,65 @@ def get_scan_symbols():
     Gap automation scanning the same universe the frontend actually uses.
     """
     return sorted(p.stem for p in DATA_DIR.glob("*.csv"))
+
+
+def push_positions_to_github():
+    """
+    Pushes gap_positions.json to the GitHub data branch — same PUT pattern
+    already used for CSVs in /breeze/fetch. Trade history is real money now
+    (entry/exit fill prices, realized P&L), and unlike the CSVs it had no
+    backup at all until this: restore_data_from_github() only ever pulled
+    .csv/SECTOR_MAP.json back down, so a Render disk wipe (redeploy, dyno
+    rebuild) would have erased it permanently. Called after every entry/exit
+    so GitHub is never more than one trade behind. Best-effort — a push
+    failure here must never surface as a failure of the order that already
+    went through.
+    """
+    import urllib.request, urllib.error, json as _json, base64 as _b64
+
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    repo     = os.environ.get("GITHUB_REPO", "crorepathi369/tradeedge-api")
+    branch   = os.environ.get("GITHUB_DATA_BRANCH", "data")
+    if not gh_token:
+        print("[gap-orders] GITHUB_TOKEN not set — skipping gap_positions.json push")
+        return
+
+    path = DATA_DIR / "gap_positions.json"
+    if not path.exists():
+        return
+
+    headers = {
+        "Authorization": f"token {gh_token}",
+        "Accept":        "application/vnd.github.v3+json",
+        "User-Agent":    "TradeEdge-App",
+        "Content-Type":  "application/json",
+    }
+    file_url = f"https://api.github.com/repos/{repo}/contents/gap_positions.json"
+    try:
+        content_b64 = _b64.b64encode(path.read_bytes()).decode()
+        sha = None
+        try:
+            get_req = urllib.request.Request(file_url + f"?ref={branch}", headers=headers)
+            meta = _json.loads(urllib.request.urlopen(get_req, timeout=10).read())
+            sha = meta.get("sha")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+
+        body = {
+            "message": f"gap_positions.json update {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            "content": content_b64,
+            "branch":  branch,
+        }
+        if sha:
+            body["sha"] = sha
+
+        put_req = urllib.request.Request(
+            file_url, data=_json.dumps(body).encode(), headers=headers, method="PUT")
+        urllib.request.urlopen(put_req, timeout=15)
+        print("[gap-orders] gap_positions.json pushed to GitHub")
+    except Exception as e:
+        print(f"[gap-orders] GitHub push failed for gap_positions.json: {e}")
 
 
 @app.route("/gap-scan", methods=["GET", "OPTIONS"])
@@ -1943,17 +2008,23 @@ def gap_orders_enter():
     if not selected:
         return cors_response({"scanDate": scan_date, "msg": "No qualifying signal today", "results": []})
 
+    # Fail-safe default: an unset/missing tradingMode trades paper, never live.
+    mode = settings.get("tradingMode", "paper")
+    if mode not in ("paper", "live"):
+        mode = "paper"
+
     results = []
     for signal in selected:
         res = kite_orders.place_entry_order(
             kite, DATA_DIR, signal, today,
-            sl_pct=settings["slPct"], sl_type=settings.get("slType", "pct"),
+            sl_pct=settings["slPct"], sl_type=settings.get("slType", "pct"), mode=mode,
         )
         res["sym"] = signal["sym"]
         results.append(res)
-        print(f"[gap-orders/enter] {signal['sym']}: {res}")
+        print(f"[gap-orders/enter] ({mode}) {signal['sym']}: {res}")
 
-    return cors_response({"scanDate": scan_date, "results": results})
+    push_positions_to_github()
+    return cors_response({"scanDate": scan_date, "mode": mode, "results": results})
 
 
 @app.route("/gap-orders/exit", methods=["POST", "OPTIONS"])
@@ -1971,6 +2042,7 @@ def gap_orders_exit():
 
     results = kite_orders.close_open_positions(kite, DATA_DIR)
     print(f"[gap-orders/exit] {results}")
+    push_positions_to_github()
     return cors_response({"results": results})
 
 
