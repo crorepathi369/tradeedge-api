@@ -223,6 +223,26 @@
       "sl_price_source": "paper_simulated_fill",
       "gtt_id": null,
       "status": "open"
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-05-08",
+      "entry_order_id": null,
+      "tradingsymbol": "BRITANNIA26MAYFUT",
+      "lot_size": 125,
+      "entry_price": 5504.5,
+      "signal_entry": 5520.0,
+      "signal_slLevel": 5685.6,
+      "sl_price": 5669.64,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 5400.5,
+      "exit_date": "2026-05-11",
+      "pnl_pct": 1.89,
+      "pnl_amount": 13000.0
     }
   ],
   "KALYANKJIL": [
@@ -289,6 +309,26 @@
       "exit_date": "2026-07-23",
       "pnl_pct": 2.4,
       "pnl_amount": 19837.5
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-05-07",
+      "entry_order_id": null,
+      "tradingsymbol": "BAJAJ-AUTO26MAYFUT",
+      "lot_size": 75,
+      "entry_price": 10633.5,
+      "signal_entry": 10457.82,
+      "signal_slLevel": 10144.09,
+      "sl_price": 10314.49,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 10721.5,
+      "exit_date": "2026-05-08",
+      "pnl_pct": 0.83,
+      "pnl_amount": 6600.0
     }
   ],
   "PRESTIGE": [
@@ -375,6 +415,26 @@
       "exit_date": "2026-06-30",
       "pnl_pct": 2.38,
       "pnl_amount": 20040.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-04-22",
+      "entry_order_id": null,
+      "tradingsymbol": "TECHM26APRFUT",
+      "lot_size": 600,
+      "entry_price": 1429.4,
+      "signal_entry": 1462.6,
+      "signal_slLevel": 1506.48,
+      "sl_price": 1472.28,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1388.5,
+      "exit_date": "2026-04-23",
+      "pnl_pct": 2.86,
+      "pnl_amount": 24540.0
     }
   ],
   "MARUTI": [
@@ -547,6 +607,46 @@
       "exit_date": "2026-05-14",
       "pnl_pct": 4.29,
       "pnl_amount": 15985.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-05-04",
+      "entry_order_id": null,
+      "tradingsymbol": "VEDL26MAYFUT",
+      "lot_size": 1150,
+      "entry_price": 296,
+      "signal_entry": 294.65,
+      "signal_slLevel": 285.81,
+      "sl_price": 287.12,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 305.2,
+      "exit_date": "2026-05-05",
+      "pnl_pct": 3.11,
+      "pnl_amount": 10580.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-05-06",
+      "entry_order_id": null,
+      "tradingsymbol": "VEDL26MAYFUT",
+      "lot_size": 1150,
+      "entry_price": 318,
+      "signal_entry": 316.4,
+      "signal_slLevel": 306.91,
+      "sl_price": 308.46,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 308.46,
+      "exit_date": "2026-05-07",
+      "pnl_pct": -3.0,
+      "pnl_amount": -10971.0
     }
   ],
   "ZYDUSLIFE": [
@@ -679,6 +779,26 @@
       "exit_date": "2026-06-09",
       "pnl_pct": -0.41,
       "pnl_amount": -2220.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-04-17",
+      "entry_order_id": null,
+      "tradingsymbol": "WIPRO26APRFUT",
+      "lot_size": 3000,
+      "entry_price": 202.37,
+      "signal_entry": 204.32,
+      "signal_slLevel": 210.45,
+      "sl_price": 208.44,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 201.8,
+      "exit_date": "2026-04-20",
+      "pnl_pct": 0.28,
+      "pnl_amount": 1710.0
     }
   ],
   "ADANIGREEN": [
@@ -701,6 +821,72 @@
       "exit_date": "2026-06-10",
       "pnl_pct": -3.0,
       "pnl_amount": -27768.0
+    }
+  ],
+  "SUZLON": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-04-16",
+      "entry_order_id": null,
+      "tradingsymbol": "SUZLON26APRFUT",
+      "lot_size": 12700,
+      "entry_price": 50.3,
+      "signal_entry": 50.25,
+      "signal_slLevel": 48.74,
+      "sl_price": 48.79,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 52.96,
+      "exit_date": "2026-04-17",
+      "pnl_pct": 5.29,
+      "pnl_amount": 33782.0
+    }
+  ],
+  "HAVELLS": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-04-23",
+      "entry_order_id": null,
+      "tradingsymbol": "HAVELLS26APRFUT",
+      "lot_size": 500,
+      "entry_price": 1243,
+      "signal_entry": 1254.05,
+      "signal_slLevel": 1291.67,
+      "sl_price": 1280.29,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1243.2,
+      "exit_date": "2026-04-24",
+      "pnl_pct": -0.02,
+      "pnl_amount": -100.0
+    }
+  ],
+  "RECLTD": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-04-29",
+      "entry_order_id": null,
+      "tradingsymbol": "RECLTD26MAYFUT",
+      "lot_size": 1575,
+      "entry_price": 365.25,
+      "signal_entry": 363.55,
+      "signal_slLevel": 374.46,
+      "sl_price": 376.21,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 355.35,
+      "exit_date": "2026-04-30",
+      "pnl_pct": 2.71,
+      "pnl_amount": 15592.5
     }
   ]
 }
