@@ -83,6 +83,26 @@
       "exit_date": "2026-07-20",
       "pnl_pct": 1.75,
       "pnl_amount": 8400.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-06-16",
+      "entry_order_id": null,
+      "tradingsymbol": "HCLTECH26JUNFUT",
+      "lot_size": 400,
+      "entry_price": 1158,
+      "signal_entry": 1159.0,
+      "signal_slLevel": 1124.23,
+      "sl_price": 1123.26,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1165,
+      "exit_date": "2026-06-17",
+      "pnl_pct": 0.6,
+      "pnl_amount": 2800
     }
   ],
   "HYUNDAI": [
@@ -147,6 +167,22 @@
       "exit_date": "2026-08-04",
       "pnl_pct": 4.06,
       "pnl_amount": 27750.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-06-25",
+      "entry_order_id": null,
+      "tradingsymbol": "NATIONALUM26JUNFUT",
+      "lot_size": 1875,
+      "entry_price": 333.25,
+      "signal_entry": 332.15,
+      "signal_slLevel": 342.11,
+      "sl_price": 343.25,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "open"
     }
   ],
   "CGPOWER": [
@@ -253,6 +289,178 @@
       "exit_date": "2026-07-23",
       "pnl_pct": 2.4,
       "pnl_amount": 19837.5
+    }
+  ],
+  "PRESTIGE": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-06-12",
+      "entry_order_id": null,
+      "tradingsymbol": "PRESTIGE26JUNFUT",
+      "lot_size": 450,
+      "entry_price": 1396,
+      "signal_entry": 1387.3,
+      "signal_slLevel": 1345.68,
+      "sl_price": 1354.12,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1475.1,
+      "exit_date": "2026-06-15",
+      "pnl_pct": 5.67,
+      "pnl_amount": 35595.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-06-15",
+      "entry_order_id": null,
+      "tradingsymbol": "PRESTIGE26JUNFUT",
+      "lot_size": 450,
+      "entry_price": 1475.1,
+      "signal_entry": 1472.5,
+      "signal_slLevel": 1428.33,
+      "sl_price": 1430.85,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1525.4,
+      "exit_date": "2026-06-16",
+      "pnl_pct": 3.41,
+      "pnl_amount": 22635.0
+    }
+  ],
+  "KFINTECH": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-06-17",
+      "entry_order_id": null,
+      "tradingsymbol": "KFINTECH26JUNFUT",
+      "lot_size": 575,
+      "entry_price": 901.45,
+      "signal_entry": 898.45,
+      "signal_slLevel": 871.5,
+      "sl_price": 874.41,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 909.5,
+      "exit_date": "2026-06-18",
+      "pnl_pct": 0.89,
+      "pnl_amount": 4628.75
+    }
+  ],
+  "TECHM": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-06-29",
+      "entry_order_id": null,
+      "tradingsymbol": "TECHM26JULFUT",
+      "lot_size": 600,
+      "entry_price": 1405.8,
+      "signal_entry": 1395.91,
+      "signal_slLevel": 1437.79,
+      "sl_price": 1447.97,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1372.4,
+      "exit_date": "2026-06-30",
+      "pnl_pct": 2.38,
+      "pnl_amount": 20040.0
+    }
+  ],
+  "MARUTI": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-06-30",
+      "entry_order_id": null,
+      "tradingsymbol": "MARUTI26JULFUT",
+      "lot_size": 50,
+      "entry_price": 14060,
+      "signal_entry": 14115.0,
+      "signal_slLevel": 13691.55,
+      "sl_price": 13638.2,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 14433,
+      "exit_date": "2026-07-01",
+      "pnl_pct": 2.65,
+      "pnl_amount": 18650
+    }
+  ],
+  "PERSISTENT": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-03",
+      "entry_order_id": null,
+      "tradingsymbol": "PERSISTENT26JULFUT",
+      "lot_size": 125,
+      "entry_price": 4682.7,
+      "signal_entry": 4682.7,
+      "signal_slLevel": 4542.22,
+      "sl_price": 4542.22,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 4696.6,
+      "exit_date": "2026-07-06",
+      "pnl_pct": 0.3,
+      "pnl_amount": 1737.5
+    }
+  ],
+  "COCHINSHIP": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-07-07",
+      "entry_order_id": null,
+      "tradingsymbol": "COCHINSHIP26JULFUT",
+      "lot_size": 400,
+      "entry_price": 1441,
+      "signal_entry": 1445.7,
+      "signal_slLevel": 1489.07,
+      "sl_price": 1484.23,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1409.1,
+      "exit_date": "2026-07-08",
+      "pnl_pct": 2.21,
+      "pnl_amount": 12760.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-07-08",
+      "entry_order_id": null,
+      "tradingsymbol": "COCHINSHIP26JULFUT",
+      "lot_size": 400,
+      "entry_price": 1409.1,
+      "signal_entry": 1404.1,
+      "signal_slLevel": 1446.22,
+      "sl_price": 1451.37,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1413.9,
+      "exit_date": "2026-07-09",
+      "pnl_pct": -0.34,
+      "pnl_amount": -1920.0
     }
   ]
 }
