@@ -41,6 +41,26 @@
       "exit_date": "2026-07-29",
       "pnl_pct": 1.7,
       "pnl_amount": 13632.5
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-09-30",
+      "entry_order_id": null,
+      "tradingsymbol": "COFORGE25OCTFUT",
+      "lot_size": 475,
+      "entry_price": 1588.2,
+      "signal_entry": 1583.7,
+      "signal_slLevel": 1536.19,
+      "sl_price": 1540.55,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1610.8,
+      "exit_date": "2025-10-01",
+      "pnl_pct": 1.42,
+      "pnl_amount": 10735.0
     }
   ],
   "HCLTECH": [
@@ -531,6 +551,26 @@
       "exit_date": "2026-06-16",
       "pnl_pct": 3.41,
       "pnl_amount": 22635.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-10-09",
+      "entry_order_id": null,
+      "tradingsymbol": "PRESTIGE25OCTFUT",
+      "lot_size": 450,
+      "entry_price": 1587.9,
+      "signal_entry": 1582.9,
+      "signal_slLevel": 1535.41,
+      "sl_price": 1540.26,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1627.9,
+      "exit_date": "2025-10-10",
+      "pnl_pct": 2.52,
+      "pnl_amount": 18000.0
     }
   ],
   "KFINTECH": [
@@ -1589,6 +1629,26 @@
       "exit_date": "2026-01-13",
       "pnl_pct": -3.0,
       "pnl_amount": -19140.75
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-10-01",
+      "entry_order_id": null,
+      "tradingsymbol": "IREDA25OCTFUT",
+      "lot_size": 4525,
+      "entry_price": 153.02,
+      "signal_entry": 151.87,
+      "signal_slLevel": 147.31,
+      "sl_price": 148.43,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 154.52,
+      "exit_date": "2025-10-03",
+      "pnl_pct": 0.98,
+      "pnl_amount": 6787.5
     }
   ],
   "DRREDDY": [
@@ -1869,6 +1929,50 @@
       "exit_date": "2025-11-07",
       "pnl_pct": 2.55,
       "pnl_amount": 23447.5
+    }
+  ],
+  "ADANIENSOL": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-09-19",
+      "entry_order_id": null,
+      "tradingsymbol": "ADANIENSOL25SEPFUT",
+      "lot_size": 675,
+      "entry_price": 879.15,
+      "signal_entry": 877.15,
+      "signal_slLevel": 850.84,
+      "sl_price": 852.78,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 940.25,
+      "exit_date": "2025-09-22",
+      "pnl_pct": 6.95,
+      "pnl_amount": 41242.5
+    }
+  ],
+  "BLUESTARCO": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-10-10",
+      "entry_order_id": null,
+      "tradingsymbol": "BLUESTARCO25OCTFUT",
+      "lot_size": 325,
+      "entry_price": 1958,
+      "signal_entry": 1949.1,
+      "signal_slLevel": 1890.63,
+      "sl_price": 1899.26,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 1899.26,
+      "exit_date": "2025-10-13",
+      "pnl_pct": -3.0,
+      "pnl_amount": -19090.5
     }
   ]
 }
