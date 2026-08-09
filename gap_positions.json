@@ -63,6 +63,26 @@
       "exit_date": "2026-07-30",
       "pnl_pct": 0.77,
       "pnl_amount": 4160.0
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-17",
+      "entry_order_id": null,
+      "tradingsymbol": "HCLTECH26JULFUT",
+      "lot_size": 400,
+      "entry_price": 1202.7,
+      "signal_entry": 1203.9,
+      "signal_slLevel": 1167.78,
+      "sl_price": 1166.62,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1223.7,
+      "exit_date": "2026-07-20",
+      "pnl_pct": 1.75,
+      "pnl_amount": 8400.0
     }
   ],
   "HYUNDAI": [
@@ -85,6 +105,26 @@
       "exit_date": "2026-08-03",
       "pnl_pct": 0.58,
       "pnl_amount": 3437.5
+    },
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-15",
+      "entry_order_id": null,
+      "tradingsymbol": "HYUNDAI26JULFUT",
+      "lot_size": 275,
+      "entry_price": 2005.8,
+      "signal_entry": 2002.9,
+      "signal_slLevel": 1942.81,
+      "sl_price": 1945.63,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2010.6,
+      "exit_date": "2026-07-16",
+      "pnl_pct": 0.24,
+      "pnl_amount": 1320.0
     }
   ],
   "NATIONALUM": [
@@ -147,6 +187,72 @@
       "sl_price_source": "paper_simulated_fill",
       "gtt_id": null,
       "status": "open"
+    }
+  ],
+  "KALYANKJIL": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-10",
+      "entry_order_id": null,
+      "tradingsymbol": "KALYANKJIL26JULFUT",
+      "lot_size": 1350,
+      "entry_price": 476.45,
+      "signal_entry": 476.15,
+      "signal_slLevel": 461.87,
+      "sl_price": 462.16,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 511.2,
+      "exit_date": "2026-07-13",
+      "pnl_pct": 7.29,
+      "pnl_amount": 46912.5
+    }
+  ],
+  "MANAPPURAM": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-07-13",
+      "entry_order_id": null,
+      "tradingsymbol": "MANAPPURAM26JULFUT",
+      "lot_size": 3000,
+      "entry_price": 332.7,
+      "signal_entry": 331.75,
+      "signal_slLevel": 341.7,
+      "sl_price": 342.68,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 329.05,
+      "exit_date": "2026-07-14",
+      "pnl_pct": 1.1,
+      "pnl_amount": 10950.0
+    }
+  ],
+  "BAJAJ-AUTO": [
+    {
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-22",
+      "entry_order_id": null,
+      "tradingsymbol": "BAJAJ-AUTO26JULFUT",
+      "lot_size": 75,
+      "entry_price": 11010,
+      "signal_entry": 10998.5,
+      "signal_slLevel": 10668.55,
+      "sl_price": 10679.7,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 11274.5,
+      "exit_date": "2026-07-23",
+      "pnl_pct": 2.4,
+      "pnl_amount": 19837.5
     }
   ]
 }
