@@ -125,8 +125,68 @@ def save_positions(data_dir: Path, positions: dict) -> None:
 
 
 def _last_trade(positions: dict, symbol: str) -> dict | None:
+    """
+    Returns the chronologically most recent trade for `symbol`, sorted by
+    entry_date — NOT simply the last array element. Backfilled trades can
+    end up appended out of chronological order (observed directly: a
+    symbol's list with entry_date descending instead of ascending), which
+    would otherwise make pl[-1] silently pick an old, already-closed trade
+    instead of a genuinely open one.
+    """
     trades = positions.get(symbol)
-    return trades[-1] if trades else None
+    if not trades:
+        return None
+    return sorted(trades, key=lambda t: t.get("entry_date", ""))[-1]
+
+
+def diagnose_order_issues(data_dir: Path) -> list[dict]:
+    """
+    One-time diagnostic — scans every symbol's trade list for the same
+    out-of-order-append pattern that stranded BRITANNIA (a trade appended
+    out of entry_date order, which made the old raw pl[-1] logic silently
+    look at the wrong trade). Flags two kinds of finding per symbol:
+
+      - "list_not_chronological": entry_dates in the stored list aren't in
+        ascending order at all — worth knowing even if it didn't cause a
+        visible problem yet, since it's the same latent risk.
+      - "was_stuck_open": the OLD raw-pl[-1] logic would have picked a
+        different trade than the correct (entry_date-sorted) most-recent
+        one, AND that correct most-recent trade is 'open' — this is the
+        exact BRITANNIA scenario: an open trade that close_open_positions()
+        would have silently never seen before this fix.
+
+    Purely read-only — flags issues, doesn't fix data. The code fix
+    (sorting by entry_date in _last_trade()/close_open_positions()) already
+    makes any "was_stuck_open" case resolve itself on the next exit run;
+    this is just visibility into whether BRITANNIA was a one-off or one of
+    several.
+    """
+    positions = load_positions(data_dir)
+    findings = []
+    for symbol, trades in positions.items():
+        if not trades or len(trades) < 2:
+            continue
+
+        dates = [t.get("entry_date", "") for t in trades]
+        is_chronological = dates == sorted(dates)
+
+        raw_last = trades[-1]
+        correct_last = sorted(trades, key=lambda t: t.get("entry_date", ""))[-1]
+        mismatch = raw_last is not correct_last
+
+        if not is_chronological:
+            findings.append({
+                "sym": symbol, "issue": "list_not_chronological",
+                "entry_dates_in_order": dates,
+            })
+        if mismatch and correct_last.get("status") == "open" and raw_last.get("status") != "open":
+            findings.append({
+                "sym": symbol, "issue": "was_stuck_open",
+                "correct_last_entry_date": correct_last.get("entry_date"),
+                "old_logic_would_have_picked": raw_last.get("entry_date"),
+                "old_logic_status": raw_last.get("status"),
+            })
+    return findings
 
 
 def clear_backfilled_trades(data_dir: Path) -> int:
@@ -456,11 +516,18 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
     if not positions:
         return reconciled
 
-    # Only the LAST trade per symbol can ever be 'open' — place_entry_order()
-    # refuses a new entry while the last one is still open, so there's no
-    # scenario where an earlier, non-last entry is open underneath a closed
-    # or newer one.
-    open_items = {s: pl[-1] for s, pl in positions.items() if pl and pl[-1].get("status") == "open"}
+    # Only the chronologically-last trade per symbol can ever be 'open' —
+    # place_entry_order() refuses a new entry while the last one is still
+    # open. "Last" here means sorted by entry_date via _last_trade(), NOT
+    # raw array position — backfilled trades can land out of append order
+    # (confirmed: BRITANNIA's list had 2026-08-07 appended BEFORE its own
+    # older 2026-05-08/2026-02-11 entries), and pl[-1] alone would silently
+    # grab an old closed trade instead of the genuinely open one.
+    open_items = {}
+    for s, pl in positions.items():
+        last = _last_trade(positions, s)
+        if last and last.get("status") == "open":
+            open_items[s] = last
     if not open_items:
         return reconciled
 

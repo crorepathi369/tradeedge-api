@@ -2182,3 +2182,23 @@ def gap_orders_status():
     positions = kite_orders.load_positions(DATA_DIR)
     flat = [{"sym": sym, **trade} for sym, trades in positions.items() for trade in trades]
     return cors_response(flat)
+
+
+@app.route("/gap-orders/diagnose", methods=["GET", "OPTIONS"])
+def gap_orders_diagnose():
+    """
+    One-time diagnostic (read-only) — scans gap_positions.json for the same
+    out-of-order-append pattern that stranded BRITANNIA (fixed in
+    kite_orders._last_trade()/close_open_positions() to sort by entry_date
+    rather than trust array position). Reports any symbol with a
+    non-chronological trade list, and specifically flags any symbol whose
+    genuinely-open trade the OLD logic would have missed — i.e. any other
+    BRITANNIA-like cases sitting stuck right now.
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    findings = kite_orders.diagnose_order_issues(DATA_DIR)
+    return cors_response({
+        "issuesFound": len(findings),
+        "findings": findings,
+    })
