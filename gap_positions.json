@@ -362,7 +362,11 @@
       "sl_price": 5383.01,
       "sl_price_source": "paper_simulated_fill",
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": 5630,
+      "exit_date": "2026-08-10",
+      "pnl_pct": 1.45,
+      "pnl_amount": 10062.5
     },
     {
       "mode": "paper",
