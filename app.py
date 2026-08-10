@@ -51,6 +51,7 @@ except ImportError:
 
 import gap_scan
 import kite_orders
+import telegram_notify
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
@@ -2002,10 +2003,12 @@ def gap_orders_enter():
     try:
         scan_result = gap_scan.scan_gap_signals(DATA_DIR, get_scan_symbols(), scan_date, settings)
     except Exception as e:
+        telegram_notify.notify_error("enter/scan", f"Scan failed for {scan_date}: {e}")
         return cors_response({"error": f"scan failed: {e}"}, 500)
 
     selected = scan_result["selected"]
     if not selected:
+        telegram_notify.notify_entry_results(scan_date, "n/a", [])
         return cors_response({"scanDate": scan_date, "msg": "No qualifying signal today", "results": []})
 
     # Fail-safe default: an unset/missing tradingMode trades paper, never live.
@@ -2023,6 +2026,7 @@ def gap_orders_enter():
         results.append(res)
         print(f"[gap-orders/enter] ({mode}) {signal['sym']}: {res}")
 
+    telegram_notify.notify_entry_results(scan_date, mode, results)
     push_positions_to_github()
     return cors_response({"scanDate": scan_date, "mode": mode, "results": results})
 
@@ -2038,12 +2042,30 @@ def gap_orders_exit():
 
     kite = get_kite_client()
     if kite is None:
+        telegram_notify.notify_error("exit", "Not logged in — visit /kite/login before market close")
         return cors_response({"error": "not_logged_in — visit /kite/login first"}, 401)
 
     results = kite_orders.close_open_positions(kite, DATA_DIR)
     print(f"[gap-orders/exit] {results}")
+    telegram_notify.notify_exit_results(results)
     push_positions_to_github()
     return cors_response({"results": results})
+
+
+@app.route("/gap-orders/daily-digest", methods=["POST", "OPTIONS"])
+def gap_orders_daily_digest():
+    """
+    Sends the once-a-day Telegram summary — meant for a separate
+    cron-job.org trigger timed AFTER both /gap-orders/enter and
+    /gap-orders/exit have run (e.g. 3:45 PM IST), so it reflects today's
+    completed activity rather than a snapshot mid-run.
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    positions = kite_orders.load_positions(DATA_DIR)
+    digest = telegram_notify.build_daily_digest(positions)
+    sent = telegram_notify.send_telegram(digest)
+    return cors_response({"sent": sent, "digest": digest})
 
 
 @app.route("/gap-orders/backfill-paper", methods=["POST", "OPTIONS"])

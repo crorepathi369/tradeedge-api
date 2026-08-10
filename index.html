@@ -4091,7 +4091,7 @@ function renderTTStockwise() {
   const symRows = _ttStockwiseRows(rows);
   tbody.innerHTML = symRows.map(r => {
     const wrCls = r.wr >= 60 ? '' : r.wr >= 45 ? 'mid' : 'low';
-    return `<tr>
+    return `<tr onclick="openTTSymTrades('${r.sym}')" style="cursor:pointer;">
       <td><b>${r.sym}</b></td>
       <td>${r.trades}</td>
       <td>${r.wins}</td>
@@ -4164,7 +4164,7 @@ function renderMobTtStockwise() {
     return;
   }
   inner.innerHTML = symRows.map(r => `
-    <div class="signal-card" style="margin:0 12px 8px;padding:10px 14px;">
+    <div class="signal-card" style="margin:0 12px 8px;padding:10px 14px;cursor:pointer;" onclick="openTTSymTrades('${r.sym}')">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">${r.sym}</span>
         <span class="mini-badge ${r.bestDir === 'LONG' ? 'gap-up' : 'gap-down'}">${r.bestDir}</span>
@@ -4177,6 +4177,44 @@ function renderMobTtStockwise() {
       </div>
     </div>`).join('');
 }
+
+// ── Auto Trades — Stockwise drill: all trades for one symbol, newest first ──
+function openTTSymTrades(sym) {
+  const trades = _ttFilteredSorted()
+    .filter(r => r.sym === sym)
+    .sort((a, b) => (b.entry_date || '').localeCompare(a.entry_date || ''));
+
+  document.getElementById('ttSymTradesTitle').textContent = sym;
+  document.getElementById('ttSymTradesBody').innerHTML = trades.length
+    ? trades.map(r => `
+      <div class="signal-card" style="margin:0 0 8px;padding:12px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span class="mini-badge ${r.direction === 'LONG' ? 'gap-up' : 'gap-down'}">${r.direction === 'LONG' ? '▲' : '▼'} ${r.direction}</span>
+          ${_ttStatusBadge(r.status, r.mode, r.backfilled)}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-family:'DM Mono',monospace;font-size:11px;">
+          <div><div style="font-size:8.5px;text-transform:uppercase;color:var(--text3);margin-bottom:2px;">Entry</div>
+            <div style="font-weight:600;">${r.entry_price != null ? r.entry_price.toFixed(2) : '—'}</div>
+            <div style="font-size:9px;color:var(--text3);">${r.entry_date || '—'}</div></div>
+          <div><div style="font-size:8.5px;text-transform:uppercase;color:var(--text3);margin-bottom:2px;">Exit</div>
+            <div style="font-weight:600;">${r.exit_price != null ? r.exit_price.toFixed(2) : '—'}</div>
+            <div style="font-size:9px;color:var(--text3);">${r.exit_date || '—'}</div></div>
+          <div><div style="font-size:8.5px;text-transform:uppercase;color:var(--text3);margin-bottom:2px;">P&amp;L</div>
+            <div style="font-weight:700;color:${r.pnl_pct != null ? _pnlColor(r.pnl_pct) : 'var(--text3)'};">${r.pnl_pct != null ? _pnlSign(r.pnl_pct) + r.pnl_pct.toFixed(2) + '%' : (r.status === 'open' ? 'unrealized' : '—')}</div>
+            <div style="font-size:9px;color:${r.pnl_amount != null ? _pnlColor(r.pnl_amount) : 'var(--text3)'};">${r.pnl_amount != null ? _pnlSign(r.pnl_amount) + '₹' + Math.abs(r.pnl_amount).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : ''}</div></div>
+        </div>
+      </div>`).join('')
+    : `<div style="text-align:center;padding:24px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">No trades found for ${sym}</div>`;
+
+  document.getElementById('ttSymTradesModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTTSymTrades() {
+  document.getElementById('ttSymTradesModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
 
 function renderMobLiveTrades() {
   const statsEl = document.getElementById('mobTtStats');
@@ -11756,6 +11794,21 @@ loadSavedDefaults();
     <div id="mobMonthDayBody"></div>
   </div>
 </div>
+
+<!-- Auto Trades Stockwise — tap a symbol card/row to see all its trades, newest first -->
+<div id="ttSymTradesModal" style="display:none;position:fixed;inset:0;z-index:1300;background:rgba(0,0,0,0.45);
+  align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeTTSymTrades()">
+  <div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-height:80vh;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px;">
+      <div id="ttSymTradesTitle" style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;"></div>
+      <button onclick="closeTTSymTrades()" style="background:none;border:none;font-size:18px;color:var(--text2);
+        cursor:pointer;padding:6px 10px;">✕</button>
+    </div>
+    <div id="ttSymTradesBody" style="padding:0 12px 16px;"></div>
+  </div>
+</div>
+
 
 <!-- Mobile App Shell -->
 <div id="mobileShell" style="display:none;">
