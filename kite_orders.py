@@ -335,52 +335,102 @@ def _paper_entry_price(kite, tradingsymbol: str) -> float | None:
         return None
 
 
-def _paper_check_sl_and_exit(kite, tradingsymbol: str, direction: str, sl_price: float) -> tuple[float, str, bool, str]:
+def _paper_check_exit(kite, tradingsymbol: str, direction: str, entry_price: float | None,
+                       sl_price: float, tp_type: str, tp_price: float | None,
+                       days_held: int, hold_days: int) -> tuple[float, str, bool, bool, str]:
     """
-    Simulates what a real GTT would have done, using real market data
-    instead of a live order. Only ever checks the exit-check day (today) —
-    NOT the entry day's own range. The entry itself happens at ~3:15 PM,
-    right near the close that sl_price is computed FROM, so checking that
-    same day's full daily low/high against it is comparing the SL to price
-    action that happened mostly BEFORE the position existed — it isn't an
-    approximation of real exposure, it's simply wrong, and would flag SL
-    hits constantly on any day with normal intraday range. The real
-    backtest engine (backtest_overnight()) never checks the entry day's
-    own range either — only "tomorrow" — and this now matches that:
+    Simulates one day's exit check for a paper position, dispatching on
+    tp_type EXACTLY like backtest_overnight() does — so live/paper trading
+    always matches whatever the preset that placed this trade backtests as,
+    whether that's a 1-day D2 Close/Open exit or a multi-day %-TP hold with
+    its own Hold Days budget. Nothing here is hardcoded per preset name;
+    behaviour is driven purely by tp_type/tp_price/hold_days as stored on
+    the trade record at entry time (see place_entry_order()) — change a
+    preset's TP settings later and this automatically follows.
 
-      1. Exit-check day (today): did the LIVE so-far high/low (kite.ohlc()
-         — a free real-time call, no Historical API needed) cross sl_price?
-      2. Not hit: exits at today's current LTP, same as a real EOD close
-         would.
+    Called once per day by close_open_positions() (which runs daily via
+    /gap-orders/exit), for as long as the position stays open. Only ever
+    checks TODAY's range so far (kite.ohlc(), no Historical API needed) —
+    NEVER the entry day's own range, for the same reason as before: the
+    entry happens near the close that sl_price/tp_price are computed from,
+    so checking that same day's range would compare against price action
+    from before the position existed.
 
-    Returns (exit_price, exit_date, sl_hit, note). Never raises — on any
-    data-fetch failure, falls through to "exit at current LTP" rather than
-    leaving a paper position stuck open forever.
+    Returns (exit_price, exit_date, closed, sl_hit, note).
+    closed=False means: neither SL nor TP hit today, and there's still
+    Hold Days budget left — caller should leave the position open and bump
+    its days_held counter by 1 (this is the ONLY state this function
+    doesn't mutate itself — it's a pure day-check, the caller owns saving).
+    Never raises — any data-fetch failure resolves the position at the
+    current LTP (closed=True) rather than leaving it stuck open forever.
     """
     today_str = date.today().isoformat()
+    hold = max(1, hold_days or 1)
+    is_last_day = (days_held + 1) >= hold
+    day_label = f"day {days_held + 1}"
 
-    def _hit(low, high):
+    def _sl_hit_range(low, high):
         return (low <= sl_price) if direction == "LONG" else (high >= sl_price)
 
     try:
         ohlc = kite.ohlc(f"NFO:{tradingsymbol}")[f"NFO:{tradingsymbol}"]["ohlc"]
-        if _hit(ohlc["low"], ohlc["high"]):
-            return sl_price, today_str, True, "paper SL hit (exit-day range so far)"
     except Exception as e:
         print(f"[gap-orders/paper] ohlc failed for {tradingsymbol}: {e}")
+        ltp = _paper_entry_price(kite, tradingsymbol)
+        return (ltp, today_str, True, False, f"paper closed at LTP ({day_label}, ohlc unavailable)")
 
-    ltp = _paper_entry_price(kite, tradingsymbol)  # same LTP read, different purpose here
-    return (ltp, today_str, False, "paper closed at LTP (no SL cross detected)")
+    low, high, o = ohlc["low"], ohlc["high"], ohlc["open"]
+
+    if tp_type == "pct" and tp_price is not None:
+        # Gap-through SL at today's open, checked first — mirrors
+        # backtest_overnight()'s day-open SL check taking priority over TP.
+        open_past_sl = (o <= sl_price) if direction == "LONG" else (o >= sl_price)
+        if open_past_sl:
+            return (o, today_str, True, True, f"paper SL hit at open ({day_label})")
+        if _sl_hit_range(low, high):
+            return (sl_price, today_str, True, True, f"paper SL hit ({day_label})")
+        tp_hit = (high >= tp_price) if direction == "LONG" else (low <= tp_price)
+        if tp_hit:
+            return (tp_price, today_str, True, False, f"paper TP hit ({day_label})")
+        if is_last_day:
+            ltp = _paper_entry_price(kite, tradingsymbol)
+            return (ltp, today_str, True, False, f"paper hold expired, closed at LTP ({day_label})")
+        return (None, today_str, False, False, f"paper still open, no SL/TP hit ({day_label})")
+
+    if tp_type == "d2_open" and entry_price is not None:
+        moved_in_favour = (o > entry_price) if direction == "LONG" else (o < entry_price)
+        if moved_in_favour:
+            return (o, today_str, True, False, "paper TP hit at open (D2 Open)")
+        if _sl_hit_range(low, high):
+            return (sl_price, today_str, True, True, "paper SL hit (D2)")
+        ltp = _paper_entry_price(kite, tradingsymbol)
+        return (ltp, today_str, True, False, "paper closed at LTP (D2 Open miss)")
+
+    # Default: 'd2_close' — unchanged from the original single-day-only
+    # behaviour (hold is always effectively 1 for this tp_type).
+    if _sl_hit_range(low, high):
+        return (sl_price, today_str, True, True, "paper SL hit (exit-day range so far)")
+    ltp = _paper_entry_price(kite, tradingsymbol)
+    return (ltp, today_str, True, False, "paper closed at LTP (no SL cross detected)")
 
 
 def place_entry_order(kite, data_dir: Path, signal: dict, today: date,
                        sl_pct: float, sl_type: str = "pct", mode: str = "paper",
-                       *, preset: str) -> dict:
+                       *, preset: str, tp_type: str = "d2_close", tp_pct: float = 1.0,
+                       hold_days: int = 1) -> dict:
     """
     Enters `signal` (from gap_scan.scan_gap_signals' "selected" list) in
     the correct current/next-month future contract, tagged with `preset`
     (required — every entry now belongs to a named preset, see
     gap_presets.json / "Include in Automated Trades").
+
+    tp_type/tp_pct/hold_days come from the preset's own params (same as
+    sl_pct/sl_type) and are stored on the trade record so
+    close_open_positions() knows how to exit it later — d2_close (default)
+    and d2_open both resolve on the very next trading day regardless of
+    hold_days; tp_type='pct' holds for up to hold_days days, checking both
+    SL and a %-TP target each day, exactly mirroring how
+    backtest_overnight() simulates the same preset. See _paper_check_exit().
 
     mode='live' places a real market order + a real GTT stop-loss, exactly
     as before. mode='paper' (the default — fail-safe, never assume live)
@@ -424,12 +474,14 @@ def place_entry_order(kite, data_dir: Path, signal: dict, today: date,
         existing = _last_trade(load_positions(data_dir), symbol, preset=preset)
         if existing and existing.get("status") == "open":
             return {"ok": False, "error": f"[{preset}] {symbol} already has an open position from {existing.get('entry_date')} — skipping"}
-        return _place_entry_order_locked(kite, data_dir, signal, today, sl_pct, sl_type, mode, preset, symbol, side)
+        return _place_entry_order_locked(kite, data_dir, signal, today, sl_pct, sl_type, mode, preset,
+                                          symbol, side, tp_type, tp_pct, hold_days)
 
 
 def _place_entry_order_locked(kite, data_dir: Path, signal: dict, today: date,
                                sl_pct: float, sl_type: str, mode: str, preset: str,
-                               symbol: str, side: str) -> dict:
+                               symbol: str, side: str, tp_type: str, tp_pct: float,
+                               hold_days: int) -> dict:
     """Body of place_entry_order() that runs under _positions_lock — split out
     only so the guard check above reads cleanly; not meant to be called directly."""
     expiry = resolve_expiry(today)
@@ -476,6 +528,15 @@ def _place_entry_order_locked(kite, data_dir: Path, signal: dict, today: date,
         print(f"[gap-orders] {symbol}: could not read back {'fill' if mode == 'live' else 'LTP'} price "
               f"— SL falls back to signal slLevel {sl_price}")
 
+    # TP target for the multi-day %-TP hold path — None for d2_close/d2_open
+    # (those resolve on the next trading day regardless of a price target) or
+    # when fill_price couldn't be confirmed (same fallback reasoning as SL).
+    tp_price = None
+    if tp_type == "pct" and fill_price:
+        tp_price = (fill_price * (1 + tp_pct / 100) if side == "LONG"
+                    else fill_price * (1 - tp_pct / 100))
+        tp_price = round(tp_price, 2)
+
     # GTT stop-loss — only for real trades. A paper position's "GTT" is
     # just the sl_price value checked day-by-day in close_open_positions().
     gtt_id = None
@@ -510,6 +571,8 @@ def _place_entry_order_locked(kite, data_dir: Path, signal: dict, today: date,
         "signal_slLevel": signal["slLevel"],  # cash-market reference, for comparison
         "sl_price": sl_price,
         "sl_price_source": sl_price_source,
+        "tp_type": tp_type, "tp_pct": tp_pct, "tp_price": tp_price,
+        "hold_days": max(1, hold_days or 1), "days_held": 0,
         "gtt_id": gtt_id, "status": "open",
     }
     positions.setdefault(symbol, []).append(new_trade)
@@ -577,10 +640,13 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
     to its own stored mode — 'live' positions check Kite's real position
     book and place a real exit order if the GTT hasn't already closed it;
     'paper' positions get checked against real market data via
-    _paper_check_sl_and_exit() instead, no real orders anywhere. Mode is
-    read per-position, not passed in globally, so a Paper→Live toggle
-    mid-flight never changes how an already-open paper position gets
-    closed. Also sweeps for any already-closed trade still missing its
+    _paper_check_exit() instead, no real orders anywhere — including
+    multi-day Hold Days + %-TP positions, which stay open (days_held
+    bumped) across as many daily runs of this function as their preset's
+    Hold Days budget allows. Mode is read per-position, not passed in
+    globally, so a Paper→Live toggle mid-flight never changes how an
+    already-open paper position gets closed. Also sweeps for any
+    already-closed trade still missing its
     exit_price (see _reconcile_missing_exit_prices()) before processing
     today's closes. Returns a list of per-symbol result dicts (reconciled
     ones first). Called by the next-day 3:15 PM job.
@@ -652,8 +718,23 @@ def _close_open_positions_locked(kite, data_dir: Path, positions: dict, reconcil
         exit_txn_type = kite.TRANSACTION_TYPE_SELL if pos["direction"] == "LONG" else kite.TRANSACTION_TYPE_BUY
 
         if mode == "paper":
-            exit_price, exit_date, sl_hit, note = _paper_check_sl_and_exit(
-                kite, pos["tradingsymbol"], pos["direction"], pos["sl_price"])
+            # Fields default for trade records placed before this multi-day-hold
+            # support existed — those are all effectively 'd2_close', hold=1,
+            # so defaulting reproduces their exact original single-day behaviour.
+            tp_type   = pos.get("tp_type", "d2_close")
+            tp_price  = pos.get("tp_price")
+            hold_days = pos.get("hold_days", 1)
+            days_held = pos.get("days_held", 0)
+            exit_price, exit_date, closed, sl_hit, note = _paper_check_exit(
+                kite, pos["tradingsymbol"], pos["direction"], pos.get("entry_price"),
+                pos["sl_price"], tp_type, tp_price, days_held, hold_days)
+            if not closed:
+                # Still within its Hold Days budget, neither SL nor TP hit
+                # today — leave it open, just remember another day passed.
+                # save_positions() at the end of this function persists it.
+                pos["days_held"] = days_held + 1
+                results.append({"sym": symbol, "preset": preset, "ok": True, "action": note, "exit_price": None})
+                continue
             pnl_pct, pnl_amount = _compute_pnl(pos["direction"], pos.get("entry_price"), exit_price, pos["lot_size"])
             pos["status"] = "closed_by_sl" if sl_hit else "closed_eod"
             pos["exit_price"] = exit_price
@@ -720,22 +801,97 @@ def _already_backfilled(positions: dict, symbol: str, entry_date: str, preset: s
                for t in positions.get(symbol, []))
 
 
+def _resolve_backfill_exit(kite, token: int, tradingsymbol: str, side: str,
+                            entry_price: float, sl_price: float, tp_type: str,
+                            tp_price: float | None, exit_check_dates: list[date]) -> tuple[str, float | None, str | None, int]:
+    """
+    Walks exit_check_dates (ascending, already trimmed by the caller to at
+    most Hold Days entries) one historical daily candle at a time — this is
+    the backfill equivalent of _paper_check_exit(), mirroring
+    backtest_overnight()'s own day-by-day resolution exactly, since here
+    (unlike the live daily check) the full future date range is already
+    known up front. d2_close/d2_open only ever get ONE date in
+    exit_check_dates (their hold is always 1 day), so this naturally
+    reduces to the original single-day check for those — no behaviour
+    change for Oneday-Setup/High-Conviction-Only-style presets.
+
+    Returns (status, exit_price, exit_date_str, days_checked):
+      status: "open" (ran out of dates, or the list was empty — the regular
+        /gap-orders/exit → close_open_positions() path finishes it later,
+        continuing from days_checked), "closed_by_sl", or "closed_eod"
+        (used for a TP win too — there's no separate "closed_by_tp" status
+        anywhere in this app, so a TP close is just a closed_eod win).
+      days_checked: how many dates were actually resolved (candle fetched,
+        neither SL nor TP hit) before stopping — the caller stores this as
+        the new trade's days_held so close_open_positions() picks up
+        counting from the right place instead of restarting at 0.
+    """
+    def _sl_hit_range(low, high):
+        return (low <= sl_price) if side == "LONG" else (high >= sl_price)
+
+    days_checked = 0
+    for h, check_date in enumerate(exit_check_dates, start=1):
+        date_str = check_date.isoformat()
+        try:
+            candles = kite.historical_data(token, date_str, date_str, "day", continuous=True)
+        except Exception as e:
+            print(f"[gap-orders/backfill] historical_data failed for {tradingsymbol} on {date_str}: {e}")
+            candles = []
+        if not candles:
+            break  # missing data for this date — stop here, leave open at days_checked
+        c = candles[0]
+        is_last = (h == len(exit_check_dates))
+
+        if tp_type == "pct" and tp_price is not None:
+            open_past_sl = (c["open"] <= sl_price) if side == "LONG" else (c["open"] >= sl_price)
+            if open_past_sl:
+                return "closed_by_sl", c["open"], date_str, days_checked
+            if _sl_hit_range(c["low"], c["high"]):
+                return "closed_by_sl", sl_price, date_str, days_checked
+            tp_hit = (c["high"] >= tp_price) if side == "LONG" else (c["low"] <= tp_price)
+            if tp_hit:
+                return "closed_eod", tp_price, date_str, days_checked
+            if is_last:
+                return "closed_eod", c["close"], date_str, days_checked
+            days_checked = h
+            continue
+
+        if tp_type == "d2_open":
+            moved_in_favour = (c["open"] > entry_price) if side == "LONG" else (c["open"] < entry_price)
+            if moved_in_favour:
+                return "closed_eod", c["open"], date_str, days_checked
+            if _sl_hit_range(c["low"], c["high"]):
+                return "closed_by_sl", sl_price, date_str, days_checked
+            return "closed_eod", c["close"], date_str, days_checked
+
+        # Default: 'd2_close' — original single-day behaviour, unchanged.
+        if _sl_hit_range(c["low"], c["high"]):
+            return "closed_by_sl", sl_price, date_str, days_checked
+        return "closed_eod", c["close"], date_str, days_checked
+
+    return "open", None, None, days_checked
+
+
 def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
-                          sl_pct: float, sl_type: str, exit_check_date: date | None,
-                          *, preset: str) -> dict:
+                          sl_pct: float, sl_type: str, exit_check_dates: list[date],
+                          *, preset: str, tp_type: str = "d2_close", tp_pct: float = 1.0,
+                          hold_days: int = 1) -> dict:
     """
     Creates one backfilled paper trade for a past `signal` (from
     gap_scan.scan_gap_signals' "selected" list for that historical date).
 
     entry_date: the historical signal day being backfilled.
-    exit_check_date: the next date in the caller's own backfill date
-    sequence — not a naive +1 calendar day, so it always lines up with an
-    actual trading day the caller already knows has data. If None (this is
-    the most recent date in the backfill window, with no "next day" data
-    available yet), the trade is left status='open' and un-exited — the
-    regular /gap-orders/exit → close_open_positions() paper path finishes
-    it correctly the next time it runs, exactly as it would for a same-day
-    live paper entry (kite.ohlc() covers "today" either way).
+    exit_check_dates: the next dates (ascending) in the caller's own
+    backfill date sequence — not naive +1-calendar-day, so they always line
+    up with actual trading days the caller already knows have data. Length
+    should be at most hold_days (the caller trims it); d2_close/d2_open
+    presets only ever need one date since their hold is always 1 day. If
+    empty (this is at/near the most recent date in the backfill window,
+    with no "next day" data available yet), the trade is left status='open'
+    and un-exited — the regular /gap-orders/exit → close_open_positions()
+    paper path finishes it correctly the next time it runs, exactly as it
+    would for a same-day live paper entry (kite.ohlc() covers "today"
+    either way). See _resolve_backfill_exit() for the day-by-day walk.
 
     Expired contracts are flushed from kite.instruments("NFO") the moment
     they expire — the exchange doesn't keep old instrument_tokens resolvable
@@ -772,14 +928,14 @@ def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
         if _already_backfilled(positions, symbol, entry_date_str, preset):
             return {"ok": False, "error": f"[{preset}] {symbol} {entry_date_str} already backfilled — skipping"}
         return _backfill_paper_trade_locked(
-            kite, data_dir, signal, entry_date, sl_pct, sl_type, exit_check_date,
-            preset, symbol, side, entry_date_str, positions)
+            kite, data_dir, signal, entry_date, sl_pct, sl_type, exit_check_dates,
+            preset, symbol, side, entry_date_str, positions, tp_type, tp_pct, hold_days)
 
 
 def _backfill_paper_trade_locked(kite, data_dir: Path, signal: dict, entry_date: date,
-                                  sl_pct: float, sl_type: str, exit_check_date: date | None,
+                                  sl_pct: float, sl_type: str, exit_check_dates: list[date],
                                   preset: str, symbol: str, side: str, entry_date_str: str,
-                                  positions: dict) -> dict:
+                                  positions: dict, tp_type: str, tp_pct: float, hold_days: int) -> dict:
     """Body of backfill_paper_trade() that runs under _positions_lock; not
     meant to be called directly."""
     live_inst = find_future_instrument(kite, symbol, resolve_expiry(date.today()))
@@ -802,7 +958,7 @@ def _backfill_paper_trade_locked(kite, data_dir: Path, signal: dict, entry_date:
 
     # Entry fill = entry day's close, same close sl_price is measured from —
     # only used here to get that price, NOT to check for an SL cross. See
-    # _paper_check_sl_and_exit()'s docstring: checking the entry day's own
+    # _paper_check_exit()'s docstring: checking the entry day's own
     # range against an SL computed from that same day's close compares the
     # SL to price action that happened mostly before the position existed
     # (entry is ~3:15 PM), and would flag false hits on any normal-range day.
@@ -818,21 +974,14 @@ def _backfill_paper_trade_locked(kite, data_dir: Path, signal: dict, entry_date:
                     else fill_price * (1 + sl_pct / 100))
     sl_price = round(sl_price, 2)
 
-    def _hit(low, high):
-        return (low <= sl_price) if side == "LONG" else (high >= sl_price)
+    tp_price = None
+    if tp_type == "pct" and fill_price:
+        tp_price = (fill_price * (1 + tp_pct / 100) if side == "LONG"
+                    else fill_price * (1 - tp_pct / 100))
+        tp_price = round(tp_price, 2)
 
-    status, exit_price, exit_date_str = "open", None, None
-    if exit_check_date is not None:
-        exit_date_str = exit_check_date.isoformat()
-        try:
-            exit_candles = kite.historical_data(token, exit_date_str, exit_date_str, "day", continuous=True)
-        except Exception as e:
-            exit_candles = []
-            print(f"[gap-orders/backfill] historical_data failed for {tradingsymbol} on {exit_date_str}: {e}")
-        if exit_candles:
-            ec = exit_candles[0]
-            status, exit_price = ("closed_by_sl", sl_price) if _hit(ec["low"], ec["high"]) else ("closed_eod", ec["close"])
-        # else: no data for the next date either — leave open rather than guess
+    status, exit_price, exit_date_str, days_checked = _resolve_backfill_exit(
+        kite, token, tradingsymbol, side, fill_price, sl_price, tp_type, tp_price, exit_check_dates)
 
     pnl_pct, pnl_amount = (None, None) if status == "open" else _compute_pnl(side, fill_price, exit_price, lot_size)
 
@@ -844,6 +993,13 @@ def _backfill_paper_trade_locked(kite, data_dir: Path, signal: dict, entry_date:
         "entry_price": fill_price,
         "signal_entry": signal["entry"], "signal_slLevel": signal["slLevel"],
         "sl_price": sl_price, "sl_price_source": "paper_simulated_fill",
+        "tp_type": tp_type, "tp_pct": tp_pct, "tp_price": tp_price,
+        "hold_days": max(1, hold_days or 1),
+        # days_checked from _resolve_backfill_exit — for a still-open trade,
+        # this is how many days were already resolved during backfill, so
+        # close_open_positions() continues counting from here rather than
+        # restarting at 0 (which would let it hold longer than hold_days).
+        "days_held": days_checked,
         "gtt_id": None, "status": status,
     }
     if status != "open":

@@ -2348,6 +2348,8 @@ def gap_orders_enter():
                 kite, DATA_DIR, signal, today,
                 sl_pct=params["slPct"], sl_type=params.get("slType", "pct"),
                 mode="paper", preset=preset_name,
+                tp_type=params.get("tpType", "d2_close"), tp_pct=params.get("tpPct", 1.0),
+                hold_days=params.get("holdDays", 1),
             )
             res["sym"] = signal["sym"]
             res["preset"] = preset_name
@@ -2415,17 +2417,21 @@ def gap_orders_backfill_paper():
     dates actually have CSV data — same universe as the live scan), runs
     the exact same gap_scan.scan_gap_signals() the live automation would
     have, then backfills each selected signal via
-    kite_orders.backfill_paper_trade(), checking for an SL cross against
-    the NEXT trading day (not a naive +1 calendar day, and NOT the entry
-    day's own range, which would wrongly compare the SL to price action
-    from before the position existed). Critically, "next trading day" is
-    looked up against the FULL date history on disk, not just the dates
-    inside this one request's window — otherwise the last day of every
-    chunk would wrongly look like "no next day yet" and get left open,
-    even though the real next day's data already exists in an adjacent
-    chunk. Only the actual most-recent date in the whole backfillable
-    history has no next day, and that one is correctly left open for the
-    regular /gap-orders/exit job to finish naturally.
+    kite_orders.backfill_paper_trade(), passing up to `holdDays` future
+    trading dates (not naive +N calendar days, and NOT the entry day's own
+    range, which would wrongly compare the SL/TP to price action from
+    before the position existed) for it to walk day-by-day — a single date
+    for d2_close/d2_open presets (hold is always 1 day), several for a
+    %-TP preset with holdDays>1, mirroring exactly how the live automation
+    now resolves the same preset's multi-day hold. Critically, those future
+    dates are looked up against the FULL date history on disk, not just the
+    dates inside this one request's window — otherwise the last day(s) of
+    every chunk would wrongly look like "no more data yet" and get left
+    open, even though the real next day's data already exists in an
+    adjacent chunk. Only dates genuinely at/near the end of the whole
+    backfillable history run out of lookahead, and those are correctly
+    left open (partway through, if some days were already resolved) for
+    the regular /gap-orders/exit job to finish naturally.
 
     kite_orders.backfill_paper_trade() saves after every individual trade,
     not just at the end, and skips (symbol, date, preset) triples already
@@ -2492,15 +2498,23 @@ def gap_orders_backfill_paper():
             continue
 
         idx = all_dates.index(scan_date)
-        next_date_str = all_dates[idx + 1] if idx + 1 < len(all_dates) else None
-        next_date = datetime.strptime(next_date_str, "%Y-%m-%d").date() if next_date_str else None
+        # Up to hold_days future trading dates (naturally truncated near the
+        # end of the available history) — d2_close/d2_open presets only ever
+        # need one, since their hold is always 1 day; a %-TP preset with
+        # holdDays=3 gets up to 3, so backfill_paper_trade() can walk the
+        # same multi-day SL/TP resolution the live automation now does.
+        hold_days_for_backfill = max(1, params.get("holdDays", 1) or 1)
+        exit_check_date_strs = all_dates[idx + 1: idx + 1 + hold_days_for_backfill]
+        exit_check_dates = [datetime.strptime(d, "%Y-%m-%d").date() for d in exit_check_date_strs]
         entry_date = datetime.strptime(scan_date, "%Y-%m-%d").date()
 
         for signal in scan_result["selected"]:
             res = kite_orders.backfill_paper_trade(
                 kite, DATA_DIR, signal, entry_date,
                 sl_pct=params["slPct"], sl_type=params.get("slType", "pct"),
-                exit_check_date=next_date, preset=preset_name,
+                exit_check_dates=exit_check_dates, preset=preset_name,
+                tp_type=params.get("tpType", "d2_close"), tp_pct=params.get("tpPct", 1.0),
+                hold_days=hold_days_for_backfill,
             )
             res["date"] = scan_date
             res["sym"] = signal["sym"]
