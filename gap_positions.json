@@ -4283,6 +4283,32 @@
       "exit_date": "2025-08-25",
       "pnl_pct": 4.95,
       "pnl_amount": 25016.25
+    },
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2025-08-26",
+      "entry_order_id": null,
+      "tradingsymbol": "IDEA25SEPFUT",
+      "lot_size": 71475,
+      "entry_price": 6.71,
+      "signal_entry": 6.71,
+      "signal_slLevel": 6.91,
+      "sl_price": 6.91,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 6.57,
+      "exit_date": "2025-08-28",
+      "pnl_pct": 2.09,
+      "pnl_amount": 10006.5
     }
   ],
   "OBEROIRLTY": [
@@ -4912,6 +4938,32 @@
       "exit_date": "2026-06-16",
       "pnl_pct": 1.58,
       "pnl_amount": 16312.5
+    },
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-18",
+      "entry_order_id": null,
+      "tradingsymbol": "CHOLAFIN25AUGFUT",
+      "lot_size": 625,
+      "entry_price": 1527.4,
+      "signal_entry": 1521.46,
+      "signal_slLevel": 1475.82,
+      "sl_price": 1481.58,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1528,
+      "exit_date": "2025-08-19",
+      "pnl_pct": 0.04,
+      "pnl_amount": 375.0
     }
   ],
   "MPHASIS": [
@@ -6748,6 +6800,34 @@
       "exit_date": "2026-02-04",
       "pnl_pct": 2.21,
       "pnl_amount": 11780.0
+    }
+  ],
+  "COLPAL": [
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-18",
+      "entry_order_id": null,
+      "tradingsymbol": "COLPAL25AUGFUT",
+      "lot_size": 275,
+      "entry_price": 2227,
+      "signal_entry": 2175.55,
+      "signal_slLevel": 2110.28,
+      "sl_price": 2160.19,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2276.3,
+      "exit_date": "2025-08-19",
+      "pnl_pct": 2.21,
+      "pnl_amount": 13557.5
     }
   ]
 }
