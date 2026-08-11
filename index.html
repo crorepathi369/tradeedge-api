@@ -537,6 +537,7 @@
     font-family: 'Syne', sans-serif;
     font-weight: 600;
     font-size: 13px;
+    line-height: 1;
     cursor: pointer;
     border: none;
     transition: all .15s;
@@ -2537,7 +2538,7 @@
     <!-- OVERNIGHT PARAMS -->
     <div id="overnightParams">
       <!-- Row 1: dates + gap params + SL + TP -->
-      <div class="controls-grid" style="grid-template-columns:140px 140px 1px 80px 80px 1px 190px 70px 1px 170px 70px;align-items:end;gap:12px;margin-bottom:0;">
+      <div class="controls-grid" style="grid-template-columns:140px 140px 1px 80px 80px 1px 190px 70px 1px 170px 70px 90px;align-items:end;gap:12px;margin-bottom:0;">
         <div class="control-group"><label>From Date</label><input type="date" id="fromDate"></div>
         <div class="control-group"><label>To Date</label><input type="date" id="toDate"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
@@ -2565,22 +2566,6 @@
         </div>
         <div class="control-group" id="tpPctGrp" style="display:none"><label>TP %</label><input type="number" id="tpPct" value="1.0" step="0.1" min="0.1" max="20"></div>
         <div class="control-group" id="holdDaysGrp" style="display:none"><label title="Hold up to N days for TP/SL to trigger. Exit at EOD of last day if neither hit. Only applies when TP = Fixed %.">Hold Days</label><input type="number" id="holdDays" value="1" step="1" min="1" max="20" title="Max days to hold waiting for TP or SL. Exit at close of last day if neither hit."></div>
-      </div>
-
-      <!-- Trading mode — controls whether /gap-orders/enter places real orders or simulates
-           them against real market data. Defaults to Paper; kept visually distinct given the
-           stakes of getting this wrong. -->
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span style="font-size:11px;font-weight:600;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.4px;">Gap Automation Mode</span>
-        <div style="display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;">
-          <button id="tmPaper" onclick="setTradingMode('paper')" class="dir-btn active"
-            style="padding:6px 14px;">🧪 Paper</button>
-          <button id="tmLive" onclick="setTradingMode('live')" class="dir-btn"
-            style="padding:6px 14px;color:var(--bear);">🔴 Live</button>
-        </div>
-        <span id="tmWarning" style="display:none;font-family:'DM Mono',monospace;font-size:11px;color:var(--bear);font-weight:600;">
-          ⚠ Live mode places real orders with real money on every entry/exit.
-        </span>
       </div>
     </div>
 
@@ -2717,6 +2702,19 @@
           <input type="checkbox" id="overnightAutomateToggle" disabled onchange="toggleIncludeInAutomation(this.checked)" style="cursor:pointer;">
           🤖 Automate
         </label>
+        <div style="width:1px;height:24px;background:var(--border);"></div>
+        <!-- Trading mode — controls whether /gap-orders/enter places real orders or
+             simulates them against real market data. No label text (saves a row);
+             Paper stays the fail-safe default either way. -->
+        <div style="display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;" title="Gap Automation Mode">
+          <button id="tmPaper" onclick="setTradingMode('paper')" class="dir-btn active"
+            style="padding:6px 14px;">🧪 Paper</button>
+          <button id="tmLive" onclick="setTradingMode('live')" class="dir-btn"
+            style="padding:6px 14px;color:var(--bear);">🔴 Live</button>
+        </div>
+        <span id="tmWarning" style="display:none;font-family:'DM Mono',monospace;font-size:11px;color:var(--bear);font-weight:600;white-space:nowrap;">
+          ⚠ Live places real orders with real money.
+        </span>
       </div>
     </div>
 
@@ -4414,6 +4412,7 @@ function renderMobLiveTrades() {
   _renderMobTtSubTabBar();
 
   const { open, winRate, netPnl, avgSlip } = _ttStats();
+  const { total, wins, losses, slHits } = _ttStatsExtended();
   statsEl.innerHTML = `
     <div class="mob-stat" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:70px;">
       <div style="font-family:'DM Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text3);">Open</div>
@@ -4430,6 +4429,11 @@ function renderMobLiveTrades() {
     <div class="mob-stat" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:76px;">
       <div style="font-family:'DM Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text3);">Slippage</div>
       <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;margin-top:2px;">${avgSlip == null ? '—' : (avgSlip >= 0 ? '+' : '') + avgSlip.toFixed(2) + '%'}</div>
+    </div>
+    <div class="mob-stat" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:92px;">
+      <div style="font-family:'DM Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text3);">Total Trades</div>
+      <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;margin-top:2px;">${total}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--text3);margin-top:1px;white-space:nowrap;">${wins.length}W · ${losses.length}L · ${slHits.length}SL</div>
     </div>
   `;
 
