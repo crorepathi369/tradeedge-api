@@ -516,18 +516,19 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
     if not positions:
         return reconciled
 
-    # Only the chronologically-last trade per symbol can ever be 'open' —
-    # place_entry_order() refuses a new entry while the last one is still
-    # open. "Last" here means sorted by entry_date via _last_trade(), NOT
-    # raw array position — backfilled trades can land out of append order
-    # (confirmed: BRITANNIA's list had 2026-08-07 appended BEFORE its own
-    # older 2026-05-08/2026-02-11 entries), and pl[-1] alone would silently
-    # grab an old closed trade instead of the genuinely open one.
-    open_items = {}
-    for s, pl in positions.items():
-        last = _last_trade(positions, s)
-        if last and last.get("status") == "open":
-            open_items[s] = last
+    # For the live entry flow, only the chronologically-last trade per
+    # symbol can ever be 'open' — place_entry_order() refuses a new entry
+    # while the last one is still open. But backfill_paper_trade() bypasses
+    # that guard and processes chunks newest-first, so a data gap on one
+    # historical exit-check date can leave an OLDER entry_date 'open' while
+    # a NEWER entry_date for the same symbol is already closed (confirmed:
+    # NATIONALUM26JUNFUT sat 'open' from 2026-06-25 while NATIONALUM26AUGFUT,
+    # entered 2026-08-03, was already closed_eod — _last_trade() alone would
+    # never surface the June one again). So sweep every trade with
+    # status=='open' across every symbol, not just the last one — a symbol
+    # can appear more than once here only via that backfill edge case; the
+    # live flow's one-open-position-per-symbol invariant still holds.
+    open_items = [(s, t) for s, pl in positions.items() for t in pl if t.get("status") == "open"]
     if not open_items:
         return reconciled
 
@@ -535,7 +536,7 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
     # entirely (and don't let its failure block paper closes) if there
     # are none open right now.
     live_positions = {}
-    if any(p.get("mode", "live") == "live" for p in open_items.values()):
+    if any(p.get("mode", "live") == "live" for _, p in open_items):
         try:
             live_positions = {p["tradingsymbol"]: p for p in kite.positions()["net"]}
         except Exception as e:
@@ -543,7 +544,7 @@ def close_open_positions(kite, data_dir: Path) -> list[dict]:
 
     today_str = date.today().isoformat()
     results = []
-    for symbol, pos in open_items.items():
+    for symbol, pos in open_items:
         mode = pos.get("mode", "live")  # positions entered before mode existed default to live
         exit_txn_type = kite.TRANSACTION_TYPE_SELL if pos["direction"] == "LONG" else kite.TRANSACTION_TYPE_BUY
 

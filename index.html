@@ -2043,7 +2043,7 @@
     .mob-trade-header span:nth-child(n+3) { text-align: right; }
 
     /* ── Trades sub-tab bar (pinned at bottom of Stats tab) ── */
-    #mobTradesSubTabBar {
+    #mobTradesSubTabBar, #mobTtSubTabBar {
       flex-shrink: 0;
       background: var(--bg);
       border-top: 1px solid var(--border);
@@ -11929,7 +11929,6 @@ loadSavedDefaults();
   <!-- Live Trades Tab content — real Kite-executed trades, sibling of mobScannerContent / mobTradesTab -->
   <div id="mobLiveTradesTab" style="display:none;flex-direction:column;min-height:0;flex:1;">
     <div id="mobTtStratHdr" style="padding:10px 12px 0;"></div>
-    <div id="mobTtSubTabBar" style="padding:0 12px 8px;"></div>
     <div id="mobTtGapControls">
       <div id="mobTtStats" style="display:flex;gap:8px;padding:10px 12px 4px;overflow-x:auto;"></div>
       <div style="display:flex;gap:6px;padding:8px 12px;">
@@ -11959,6 +11958,7 @@ loadSavedDefaults();
       </div>
     </div>
     <div id="mobTtInner" style="flex:1;overflow-y:auto;min-height:0;padding:4px 0 80px;-webkit-overflow-scrolling:touch;"></div>
+    <div id="mobTtSubTabBar"></div>
   </div>
 
   <!-- Bottom tab bar -->
