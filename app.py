@@ -102,7 +102,7 @@ def restore_data_from_github():
     files = [
         f["path"] for f in tree.get("tree", [])
         if f["type"] == "blob" and (
-            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json")
+            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json")
         )
     ]
     print(f"[restore] {len(files)} files in data branch")
@@ -1408,7 +1408,7 @@ def _do_pull_from_github():
     files = [
         f["path"] for f in tree.get("tree", [])
         if f["type"] == "blob" and (
-            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json")
+            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json")
         )
     ]
     _log(f"[pull] {len(files)} files found — downloading all (overwrite mode)")
@@ -1836,6 +1836,7 @@ def save_gap_settings():
             import json as _json
             _json.dump(body, f, indent=2)
         print(f"[gap-settings] Synced: {body}")
+        push_gap_settings_to_github()
         return cors_response({"ok": True, "msg": "Gap settings stored"})
     except Exception as e:
         return cors_response({"error": str(e)}, 500)
@@ -1868,6 +1869,66 @@ def get_gap_settings():
         return None
 
 
+def push_gap_settings_to_github():
+    """
+    Pushes gap_settings.json to the GitHub data branch — same PUT pattern as
+    push_positions_to_github()/push_gap_presets_to_github(). This is the live
+    Overnight Gap automation config (minGap/maxGap/slPct/tradingMode/etc, i.e.
+    whether entries are Paper or Live); without a backup, a Render redeploy
+    wipes it and get_gap_settings() returns None, silently breaking
+    /gap-orders/enter and /gap-scan ("no_gap_settings_synced") until someone
+    notices and hits Save again in the app. Called after every settings save
+    so GitHub is never more than one save behind. Best-effort — a push
+    failure here must never surface as a failure of the save that already
+    succeeded locally.
+    """
+    import urllib.request, urllib.error, json as _json, base64 as _b64
+
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    repo     = os.environ.get("GITHUB_REPO", "crorepathi369/tradeedge-api")
+    branch   = os.environ.get("GITHUB_DATA_BRANCH", "data")
+    if not gh_token:
+        print("[gap-settings] GITHUB_TOKEN not set — skipping gap_settings.json push")
+        return
+
+    path = GAP_SETTINGS_FILE
+    if not path.exists():
+        return
+
+    headers = {
+        "Authorization": f"token {gh_token}",
+        "Accept":        "application/vnd.github.v3+json",
+        "User-Agent":    "TradeEdge-App",
+        "Content-Type":  "application/json",
+    }
+    file_url = f"https://api.github.com/repos/{repo}/contents/gap_settings.json"
+    try:
+        content_b64 = _b64.b64encode(path.read_bytes()).decode()
+        sha = None
+        try:
+            get_req = urllib.request.Request(file_url + f"?ref={branch}", headers=headers)
+            meta = _json.loads(urllib.request.urlopen(get_req, timeout=10).read())
+            sha = meta.get("sha")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+
+        body = {
+            "message": f"gap_settings.json update {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            "content": content_b64,
+            "branch":  branch,
+        }
+        if sha:
+            body["sha"] = sha
+
+        put_req = urllib.request.Request(
+            file_url, data=_json.dumps(body).encode(), headers=headers, method="PUT")
+        urllib.request.urlopen(put_req, timeout=15)
+        print("[gap-settings] gap_settings.json pushed to GitHub")
+    except Exception as e:
+        print(f"[gap-settings] GitHub push failed for gap_settings.json: {e}")
+
+
 # ── Named Overnight Gap presets ──────────────────────────────────────────────
 # Separate from GAP_SETTINGS_FILE above: gap-settings is the single "live"
 # config the automation reads; gap-presets is a named library of parameter
@@ -1891,6 +1952,65 @@ def _save_gap_presets(presets):
     import json as _json
     with open(GAP_PRESETS_FILE, "w") as f:
         _json.dump(presets, f, indent=2)
+    push_gap_presets_to_github()
+
+
+def push_gap_presets_to_github():
+    """
+    Pushes gap_presets.json to the GitHub data branch — same PUT pattern as
+    push_positions_to_github() below. Without this, gap_presets.json only
+    ever lived in Render's local disk, which is wiped on every redeploy/dyno
+    restart (this is exactly what happened the first time: presets saved via
+    /gap-presets disappeared after the next deploy). Called after every
+    save/delete so GitHub is never more than one edit behind. Best-effort —
+    a push failure here must never surface as a failure of the save/delete
+    that already succeeded locally.
+    """
+    import urllib.request, urllib.error, json as _json, base64 as _b64
+
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    repo     = os.environ.get("GITHUB_REPO", "crorepathi369/tradeedge-api")
+    branch   = os.environ.get("GITHUB_DATA_BRANCH", "data")
+    if not gh_token:
+        print("[gap-presets] GITHUB_TOKEN not set — skipping gap_presets.json push")
+        return
+
+    path = GAP_PRESETS_FILE
+    if not path.exists():
+        return
+
+    headers = {
+        "Authorization": f"token {gh_token}",
+        "Accept":        "application/vnd.github.v3+json",
+        "User-Agent":    "TradeEdge-App",
+        "Content-Type":  "application/json",
+    }
+    file_url = f"https://api.github.com/repos/{repo}/contents/gap_presets.json"
+    try:
+        content_b64 = _b64.b64encode(path.read_bytes()).decode()
+        sha = None
+        try:
+            get_req = urllib.request.Request(file_url + f"?ref={branch}", headers=headers)
+            meta = _json.loads(urllib.request.urlopen(get_req, timeout=10).read())
+            sha = meta.get("sha")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+
+        body = {
+            "message": f"gap_presets.json update {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            "content": content_b64,
+            "branch":  branch,
+        }
+        if sha:
+            body["sha"] = sha
+
+        put_req = urllib.request.Request(
+            file_url, data=_json.dumps(body).encode(), headers=headers, method="PUT")
+        urllib.request.urlopen(put_req, timeout=15)
+        print("[gap-presets] gap_presets.json pushed to GitHub")
+    except Exception as e:
+        print(f"[gap-presets] GitHub push failed for gap_presets.json: {e}")
 
 
 @app.route("/gap-presets", methods=["GET", "OPTIONS"])
