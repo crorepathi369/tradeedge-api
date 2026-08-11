@@ -2713,6 +2713,10 @@
         </select>
         <button class="btn btn-secondary" onclick="saveOvernightPresetAs()" title="Save current parameters as a new named preset">💾 Save As…</button>
         <button class="btn btn-secondary" onclick="deleteOvernightPreset()" title="Delete the selected preset">🗑</button>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;cursor:pointer;white-space:nowrap;" title="When ON, this preset's entries/exits run automatically via the daily cron job (Paper mode only)">
+          <input type="checkbox" id="overnightAutomateToggle" disabled onchange="toggleIncludeInAutomation(this.checked)" style="cursor:pointer;">
+          🤖 Automate
+        </label>
       </div>
     </div>
 
@@ -3451,6 +3455,66 @@ function fetchGapPresetsFromServer() {
     .catch(e => console.warn('[GapPresets] Could not fetch from server, using local cache:', e));
 }
 
+// ── Which presets automate — server sync ────────────────────────────────────
+// Same cache-then-reconcile pattern as presets above. TE_GAP_AUTOMATION_ENABLED
+// is a local array cache of preset names currently flagged "Include in
+// Automated Trades"; /gap-automation-config is the server source of truth.
+function getEnabledAutomationPresets() {
+  try { return JSON.parse(localStorage.getItem('TE_GAP_AUTOMATION_ENABLED')) || []; }
+  catch(e) { console.warn('[GapAutomationConfig] parse error', e); return []; }
+}
+
+function _syncGapAutomationConfigToServer(names) {
+  fetch(`${TRADEEDGE_API_URL}/gap-automation-config`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ enabledPresets: names }),
+  }).then(r => r.json())
+    .then(j => console.log('[GapAutomationConfig] Synced to server:', j))
+    .catch(e => console.warn('[GapAutomationConfig] Could not sync to server:', e));
+}
+
+function fetchGapAutomationConfigFromServer() {
+  return fetch(`${TRADEEDGE_API_URL}/gap-automation-config`)
+    .then(r => r.json())
+    .then(cfg => {
+      if (cfg && Array.isArray(cfg.enabledPresets)) {
+        localStorage.setItem('TE_GAP_AUTOMATION_ENABLED', JSON.stringify(cfg.enabledPresets));
+        _refreshAutomateToggle(document.getElementById('overnightPresetSelect')?.value);
+      }
+    })
+    .catch(e => console.warn('[GapAutomationConfig] Could not fetch from server, using local cache:', e));
+}
+
+// Sets the desktop + mobile "🤖 Automate" checkboxes to reflect whichever
+// preset is currently selected — disabled (nothing to toggle) when the
+// dropdown is on the blank placeholder.
+function _refreshAutomateToggle(name) {
+  const enabled = name ? getEnabledAutomationPresets().includes(name) : false;
+  ['overnightAutomateToggle', 'mobOvernightAutomateToggle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.checked = enabled;
+    el.disabled = !name;
+  });
+}
+
+// Toggles the currently-selected preset's automation flag and syncs it.
+// selectId lets the mobile checkbox reuse this against its own dropdown.
+function toggleIncludeInAutomation(checked, selectId) {
+  const sel = document.getElementById(selectId || 'overnightPresetSelect');
+  const name = sel ? sel.value : '';
+  if (!name) return; // checkbox should be disabled in this case, but guard anyway
+  const names = getEnabledAutomationPresets();
+  const idx = names.indexOf(name);
+  if (checked && idx === -1) names.push(name);
+  if (!checked && idx !== -1) names.splice(idx, 1);
+  localStorage.setItem('TE_GAP_AUTOMATION_ENABLED', JSON.stringify(names));
+  _refreshAutomateToggle(name);
+  _syncGapAutomationConfigToServer(names);
+  _showSaveToast(`"${name}" ${checked ? 'added to' : 'removed from'} Automated Trades ✓`);
+}
+
 // ── Kite login — daily token authorization for the Gap automation ──────────
 // Access tokens expire every day (Zerodha platform constraint, no refresh
 // token) — this just opens the login flow in a new tab so it doesn't lose
@@ -3514,7 +3578,7 @@ document.addEventListener('DOMContentLoaded', refreshKiteLoginStatus);
 // Desktop table and mobile card list share the same fetch/filter/sort state.
 let _tradesTakenData   = [];
 let _tradesTakenSort   = { field: 'entry_date', dir: 'desc' };
-let _tradesTakenFilter = { status: 'all', side: 'all' };
+let _tradesTakenFilter = { status: 'all', side: 'all', preset: null };
 
 // Mobile Auto Trades tab's own strategy sub-tab — automation only exists for
 // Gap, but the picker itself mirrors the Stats tab's Gap/Momentum/Pullback
@@ -3542,15 +3606,20 @@ async function loadTradesTaken() {
   renderMobLiveTrades();
 }
 
+// Scoped to whichever preset is selected in the Presets dropdown — with
+// multiple presets automated in parallel, an unscoped clear would wipe
+// every other preset's backfill history too when you only meant to fix one.
 async function clearBackfilledTrades() {
-  if (!confirm('Remove all backfilled trades?\n\nReal paper/live trades are untouched — only rows tagged BACKFILLED get removed. Use this before re-running Backfill after a logic fix.')) return;
+  const preset = document.getElementById('overnightPresetSelect')?.value;
+  if (!preset) { alert('Select a preset first — Clear Backfilled Trades is scoped to one preset at a time.'); return; }
+  if (!confirm(`Remove backfilled trades for preset "${preset}"?\n\nReal paper/live trades — and other presets' backfilled trades — are untouched.`)) return;
   const btn = document.getElementById('ttClearBackfillBtn');
   const original = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Clearing…'; }
   try {
-    const res = await fetch(`${TRADEEDGE_API_URL}/gap-orders/clear-backfill`, { method: 'POST' });
+    const res = await fetch(`${TRADEEDGE_API_URL}/gap-orders/clear-backfill?preset=${encodeURIComponent(preset)}`, { method: 'POST' });
     const data = await res.json();
-    _showSaveToast(data.error ? ('Clear failed: ' + data.error) : `Removed ${data.removed} backfilled trade(s)`);
+    _showSaveToast(data.error ? ('Clear failed: ' + data.error) : `Removed ${data.removed} backfilled trade(s) for "${preset}"`);
   } catch (e) {
     alert('Clear request failed: ' + e.message);
   } finally {
@@ -3591,7 +3660,14 @@ function _monthlyChunks(daysTotal) {
 // just the current chunk, so a signal on the last day of a chunk still
 // exits correctly using the following chunk's data — no artificial gaps
 // at month boundaries.
+// Scoped to whichever preset is selected in the Presets dropdown — backfills
+// one preset per run, same as the button always did pre-multi-preset; loop
+// this once per preset (switching the dropdown between runs) to backfill more
+// than one.
 async function backfillPaperTrades(days = 365) {
+  const preset = document.getElementById('overnightPresetSelect')?.value;
+  if (!preset) { alert('Select a preset first — Backfill is scoped to one preset at a time.'); return; }
+
   const btns = [document.getElementById('ttBackfillBtn'), document.getElementById('mobTtBackfillBtn')].filter(Boolean);
   const originals = btns.map(b => b.textContent);
   const setLabel = (text) => btns.forEach(b => { b.disabled = true; b.textContent = text; });
@@ -3610,7 +3686,7 @@ async function backfillPaperTrades(days = 365) {
     const { from, to } = chunks[i];
     setLabel(`⏳ ${i + 1}/${chunks.length} (${totalBackfilled} so far)`);
     try {
-      const res = await fetch(`${TRADEEDGE_API_URL}/gap-orders/backfill-paper?from=${from}&to=${to}`, { method: 'POST' });
+      const res = await fetch(`${TRADEEDGE_API_URL}/gap-orders/backfill-paper?preset=${encodeURIComponent(preset)}&from=${from}&to=${to}`, { method: 'POST' });
       const data = await res.json();
       if (data.error) {
         errors.push(`${from}..${to}: ${data.error}`);
@@ -3644,7 +3720,7 @@ async function backfillPaperTrades(days = 365) {
       + `Click Backfill again to retry — completed work is skipped, not redone.`
     );
   } else {
-    _showSaveToast(`Backfilled ${totalBackfilled} paper trade(s) across ${chunks.length} month(s)`);
+    _showSaveToast(`Backfilled ${totalBackfilled} paper trade(s) for "${preset}" across ${chunks.length} month(s)`);
   }
 }
 
@@ -3668,8 +3744,20 @@ function sortTradesTaken(field) {
   renderTradesTaken();
 }
 
+// Preset-only filter, shared by _ttFilteredSorted() (status/side/preset,
+// used by the table/day-cards/calendar/stockwise sub-tabs) and _ttStats()/
+// _ttStatsExtended() (preset only — those two deliberately ignore status/
+// side so the stat row stays a full picture regardless of table filters,
+// but preset SHOULD narrow the stats too since comparing setups side by
+// side is the whole point of tagging trades by preset).
+function _ttPresetFiltered() {
+  return _tradesTakenFilter.preset
+    ? _tradesTakenData.filter(r => r.preset === _tradesTakenFilter.preset)
+    : _tradesTakenData;
+}
+
 function _ttFilteredSorted() {
-  let rows = _tradesTakenData.slice();
+  let rows = _ttPresetFiltered().slice();
   if (_tradesTakenFilter.status !== 'all') rows = rows.filter(r => r.status === _tradesTakenFilter.status);
   if (_tradesTakenFilter.side   !== 'all') rows = rows.filter(r => r.direction === _tradesTakenFilter.side);
 
@@ -3726,7 +3814,7 @@ function _ttSlHTML(r) {
 
 // Computes the shared stat-strip values — used by both desktop and mobile.
 function _ttStats() {
-  const all    = _tradesTakenData;
+  const all    = _ttPresetFiltered();
   const open   = all.filter(r => r.status === 'open');
   const closed = all.filter(r => r.status !== 'open');
   const wins   = closed.filter(r => (r.pnl_pct ?? 0) > 0);
@@ -3745,7 +3833,7 @@ function _ttStats() {
 // so the rupee card is labelled accordingly rather than implying the two
 // are on the same basis.
 function _ttStatsExtended() {
-  const all    = _tradesTakenData;
+  const all    = _ttPresetFiltered();
   const closed = all.filter(r => r.status !== 'open');
   const open   = all.filter(r => r.status === 'open');
   const longs  = all.filter(r => r.direction === 'LONG');
@@ -7033,15 +7121,33 @@ function saveOvernightPresetAs(selectId) {
   if (!trimmed) return;
   const presets = getOvernightPresets();
   const overwrite = !!presets[trimmed];
-  presets[trimmed] = _isMobileView() ? _buildOvernightSavedObjectMobile() : _buildOvernightSavedObject();
+  const built = _isMobileView() ? _buildOvernightSavedObjectMobile() : _buildOvernightSavedObject();
+  // Merge, not replace — an overwrite must not clobber any future meta key
+  // that might live alongside a preset's own params (there isn't one today;
+  // "Include in Automated Trades" lives in a separate file specifically to
+  // avoid this exact class of bug, but merging here is cheap insurance).
+  presets[trimmed] = { ...(presets[trimmed] || {}), ...built };
   localStorage.setItem('TE_OVERNIGHT_PRESETS', JSON.stringify(presets));
   refreshOvernightPresetSelect(trimmed);
   _syncGapPresetToServer(trimmed, presets[trimmed]);
   _showSaveToast(`Preset "${trimmed}" ${overwrite ? 'updated' : 'saved'} ✓`);
 }
 
+// The Presets dropdown now does double duty: loads backtest params AND
+// filters the Automated Trades section (all 4 sub-tabs + stat cards, see
+// _ttFilteredSorted()/_ttPresetFiltered()) to whichever preset is selected —
+// no separate "Setup" selector, per explicit direction to reuse this one.
 function applyOvernightPreset(name) {
-  if (!name) return;
+  if (!name) {
+    // Blank/placeholder selected — reset Automated Trades to show every
+    // preset's trades combined, WITHOUT touching whatever backtest params
+    // are currently loaded in the form (there's no "load nothing" concept
+    // for the backtest side; only the Automated Trades filter resets).
+    _tradesTakenFilter.preset = null;
+    renderTradesTaken();
+    renderMobLiveTrades();
+    return;
+  }
   const presets = getOvernightPresets();
   const d = presets[name];
   if (!d) return;
@@ -7050,7 +7156,13 @@ function applyOvernightPreset(name) {
   _applyOvernightParamsToForm(d);
   if (document.getElementById('mobMinGap')) _applyOvernightParamsToMobForm(d);
   refreshOvernightPresetSelect(name);
+  _refreshAutomateToggle(name);
   _showSaveToast(`Preset "${name}" loaded ✓`);
+
+  _tradesTakenFilter.preset = name;
+  renderTradesTaken();
+  renderMobLiveTrades();
+
   // Re-run so the backtest results on screen reflect the preset just loaded,
   // matching the same "instant feedback" behaviour as saveStrategyDefaults()/
   // saveMobDefaults() — but only on whichever view is actually visible.
@@ -11819,8 +11931,9 @@ loadSavedDefaults();
 // parsed yet). refreshOvernightPresetSelect() itself no-ops per-select when an
 // id isn't found, so this only matters for the mobile one.
 document.addEventListener('DOMContentLoaded', () => {
-  refreshOvernightPresetSelect(); // instant paint from local cache
-  fetchGapPresetsFromServer();    // then reconcile against the server (source of truth)
+  refreshOvernightPresetSelect();     // instant paint from local cache
+  fetchGapPresetsFromServer();        // then reconcile against the server (source of truth)
+  fetchGapAutomationConfigFromServer(); // same, for "Include in Automated Trades" flags
 });
 </script>
 <div id="symDrillModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);overflow-y:auto;padding:16px 12px;">
@@ -12478,6 +12591,12 @@ document.addEventListener('DOMContentLoaded', () => {
         <button onclick="deleteOvernightPreset('mobOvernightPresetSelect')" style="padding:8px 10px;
           background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;
           font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;">🗑</button>
+      </div>
+      <div class="mob-settings-row" style="border:none;padding-top:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);font-family:'DM Mono',monospace;cursor:pointer;" title="When ON, this preset's entries/exits run automatically via the daily cron job (Paper mode only)">
+          <input type="checkbox" id="mobOvernightAutomateToggle" disabled onchange="toggleIncludeInAutomation(this.checked, 'mobOvernightPresetSelect')" style="cursor:pointer;width:16px;height:16px;">
+          🤖 Include in Automated Trades
+        </label>
       </div>
     </div>
 
