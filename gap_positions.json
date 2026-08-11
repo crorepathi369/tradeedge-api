@@ -2241,6 +2241,32 @@
       "exit_date": "2026-05-07",
       "pnl_pct": -3.0,
       "pnl_amount": -10971.0
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-05-13",
+      "entry_order_id": null,
+      "tradingsymbol": "VEDL26MAYFUT",
+      "lot_size": 1150,
+      "entry_price": 324.1,
+      "signal_entry": 323.35,
+      "signal_slLevel": 313.65,
+      "sl_price": 314.38,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 340.31,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 325.45,
+      "exit_date": "2026-05-18",
+      "pnl_pct": 0.42,
+      "pnl_amount": 1552.5
     }
   ],
   "ZYDUSLIFE": [
