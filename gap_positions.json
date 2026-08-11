@@ -18,7 +18,8 @@
       "exit_price": 657.6,
       "exit_date": "2026-07-28",
       "pnl_pct": 2.24,
-      "pnl_amount": 11520.0
+      "pnl_amount": 11520.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "COFORGE": [
@@ -40,7 +41,8 @@
       "exit_price": 1718.2,
       "exit_date": "2026-07-29",
       "pnl_pct": 1.7,
-      "pnl_amount": 13632.5
+      "pnl_amount": 13632.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -60,7 +62,8 @@
       "exit_price": 1610.8,
       "exit_date": "2025-10-01",
       "pnl_pct": 1.42,
-      "pnl_amount": 10735.0
+      "pnl_amount": 10735.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "HCLTECH": [
@@ -82,7 +85,8 @@
       "exit_price": 1357.8,
       "exit_date": "2026-07-30",
       "pnl_pct": 0.77,
-      "pnl_amount": 4160.0
+      "pnl_amount": 4160.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -102,7 +106,8 @@
       "exit_price": 1223.7,
       "exit_date": "2026-07-20",
       "pnl_pct": 1.75,
-      "pnl_amount": 8400.0
+      "pnl_amount": 8400.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -122,7 +127,8 @@
       "exit_price": 1165,
       "exit_date": "2026-06-17",
       "pnl_pct": 0.6,
-      "pnl_amount": 2800
+      "pnl_amount": 2800,
+      "preset": "Oneday-Setup"
     }
   ],
   "HYUNDAI": [
@@ -144,7 +150,8 @@
       "exit_price": 2176.7,
       "exit_date": "2026-08-03",
       "pnl_pct": 0.58,
-      "pnl_amount": 3437.5
+      "pnl_amount": 3437.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -164,7 +171,8 @@
       "exit_price": 2010.6,
       "exit_date": "2026-07-16",
       "pnl_pct": 0.24,
-      "pnl_amount": 1320.0
+      "pnl_amount": 1320.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "NATIONALUM": [
@@ -186,7 +194,8 @@
       "exit_price": 379.7,
       "exit_date": "2026-08-04",
       "pnl_pct": 4.06,
-      "pnl_amount": 27750.0
+      "pnl_amount": 27750.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -206,7 +215,8 @@
       "exit_price": null,
       "exit_date": "2026-08-11",
       "pnl_pct": null,
-      "pnl_amount": null
+      "pnl_amount": null,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -226,7 +236,8 @@
       "exit_price": 350.35,
       "exit_date": "2026-03-23",
       "pnl_pct": 4.86,
-      "pnl_amount": 33562.5
+      "pnl_amount": 33562.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -246,7 +257,8 @@
       "exit_price": 402.05,
       "exit_date": "2026-04-01",
       "pnl_pct": 4.2,
-      "pnl_amount": 30375.0
+      "pnl_amount": 30375.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -266,7 +278,8 @@
       "exit_price": 368.55,
       "exit_date": "2026-01-19",
       "pnl_pct": -1.61,
-      "pnl_amount": -10968.75
+      "pnl_amount": -10968.75,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -286,7 +299,8 @@
       "exit_price": 238.17,
       "exit_date": "2025-10-27",
       "pnl_pct": 0.9,
-      "pnl_amount": 3975.0
+      "pnl_amount": 3975.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -306,7 +320,8 @@
       "exit_price": 262.25,
       "exit_date": "2025-11-11",
       "pnl_pct": 3.06,
-      "pnl_amount": 14587.5
+      "pnl_amount": 14587.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "CGPOWER": [
@@ -328,7 +343,8 @@
       "exit_price": 883.8,
       "exit_date": "2026-08-05",
       "pnl_pct": 0.17,
-      "pnl_amount": 1275.0
+      "pnl_amount": 1275.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -348,7 +364,8 @@
       "exit_price": 721.75,
       "exit_date": "2025-09-01",
       "pnl_pct": 3.34,
-      "pnl_amount": 19805.0
+      "pnl_amount": 19805.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "BRITANNIA": [
@@ -370,7 +387,8 @@
       "exit_price": 5630,
       "exit_date": "2026-08-10",
       "pnl_pct": 1.45,
-      "pnl_amount": 10062.5
+      "pnl_amount": 10062.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -390,7 +408,8 @@
       "exit_price": 5400.5,
       "exit_date": "2026-05-11",
       "pnl_pct": 1.89,
-      "pnl_amount": 13000.0
+      "pnl_amount": 13000.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -410,7 +429,8 @@
       "exit_price": 6120,
       "exit_date": "2026-02-12",
       "pnl_pct": 1.33,
-      "pnl_amount": 10062.5
+      "pnl_amount": 10062.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "KALYANKJIL": [
@@ -432,7 +452,8 @@
       "exit_price": 511.2,
       "exit_date": "2026-07-13",
       "pnl_pct": 7.29,
-      "pnl_amount": 46912.5
+      "pnl_amount": 46912.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -452,7 +473,8 @@
       "exit_price": 377.67,
       "exit_date": "2026-04-02",
       "pnl_pct": -3.0,
-      "pnl_amount": -15768.0
+      "pnl_amount": -15768.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "MANAPPURAM": [
@@ -474,7 +496,8 @@
       "exit_price": 329.05,
       "exit_date": "2026-07-14",
       "pnl_pct": 1.1,
-      "pnl_amount": 10950.0
+      "pnl_amount": 10950.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -494,7 +517,8 @@
       "exit_price": 252.85,
       "exit_date": "2026-03-24",
       "pnl_pct": -0.16,
-      "pnl_amount": -1200.0
+      "pnl_amount": -1200.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "BAJAJ-AUTO": [
@@ -516,7 +540,8 @@
       "exit_price": 11274.5,
       "exit_date": "2026-07-23",
       "pnl_pct": 2.4,
-      "pnl_amount": 19837.5
+      "pnl_amount": 19837.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -536,7 +561,8 @@
       "exit_price": 10721.5,
       "exit_date": "2026-05-08",
       "pnl_pct": 0.83,
-      "pnl_amount": 6600.0
+      "pnl_amount": 6600.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "PRESTIGE": [
@@ -558,7 +584,8 @@
       "exit_price": 1475.1,
       "exit_date": "2026-06-15",
       "pnl_pct": 5.67,
-      "pnl_amount": 35595.0
+      "pnl_amount": 35595.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -578,7 +605,8 @@
       "exit_price": 1525.4,
       "exit_date": "2026-06-16",
       "pnl_pct": 3.41,
-      "pnl_amount": 22635.0
+      "pnl_amount": 22635.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -598,7 +626,8 @@
       "exit_price": 1627.9,
       "exit_date": "2025-10-10",
       "pnl_pct": 2.52,
-      "pnl_amount": 18000.0
+      "pnl_amount": 18000.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "KFINTECH": [
@@ -620,7 +649,8 @@
       "exit_price": 909.5,
       "exit_date": "2026-06-18",
       "pnl_pct": 0.89,
-      "pnl_amount": 4628.75
+      "pnl_amount": 4628.75,
+      "preset": "Oneday-Setup"
     }
   ],
   "TECHM": [
@@ -642,7 +672,8 @@
       "exit_price": 1372.4,
       "exit_date": "2026-06-30",
       "pnl_pct": 2.38,
-      "pnl_amount": 20040.0
+      "pnl_amount": 20040.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -662,7 +693,8 @@
       "exit_price": 1388.5,
       "exit_date": "2026-04-23",
       "pnl_pct": 2.86,
-      "pnl_amount": 24540.0
+      "pnl_amount": 24540.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -682,7 +714,8 @@
       "exit_price": 1611.3,
       "exit_date": "2026-02-05",
       "pnl_pct": -0.31,
-      "pnl_amount": -3000.0
+      "pnl_amount": -3000.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "MARUTI": [
@@ -704,7 +737,8 @@
       "exit_price": 14433,
       "exit_date": "2026-07-01",
       "pnl_pct": 2.65,
-      "pnl_amount": 18650
+      "pnl_amount": 18650,
+      "preset": "Oneday-Setup"
     }
   ],
   "PERSISTENT": [
@@ -726,7 +760,8 @@
       "exit_price": 4696.6,
       "exit_date": "2026-07-06",
       "pnl_pct": 0.3,
-      "pnl_amount": 1737.5
+      "pnl_amount": 1737.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -746,7 +781,8 @@
       "exit_price": 5845.2,
       "exit_date": "2025-10-16",
       "pnl_pct": 1.82,
-      "pnl_amount": 13050.0
+      "pnl_amount": 13050.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "COCHINSHIP": [
@@ -768,7 +804,8 @@
       "exit_price": 1409.1,
       "exit_date": "2026-07-08",
       "pnl_pct": 2.21,
-      "pnl_amount": 12760.0
+      "pnl_amount": 12760.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -788,7 +825,8 @@
       "exit_price": 1413.9,
       "exit_date": "2026-07-09",
       "pnl_pct": -0.34,
-      "pnl_amount": -1920.0
+      "pnl_amount": -1920.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -808,7 +846,8 @@
       "exit_price": 1485.9,
       "exit_date": "2026-05-19",
       "pnl_pct": 1.89,
-      "pnl_amount": 11440.0
+      "pnl_amount": 11440.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "TITAN": [
@@ -830,7 +869,8 @@
       "exit_price": 4070.8,
       "exit_date": "2026-05-12",
       "pnl_pct": 3.4,
-      "pnl_amount": 25042.5
+      "pnl_amount": 25042.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -850,7 +890,8 @@
       "exit_price": 4238.9,
       "exit_date": "2026-03-10",
       "pnl_pct": -1.63,
-      "pnl_amount": -11865.0
+      "pnl_amount": -11865.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "JSWENERGY": [
@@ -872,7 +913,8 @@
       "exit_price": 511.85,
       "exit_date": "2026-05-13",
       "pnl_pct": 0.85,
-      "pnl_amount": 4730.0
+      "pnl_amount": 4730.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "VEDL": [
@@ -894,7 +936,8 @@
       "exit_price": 338,
       "exit_date": "2026-05-14",
       "pnl_pct": 4.29,
-      "pnl_amount": 15985.0
+      "pnl_amount": 15985.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -914,7 +957,8 @@
       "exit_price": 305.2,
       "exit_date": "2026-05-05",
       "pnl_pct": 3.11,
-      "pnl_amount": 10580.0
+      "pnl_amount": 10580.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -934,7 +978,8 @@
       "exit_price": 308.46,
       "exit_date": "2026-05-07",
       "pnl_pct": -3.0,
-      "pnl_amount": -10971.0
+      "pnl_amount": -10971.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -954,7 +999,8 @@
       "exit_price": 387.05,
       "exit_date": "2026-01-28",
       "pnl_pct": 4.78,
-      "pnl_amount": 20297.5
+      "pnl_amount": 20297.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "ZYDUSLIFE": [
@@ -976,7 +1022,8 @@
       "exit_price": 1011,
       "exit_date": "2026-05-15",
       "pnl_pct": 1.5,
-      "pnl_amount": 13455.0
+      "pnl_amount": 13455.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "PIIND": [
@@ -998,7 +1045,8 @@
       "exit_price": 2730.5,
       "exit_date": "2026-05-21",
       "pnl_pct": 5.32,
-      "pnl_amount": 26845.0
+      "pnl_amount": 26845.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1018,7 +1066,8 @@
       "exit_price": 3053.2,
       "exit_date": "2026-02-17",
       "pnl_pct": 0.01,
-      "pnl_amount": 52.5
+      "pnl_amount": 52.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "MAXHEALTH": [
@@ -1040,7 +1089,8 @@
       "exit_price": 1004.35,
       "exit_date": "2026-05-25",
       "pnl_pct": 1.96,
-      "pnl_amount": 10526.25
+      "pnl_amount": 10526.25,
+      "preset": "Oneday-Setup"
     }
   ],
   "LODHA": [
@@ -1062,7 +1112,8 @@
       "exit_price": 905.4,
       "exit_date": "2026-05-26",
       "pnl_pct": -0.07,
-      "pnl_amount": -375.0
+      "pnl_amount": -375.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "CONCOR": [
@@ -1084,7 +1135,8 @@
       "exit_price": 473.8,
       "exit_date": "2026-05-27",
       "pnl_pct": 0.68,
-      "pnl_amount": 4062.5
+      "pnl_amount": 4062.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "WIPRO": [
@@ -1106,7 +1158,8 @@
       "exit_price": 180.69,
       "exit_date": "2026-06-09",
       "pnl_pct": -0.41,
-      "pnl_amount": -2220.0
+      "pnl_amount": -2220.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1126,7 +1179,8 @@
       "exit_price": 201.8,
       "exit_date": "2026-04-20",
       "pnl_pct": 0.28,
-      "pnl_amount": 1710.0
+      "pnl_amount": 1710.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1146,7 +1200,8 @@
       "exit_price": 234.2,
       "exit_date": "2026-01-20",
       "pnl_pct": 2.31,
-      "pnl_amount": 16650.0
+      "pnl_amount": 16650.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "ADANIGREEN": [
@@ -1168,7 +1223,8 @@
       "exit_price": 1496.32,
       "exit_date": "2026-06-10",
       "pnl_pct": -3.0,
-      "pnl_amount": -27768.0
+      "pnl_amount": -27768.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1188,7 +1244,8 @@
       "exit_price": 888.4,
       "exit_date": "2026-03-05",
       "pnl_pct": -1.54,
-      "pnl_amount": -8070.0
+      "pnl_amount": -8070.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1208,7 +1265,8 @@
       "exit_price": 1145.3,
       "exit_date": "2025-10-30",
       "pnl_pct": 2.37,
-      "pnl_amount": 15900.0
+      "pnl_amount": 15900.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "SUZLON": [
@@ -1230,7 +1288,8 @@
       "exit_price": 52.96,
       "exit_date": "2026-04-17",
       "pnl_pct": 5.29,
-      "pnl_amount": 33782.0
+      "pnl_amount": 33782.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "HAVELLS": [
@@ -1252,7 +1311,8 @@
       "exit_price": 1243.2,
       "exit_date": "2026-04-24",
       "pnl_pct": -0.02,
-      "pnl_amount": -100.0
+      "pnl_amount": -100.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "RECLTD": [
@@ -1274,7 +1334,8 @@
       "exit_price": 355.35,
       "exit_date": "2026-04-30",
       "pnl_pct": 2.71,
-      "pnl_amount": 15592.5
+      "pnl_amount": 15592.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "IOC": [
@@ -1296,7 +1357,8 @@
       "exit_price": 147.04,
       "exit_date": "2026-03-17",
       "pnl_pct": 1.58,
-      "pnl_amount": 11505.0
+      "pnl_amount": 11505.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "FINNIFTY": [
@@ -1318,7 +1380,8 @@
       "exit_price": 24830.1,
       "exit_date": "2026-03-20",
       "pnl_pct": 0.72,
-      "pnl_amount": 10758.0
+      "pnl_amount": 10758.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "TIINDIA": [
@@ -1340,7 +1403,8 @@
       "exit_price": 2689.3,
       "exit_date": "2026-03-25",
       "pnl_pct": 4.41,
-      "pnl_amount": 22700.0
+      "pnl_amount": 22700.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1360,7 +1424,8 @@
       "exit_price": 2752.1,
       "exit_date": "2026-04-09",
       "pnl_pct": 0.37,
-      "pnl_amount": 2020.0
+      "pnl_amount": 2020.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1380,7 +1445,8 @@
       "exit_price": 2642.7,
       "exit_date": "2026-02-04",
       "pnl_pct": 5.3,
-      "pnl_amount": 26620.0
+      "pnl_amount": 26620.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "OFSS": [
@@ -1402,7 +1468,8 @@
       "exit_price": 6553.32,
       "exit_date": "2026-03-30",
       "pnl_pct": -3.0,
-      "pnl_amount": -20268.0
+      "pnl_amount": -20268.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1422,7 +1489,8 @@
       "exit_price": 8912,
       "exit_date": "2025-09-11",
       "pnl_pct": -1.55,
-      "pnl_amount": -14000
+      "pnl_amount": -14000,
+      "preset": "Oneday-Setup"
     }
   ],
   "DMART": [
@@ -1444,7 +1512,8 @@
       "exit_price": 4474.5,
       "exit_date": "2026-04-07",
       "pnl_pct": -1.4,
-      "pnl_amount": -9525.0
+      "pnl_amount": -9525.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "BSE": [
@@ -1466,7 +1535,8 @@
       "exit_price": 3179.8,
       "exit_date": "2026-02-11",
       "pnl_pct": -0.18,
-      "pnl_amount": -1120.0
+      "pnl_amount": -1120.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1486,7 +1556,8 @@
       "exit_price": 2747.6,
       "exit_date": "2026-03-06",
       "pnl_pct": -0.63,
-      "pnl_amount": -3480.0
+      "pnl_amount": -3480.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1506,7 +1577,8 @@
       "exit_price": 2767.9,
       "exit_date": "2025-11-13",
       "pnl_pct": -0.75,
-      "pnl_amount": -4160.0
+      "pnl_amount": -4160.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "MCX": [
@@ -1528,7 +1600,8 @@
       "exit_price": 2346.5,
       "exit_date": "2026-02-16",
       "pnl_pct": -0.24,
-      "pnl_amount": -1260.0
+      "pnl_amount": -1260.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1548,7 +1621,8 @@
       "exit_price": 2700,
       "exit_date": "2026-01-29",
       "pnl_pct": 3.65,
-      "pnl_amount": 21375
+      "pnl_amount": 21375,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1568,7 +1642,8 @@
       "exit_price": 2619.0,
       "exit_date": "2026-01-30",
       "pnl_pct": -3.0,
-      "pnl_amount": -18225.0
+      "pnl_amount": -18225.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1588,7 +1663,8 @@
       "exit_price": 2389.8,
       "exit_date": "2026-02-06",
       "pnl_pct": 1.33,
-      "pnl_amount": 7267.5
+      "pnl_amount": 7267.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "OIL": [
@@ -1610,7 +1686,8 @@
       "exit_price": 475.05,
       "exit_date": "2026-02-20",
       "pnl_pct": -0.24,
-      "pnl_amount": -1610.0
+      "pnl_amount": -1610.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1625,7 +1702,8 @@
       "sl_price": 459.34,
       "sl_price_source": "paper_simulated_fill",
       "gtt_id": null,
-      "status": "open"
+      "status": "open",
+      "preset": "Oneday-Setup"
     }
   ],
   "UPL": [
@@ -1647,7 +1725,8 @@
       "exit_price": 630.7,
       "exit_date": "2026-02-24",
       "pnl_pct": 2.08,
-      "pnl_amount": 18157.0
+      "pnl_amount": 18157.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "BAJAJFINSV": [
@@ -1669,7 +1748,8 @@
       "exit_price": 1891.8,
       "exit_date": "2026-03-04",
       "pnl_pct": 2.94,
-      "pnl_amount": 17190.0
+      "pnl_amount": 17190.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "IREDA": [
@@ -1691,7 +1771,8 @@
       "exit_price": 136.71,
       "exit_date": "2026-01-13",
       "pnl_pct": -3.0,
-      "pnl_amount": -19140.75
+      "pnl_amount": -19140.75,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1711,7 +1792,8 @@
       "exit_price": 154.52,
       "exit_date": "2025-10-03",
       "pnl_pct": 0.98,
-      "pnl_amount": 6787.5
+      "pnl_amount": 6787.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "DRREDDY": [
@@ -1733,7 +1815,8 @@
       "exit_price": 1236.1,
       "exit_date": "2026-01-23",
       "pnl_pct": 1.21,
-      "pnl_amount": 9250.0
+      "pnl_amount": 9250.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "HINDPETRO": [
@@ -1755,7 +1838,8 @@
       "exit_price": 452.7,
       "exit_date": "2026-02-03",
       "pnl_pct": -0.31,
-      "pnl_amount": -2835.0
+      "pnl_amount": -2835.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "NYKAA": [
@@ -1777,7 +1861,8 @@
       "exit_price": 278.72,
       "exit_date": "2026-02-09",
       "pnl_pct": 0.26,
-      "pnl_amount": 2250.0
+      "pnl_amount": 2250.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1797,7 +1882,8 @@
       "exit_price": 213.55,
       "exit_date": "2025-08-14",
       "pnl_pct": 0.0,
-      "pnl_amount": 0.0
+      "pnl_amount": 0.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "TATASTEEL": [
@@ -1819,7 +1905,8 @@
       "exit_price": 208.09,
       "exit_date": "2026-02-10",
       "pnl_pct": 2.85,
-      "pnl_amount": 15840.0
+      "pnl_amount": 15840.0,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1839,7 +1926,8 @@
       "exit_price": 182.67,
       "exit_date": "2026-01-01",
       "pnl_pct": 0.89,
-      "pnl_amount": 4427.5
+      "pnl_amount": 4427.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "TATAELXSI": [
@@ -1861,7 +1949,8 @@
       "exit_price": 5463,
       "exit_date": "2025-12-22",
       "pnl_pct": 0.66,
-      "pnl_amount": 4500
+      "pnl_amount": 4500,
+      "preset": "Oneday-Setup"
     }
   ],
   "IDEA": [
@@ -1883,7 +1972,8 @@
       "exit_price": 11.89,
       "exit_date": "2026-01-02",
       "pnl_pct": 1.54,
-      "pnl_amount": 12865.5
+      "pnl_amount": 12865.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1903,7 +1993,8 @@
       "exit_price": 9.44,
       "exit_date": "2025-11-04",
       "pnl_pct": -1.77,
-      "pnl_amount": -12150.75
+      "pnl_amount": -12150.75,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1923,7 +2014,8 @@
       "exit_price": 10.42,
       "exit_date": "2025-11-12",
       "pnl_pct": 1.36,
-      "pnl_amount": 10006.5
+      "pnl_amount": 10006.5,
+      "preset": "Oneday-Setup"
     },
     {
       "mode": "paper",
@@ -1943,7 +2035,8 @@
       "exit_price": 7.4,
       "exit_date": "2025-08-25",
       "pnl_pct": 4.67,
-      "pnl_amount": 23586.75
+      "pnl_amount": 23586.75,
+      "preset": "Oneday-Setup"
     }
   ],
   "OBEROIRLTY": [
@@ -1965,7 +2058,8 @@
       "exit_price": 1700.3,
       "exit_date": "2025-10-17",
       "pnl_pct": 0.42,
-      "pnl_amount": 2485.0
+      "pnl_amount": 2485.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "SBILIFE": [
@@ -1987,7 +2081,8 @@
       "exit_price": 1931.3,
       "exit_date": "2025-10-28",
       "pnl_pct": 1.65,
-      "pnl_amount": 11775.0
+      "pnl_amount": 11775.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "BHEL": [
@@ -2009,7 +2104,8 @@
       "exit_price": 266.77,
       "exit_date": "2025-10-31",
       "pnl_pct": 1.67,
-      "pnl_amount": 11497.5
+      "pnl_amount": 11497.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "DELHIVERY": [
@@ -2031,7 +2127,8 @@
       "exit_price": 431.5,
       "exit_date": "2025-11-07",
       "pnl_pct": 2.55,
-      "pnl_amount": 23447.5
+      "pnl_amount": 23447.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "ADANIENSOL": [
@@ -2053,7 +2150,8 @@
       "exit_price": 940.25,
       "exit_date": "2025-09-22",
       "pnl_pct": 6.95,
-      "pnl_amount": 41242.5
+      "pnl_amount": 41242.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "BLUESTARCO": [
@@ -2075,7 +2173,8 @@
       "exit_price": 1899.26,
       "exit_date": "2025-10-13",
       "pnl_pct": -3.0,
-      "pnl_amount": -19090.5
+      "pnl_amount": -19090.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "CHOLAFIN": [
@@ -2097,7 +2196,8 @@
       "exit_price": 1528,
       "exit_date": "2025-08-19",
       "pnl_pct": 0.04,
-      "pnl_amount": 375.0
+      "pnl_amount": 375.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "MPHASIS": [
@@ -2119,7 +2219,8 @@
       "exit_price": 2800.3,
       "exit_date": "2025-08-26",
       "pnl_pct": -1.27,
-      "pnl_amount": -9927.5
+      "pnl_amount": -9927.5,
+      "preset": "Oneday-Setup"
     }
   ],
   "INDUSTOWER": [
@@ -2141,7 +2242,8 @@
       "exit_price": 335.8,
       "exit_date": "2025-08-28",
       "pnl_pct": 1.88,
-      "pnl_amount": 10965.0
+      "pnl_amount": 10965.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "PGEL": [
@@ -2163,7 +2265,8 @@
       "exit_price": 562.6,
       "exit_date": "2025-09-02",
       "pnl_pct": 0.77,
-      "pnl_amount": 4085.0
+      "pnl_amount": 4085.0,
+      "preset": "Oneday-Setup"
     }
   ],
   "BAJFINANCE": [
@@ -2185,7 +2288,8 @@
       "exit_price": 939.95,
       "exit_date": "2025-09-05",
       "pnl_pct": 0.3,
-      "pnl_amount": 2100.0
+      "pnl_amount": 2100.0,
+      "preset": "Oneday-Setup"
     }
   ]
 }
