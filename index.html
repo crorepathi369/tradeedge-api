@@ -2801,12 +2801,12 @@
   <!-- TRADES TAKEN — real Kite-executed Gap Strategy trades, independent of backtest state -->
   <div class="collapsible-section mobile-section" id="msTradesTaken" style="margin-bottom:16px;">
     <div class="section-header" onclick="toggleSection('tradesTakenBody','tradesTakenChevron')">
-      <span class="section-chevron" id="tradesTakenChevron">▼</span>
+      <span class="section-chevron collapsed" id="tradesTakenChevron">▼</span>
       <span class="section-title">🤖 Automated Trades</span>
       <span id="tradesTakenModeBadge" style="margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.4px;"></span>
       <span id="tradesTakenBadge" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></span>
     </div>
-    <div id="tradesTakenBody" style="padding:16px;">
+    <div id="tradesTakenBody" class="section-body-hidden" style="padding:16px;">
       <div class="summary-grid" id="tradesTakenStatsExtended" style="margin-bottom:0;"></div>
 
       <div class="tabs-wrap" style="margin:4px 0 0;">
