@@ -2806,7 +2806,7 @@
   <div class="collapsible-section mobile-section" id="msTradesTaken" style="margin-bottom:16px;">
     <div class="section-header" onclick="toggleSection('tradesTakenBody','tradesTakenChevron')">
       <span class="section-chevron collapsed" id="tradesTakenChevron">▼</span>
-      <span class="section-title">🤖 Automated Trades</span>
+      <span class="section-title">🤖 Automated Trades<span id="tradesTakenTitlePreset"></span></span>
       <span id="tradesTakenModeBadge" style="margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.4px;"></span>
       <span id="tradesTakenBadge" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></span>
     </div>
@@ -3946,6 +3946,12 @@ function renderTradesTaken() {
   const { all } = _ttStats();
   renderTradesTakenStatsExtended();
 
+  // Shows which setup's data is on screen right in the section title, so it's
+  // never ambiguous which preset the numbers below belong to — e.g. "(Oneday-Setup)"
+  // or "(All Setups)" when nothing's selected in the Presets dropdown.
+  const titlePresetEl = document.getElementById('tradesTakenTitlePreset');
+  if (titlePresetEl) titlePresetEl.textContent = ` (${_tradesTakenFilter.preset || 'All Setups'})`;
+
   const badge = document.getElementById('tradesTakenBadge');
   if (badge) badge.textContent = all.length ? `${all.length} trade${all.length === 1 ? '' : 's'}` : 'No trades yet';
 
@@ -4382,6 +4388,9 @@ function renderMobLiveTrades() {
             ${stratLabels[strat]}
           </button>`;
         }).join('')}
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin:-4px 0 8px;text-align:center;">
+        Setup: <b style="color:var(--text2);">${_tradesTakenFilter.preset || 'All Setups'}</b>
       </div>`;
   }
 
