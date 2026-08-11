@@ -1611,6 +1611,21 @@
       "exit_date": "2026-02-20",
       "pnl_pct": -0.24,
       "pnl_amount": -1610.0
+    },
+    {
+      "mode": "paper",
+      "direction": "LONG",
+      "entry_date": "2026-08-11",
+      "entry_order_id": null,
+      "tradingsymbol": "OIL26AUGFUT",
+      "lot_size": 1400,
+      "entry_price": 473.55,
+      "signal_entry": 470.8,
+      "signal_slLevel": 456.68,
+      "sl_price": 459.34,
+      "sl_price_source": "paper_simulated_fill",
+      "gtt_id": null,
+      "status": "open"
     }
   ],
   "UPL": [
