@@ -102,7 +102,7 @@ def restore_data_from_github():
     files = [
         f["path"] for f in tree.get("tree", [])
         if f["type"] == "blob" and (
-            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json")
+            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json", "gap_automation_config.json")
         )
     ]
     print(f"[restore] {len(files)} files in data branch")
@@ -708,6 +708,16 @@ GAP_SETTINGS_FILE = DATA_DIR / "gap_settings.json"
 # mirror) — the frontend's localStorage copy is a cache, refreshed from here
 # on load, so presets saved on desktop show up on mobile and vice versa.
 GAP_PRESETS_FILE = DATA_DIR / "gap_presets.json"
+
+# Which presets actually run automated entry/exit ({"enabledPresets": [name,...]}).
+# Deliberately a separate file, not a flag baked into each preset's params
+# object in gap_presets.json — the frontend's "Save As" on an existing preset
+# name fully REPLACES that preset's params object (not a merge), so a flag
+# living inside it would get silently wiped the next time someone tweaks and
+# re-saves a preset's backtest params. A separate file sidesteps that bug
+# class entirely. Opt-in, empty by default — a preset saved just for
+# backtesting never starts placing paper trades on its own.
+GAP_AUTOMATION_CONFIG_FILE = DATA_DIR / "gap_automation_config.json"
 
 try:
     from breeze_connect import BreezeConnect
@@ -1408,7 +1418,7 @@ def _do_pull_from_github():
     files = [
         f["path"] for f in tree.get("tree", [])
         if f["type"] == "blob" and (
-            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json")
+            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json", "gap_automation_config.json")
         )
     ]
     _log(f"[pull] {len(files)} files found — downloading all (overwrite mode)")
@@ -2061,6 +2071,116 @@ def delete_gap_preset():
         return cors_response({"error": str(e)}, 500)
 
 
+# ── Gap automation config — which presets actually trade ────────────────────
+# See GAP_AUTOMATION_CONFIG_FILE's comment above for why this is a separate
+# file from gap_presets.json rather than a flag inside each preset.
+
+def get_enabled_preset_names() -> list:
+    try:
+        import json as _json
+        with open(GAP_AUTOMATION_CONFIG_FILE) as f:
+            return _json.load(f).get("enabledPresets", [])
+    except (FileNotFoundError, ValueError):
+        return []
+
+
+def _save_enabled_preset_names(names: list) -> None:
+    import json as _json
+    with open(GAP_AUTOMATION_CONFIG_FILE, "w") as f:
+        _json.dump({"enabledPresets": names}, f, indent=2)
+    push_gap_automation_config_to_github()
+
+
+def push_gap_automation_config_to_github():
+    """Pushes gap_automation_config.json to the GitHub data branch — same PUT
+    pattern as push_gap_presets_to_github()/push_gap_settings_to_github(). Same
+    ephemeral-Render-disk rationale: without this, the "which presets are
+    automated" list would be wiped on every redeploy just like the other two
+    were before they got this treatment."""
+    import urllib.request, urllib.error, json as _json, base64 as _b64
+
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    repo     = os.environ.get("GITHUB_REPO", "crorepathi369/tradeedge-api")
+    branch   = os.environ.get("GITHUB_DATA_BRANCH", "data")
+    if not gh_token:
+        print("[gap-automation-config] GITHUB_TOKEN not set — skipping push")
+        return
+
+    path = GAP_AUTOMATION_CONFIG_FILE
+    if not path.exists():
+        return
+
+    headers = {
+        "Authorization": f"token {gh_token}",
+        "Accept":        "application/vnd.github.v3+json",
+        "User-Agent":    "TradeEdge-App",
+        "Content-Type":  "application/json",
+    }
+    file_url = f"https://api.github.com/repos/{repo}/contents/gap_automation_config.json"
+    try:
+        content_b64 = _b64.b64encode(path.read_bytes()).decode()
+        sha = None
+        try:
+            get_req = urllib.request.Request(file_url + f"?ref={branch}", headers=headers)
+            meta = _json.loads(urllib.request.urlopen(get_req, timeout=10).read())
+            sha = meta.get("sha")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+
+        body = {
+            "message": f"gap_automation_config.json update {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            "content": content_b64,
+            "branch":  branch,
+        }
+        if sha:
+            body["sha"] = sha
+
+        put_req = urllib.request.Request(
+            file_url, data=_json.dumps(body).encode(), headers=headers, method="PUT")
+        urllib.request.urlopen(put_req, timeout=15)
+        print("[gap-automation-config] gap_automation_config.json pushed to GitHub")
+    except Exception as e:
+        print(f"[gap-automation-config] GitHub push failed: {e}")
+
+
+@app.route("/gap-automation-config", methods=["GET", "OPTIONS"])
+def get_gap_automation_config_endpoint():
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    return cors_response({"enabledPresets": get_enabled_preset_names()})
+
+
+@app.route("/gap-automation-config", methods=["POST", "OPTIONS"])
+def save_gap_automation_config():
+    """Sets which presets participate in automated entry/exit. Body:
+    {"enabledPresets": [name, ...]} — full replacement, not a toggle-one-name
+    call, matching how the frontend caches and re-syncs this list."""
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    body = request.get_json(force=True) or {}
+    names = body.get("enabledPresets")
+    if not isinstance(names, list):
+        return cors_response({"error": "enabledPresets_list_required"}, 400)
+
+    try:
+        _save_enabled_preset_names(names)
+        return cors_response({"ok": True, "enabledPresets": names})
+    except Exception as e:
+        return cors_response({"error": str(e)}, 500)
+
+
+def get_automated_presets() -> list:
+    """Returns [(name, params), ...] for every preset flagged 'Include in
+    Automated Trades' — the sole driver of /gap-orders/enter and
+    /gap-orders/backfill-paper now, replacing the old single-gap-settings
+    flow."""
+    presets = get_gap_presets()
+    enabled = set(get_enabled_preset_names())
+    return [(name, params) for name, params in presets.items() if name in enabled]
+
+
 # ── Gap automation — scan, entry, exit ──────────────────────────────────────
 # Wiring order: cron-job.org hits /gap-orders/enter at 3:15 PM (signal day)
 # and /gap-orders/exit at 3:15 PM the next trading day. Both are safe to
@@ -2181,9 +2301,22 @@ def gap_scan_endpoint():
 @app.route("/gap-orders/enter", methods=["POST", "OPTIONS"])
 def gap_orders_enter():
     """
-    Called by cron-job.org at 3:15 PM IST on scan days. Runs the scan for
-    today, places entry + GTT-SL for the selected signal(s) (normally just
-    one, since Max/day is fixed at 1 for automation).
+    Called by cron-job.org at 3:15 PM IST on scan days. Loops every preset
+    flagged "Include in Automated Trades" (get_automated_presets()) and runs
+    today's scan + entry independently for each, tagging every trade with
+    its own preset name — this REPLACES the old single-get_gap_settings()
+    flow entirely (gap_settings.json/the plain "Save" button no longer
+    drive automation; presets are now the sole source). Each preset's own
+    Cap Max/day applies (see gap_scan.py), so different presets can enter a
+    different number of signals on the same day. Two presets signaling the
+    same symbol the same day each place their own independent position —
+    intentional, so setups stay comparable apples-to-apples.
+
+    mode is hardcoded to "paper" for every preset here, regardless of
+    whatever tradingMode a preset's saved params happen to contain — an
+    explicit safety override, not incidental, since Live hasn't been
+    extended to multi-preset yet (see kite_orders.close_open_positions()'s
+    live-mode aggregation caveat).
     """
     if request.method == "OPTIONS":
         return cors_response({"ok": True})
@@ -2192,42 +2325,38 @@ def gap_orders_enter():
     if kite is None:
         return cors_response({"error": "not_logged_in — visit /kite/login first"}, 401)
 
-    settings = get_gap_settings()
-    if settings is None:
-        return cors_response({"error": "no_gap_settings_synced"}, 400)
+    automated = get_automated_presets()
+    if not automated:
+        telegram_notify.notify_error("enter", "No presets flagged 'Include in Automated Trades' — nothing to do")
+        return cors_response({"error": "no_automated_presets"}, 400)
 
     today = datetime.now().date()
     scan_date = today.isoformat()
+    symbols = get_scan_symbols()
+    all_results = []
 
-    try:
-        scan_result = gap_scan.scan_gap_signals(DATA_DIR, get_scan_symbols(), scan_date, settings)
-    except Exception as e:
-        telegram_notify.notify_error("enter/scan", f"Scan failed for {scan_date}: {e}")
-        return cors_response({"error": f"scan failed: {e}"}, 500)
+    for preset_name, params in automated:
+        try:
+            scan_result = gap_scan.scan_gap_signals(DATA_DIR, symbols, scan_date, params)
+        except Exception as e:
+            telegram_notify.notify_error("enter/scan", f"[{preset_name}] Scan failed for {scan_date}: {e}")
+            all_results.append({"preset": preset_name, "ok": False, "error": f"scan failed: {e}"})
+            continue
 
-    selected = scan_result["selected"]
-    if not selected:
-        telegram_notify.notify_entry_results(scan_date, "n/a", [])
-        return cors_response({"scanDate": scan_date, "msg": "No qualifying signal today", "results": []})
+        for signal in scan_result["selected"]:
+            res = kite_orders.place_entry_order(
+                kite, DATA_DIR, signal, today,
+                sl_pct=params["slPct"], sl_type=params.get("slType", "pct"),
+                mode="paper", preset=preset_name,
+            )
+            res["sym"] = signal["sym"]
+            res["preset"] = preset_name
+            all_results.append(res)
+            print(f"[gap-orders/enter] ({preset_name}, paper) {signal['sym']}: {res}")
 
-    # Fail-safe default: an unset/missing tradingMode trades paper, never live.
-    mode = settings.get("tradingMode", "paper")
-    if mode not in ("paper", "live"):
-        mode = "paper"
-
-    results = []
-    for signal in selected:
-        res = kite_orders.place_entry_order(
-            kite, DATA_DIR, signal, today,
-            sl_pct=settings["slPct"], sl_type=settings.get("slType", "pct"), mode=mode,
-        )
-        res["sym"] = signal["sym"]
-        results.append(res)
-        print(f"[gap-orders/enter] ({mode}) {signal['sym']}: {res}")
-
-    telegram_notify.notify_entry_results(scan_date, mode, results)
+    telegram_notify.notify_entry_results(scan_date, "paper", all_results)
     push_positions_to_github()
-    return cors_response({"scanDate": scan_date, "mode": mode, "results": results})
+    return cors_response({"scanDate": scan_date, "results": all_results})
 
 
 @app.route("/gap-orders/exit", methods=["POST", "OPTIONS"])
@@ -2299,12 +2428,19 @@ def gap_orders_backfill_paper():
     regular /gap-orders/exit job to finish naturally.
 
     kite_orders.backfill_paper_trade() saves after every individual trade,
-    not just at the end, and skips (symbol, date) pairs already done
-    (idempotent) — so a timed-out or retried request never duplicates or
-    loses work, whether retried whole or chunk-by-chunk.
+    not just at the end, and skips (symbol, date, preset) triples already
+    done (idempotent) — so a timed-out or retried request never duplicates
+    or loses work, whether retried whole or chunk-by-chunk.
 
-    Usage: POST /gap-orders/backfill-paper?from=2025-08-01&to=2025-08-31
-       or: POST /gap-orders/backfill-paper?days=365
+    Requires a `preset` query param — since presets now drive automation
+    (see /gap-orders/enter), an untagged backfill would create more
+    untagged trades and undo the one-time /gap-orders/migrate-preset-tag
+    migration. The frontend passes whichever preset is currently selected
+    in the Presets dropdown; loop this once per preset to backfill more
+    than one (that's what the existing chunked-backfill UI button does).
+
+    Usage: POST /gap-orders/backfill-paper?preset=Oneday-Setup&from=2025-08-01&to=2025-08-31
+       or: POST /gap-orders/backfill-paper?preset=Oneday-Setup&days=365
     """
     if request.method == "OPTIONS":
         return cors_response({"ok": True})
@@ -2313,9 +2449,12 @@ def gap_orders_backfill_paper():
     if kite is None:
         return cors_response({"error": "not_logged_in — visit /kite/login first"}, 401)
 
-    settings = get_gap_settings()
-    if settings is None:
-        return cors_response({"error": "no_gap_settings_synced"}, 400)
+    preset_name = request.args.get("preset")
+    if not preset_name:
+        return cors_response({"error": "preset_param_required"}, 400)
+    params = get_gap_presets().get(preset_name)
+    if params is None:
+        return cors_response({"error": f"unknown_preset: {preset_name}"}, 404)
 
     from_param = request.args.get("from")
     to_param = request.args.get("to")
@@ -2347,9 +2486,9 @@ def gap_orders_backfill_paper():
     results = []
     for scan_date in dates:
         try:
-            scan_result = gap_scan.scan_gap_signals(DATA_DIR, symbols, scan_date, settings)
+            scan_result = gap_scan.scan_gap_signals(DATA_DIR, symbols, scan_date, params)
         except Exception as e:
-            results.append({"date": scan_date, "ok": False, "error": f"scan failed: {e}"})
+            results.append({"date": scan_date, "preset": preset_name, "ok": False, "error": f"scan failed: {e}"})
             continue
 
         idx = all_dates.index(scan_date)
@@ -2360,36 +2499,70 @@ def gap_orders_backfill_paper():
         for signal in scan_result["selected"]:
             res = kite_orders.backfill_paper_trade(
                 kite, DATA_DIR, signal, entry_date,
-                sl_pct=settings["slPct"], sl_type=settings.get("slType", "pct"),
-                exit_check_date=next_date,
+                sl_pct=params["slPct"], sl_type=params.get("slType", "pct"),
+                exit_check_date=next_date, preset=preset_name,
             )
             res["date"] = scan_date
             res["sym"] = signal["sym"]
+            res["preset"] = preset_name
             results.append(res)
-            print(f"[gap-orders/backfill] {scan_date} {signal['sym']}: {res}")
+            print(f"[gap-orders/backfill] ({preset_name}) {scan_date} {signal['sym']}: {res}")
 
     push_positions_to_github()
     backfilled = sum(1 for r in results if r.get("ok"))
     return cors_response({
         "datesScanned": len(dates), "window": f"{window_start}..{window_end}",
-        "backfilled": backfilled, "results": results,
+        "preset": preset_name, "backfilled": backfilled, "results": results,
     })
 
 
 @app.route("/gap-orders/clear-backfill", methods=["POST", "OPTIONS"])
 def gap_orders_clear_backfill():
     """
-    Removes every backfilled=True trade, leaving real paper/live trades
+    Removes backfilled=True trades, leaving real paper/live trades
     untouched. Needed after any fix to the backfill/paper SL logic —
     otherwise re-running /gap-orders/backfill-paper would just skip every
-    (symbol, date) the buggy run already covered, permanently stranding
-    the bad records under the idempotency check.
+    (symbol, date, preset) the buggy run already covered, permanently
+    stranding the bad records under the idempotency check.
+
+    Optional `preset` query param scopes the clear to one preset only —
+    with multiple presets automated in parallel, an unscoped clear would
+    wipe every other preset's backfill history too when you only meant to
+    fix one. Omit it for the old unscoped "clear everything" behavior
+    (an intentional full reset); the frontend button always passes the
+    currently-selected preset.
     """
     if request.method == "OPTIONS":
         return cors_response({"ok": True})
-    removed = kite_orders.clear_backfilled_trades(DATA_DIR)
+    preset_name = request.args.get("preset")
+    removed = kite_orders.clear_backfilled_trades(DATA_DIR, preset=preset_name)
     push_positions_to_github()
-    return cors_response({"removed": removed})
+    return cors_response({"removed": removed, "preset": preset_name})
+
+
+@app.route("/gap-orders/migrate-preset-tag", methods=["POST", "OPTIONS"])
+def gap_orders_migrate_preset_tag():
+    """
+    One-time (idempotent — safe to call more than once) migration: tags
+    every trade in gap_positions.json currently missing a 'preset' field
+    with the given preset name (normally 'Oneday-Setup', since that
+    preset's params are what drove gap_settings.json/the plain "Save"
+    button before presets existed and drove automation). Admin-triggered
+    manually, not cron-wired.
+
+    MUST be run before switching /gap-orders/enter's automation over to
+    the new (symbol, preset)-scoped duplicate-entry guard in production —
+    an untagged genuinely-open position is invisible to that guard and
+    could otherwise be silently re-entered. Body: {"preset": "Oneday-Setup"}
+    (defaults to "Oneday-Setup" if omitted).
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    body = request.get_json(force=True) or {}
+    preset_name = (body.get("preset") or "Oneday-Setup").strip()
+    tagged = kite_orders.tag_untagged_trades(DATA_DIR, preset_name)
+    push_positions_to_github()
+    return cors_response({"ok": True, "tagged": tagged, "preset": preset_name})
 
 
 @app.route("/gap-orders/status", methods=["GET", "OPTIONS"])

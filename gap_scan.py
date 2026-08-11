@@ -255,14 +255,23 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
     Faithful port of the Overnight branch of runScanner(). Returns:
       {"longs": [...], "shorts": [...], "selected": [...]}
     "selected" is longs+shorts after WR/PnL filtering, sorted, and capped
-    to maxSignalsDay (== 1 for the automation job per current settings).
+    to maxSignalsDay.
 
     Historical WR/expectancy is computed over settings['fromDate']..
     settings['toDate'] (or ..scan_date if toDate is blank/absent) — the
-    exact same backtest window the app itself is configured with, synced
-    via /gap-settings. No lookback-days guessing here: every parameter
-    except maxSignalsDay (fixed at 1 for automation, per Raja) comes
-    straight from the synced settings.
+    exact same backtest window the app itself is configured with. No
+    lookback-days guessing here: every parameter, including maxSignalsDay,
+    comes straight from whatever preset's params the caller passes in.
+
+    maxSignalsDay used to be hardcoded to 1 for all automation regardless
+    of what the UI had configured ("per Raja") — a blanket safety cap from
+    when there was only one active config. Now that automation runs
+    per-preset (see /gap-orders/enter's loop over "Include in Automated
+    Trades" presets), each preset's OWN configured cap applies instead —
+    e.g. a deliberately curated "High-Conviction-Only" preset can take up
+    to 5 entries/day while a tighter preset stays at 1, because that's
+    what its own Cap Max/day field says. Defaults to 1 if a preset somehow
+    omits it, same fail-safe as before.
     """
     params = {
         "minGap":      settings["minGap"],
@@ -283,9 +292,9 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
     wr_threshold = settings.get("wrThreshold", 0) or 0
     pnl_threshold = settings.get("pnlThreshold", 0) or 0
     ranking_mode = settings.get("rankingMode", "expectancy")
-    # Fixed at 1 for automation, per Raja — deliberately ignores whatever
-    # maxSignalsDay happens to be synced from the browser's UI settings.
-    max_per_day = 1
+    # Per-preset cap — see the docstring above for why this is no longer
+    # hardcoded to 1 for every preset.
+    max_per_day = settings.get("maxSignalsDay", 1) or 1
 
     from_date = settings.get("fromDate") or None
     to_date = settings.get("toDate") or scan_date
