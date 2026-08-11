@@ -1,23 +1,4 @@
 {
-  "Loose-3DayTP": {
-    "minGap": 1.8,
-    "maxGap": 5,
-    "slType": "pct",
-    "slPct": 3,
-    "tpType": "pct",
-    "tpPct": 5,
-    "holdDays": 3,
-    "maxSignalsDay": 1,
-    "wrThreshold": 40,
-    "pnlThreshold": 0.3,
-    "capitalPerTrade": 1000000,
-    "rankingMode": "expectancy",
-    "direction": "both",
-    "fromDate": "2025-08-09",
-    "toDate": "2026-08-07",
-    "closeFilter": "strict",
-    "tradingMode": "paper"
-  },
   "Current-Baseline": {
     "minGap": 1.8,
     "maxGap": 6,
