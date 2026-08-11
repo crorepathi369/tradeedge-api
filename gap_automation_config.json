@@ -1,5 +1,7 @@
 {
   "enabledPresets": [
-    "Oneday-Setup"
+    "Oneday-Setup",
+    "Multiday-Fixed-TP",
+    "High-Conviction-Only"
   ]
 }
