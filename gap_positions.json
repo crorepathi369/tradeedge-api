@@ -3702,6 +3702,32 @@
       "exit_date": "2025-11-04",
       "pnl_pct": 2.23,
       "pnl_amount": 15382.5
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2025-08-07",
+      "entry_order_id": null,
+      "tradingsymbol": "BHEL25AUGFUT",
+      "lot_size": 2625,
+      "entry_price": 228.7,
+      "signal_entry": 227.97,
+      "signal_slLevel": 234.81,
+      "sl_price": 235.56,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 217.26,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 223.68,
+      "exit_date": "2025-08-12",
+      "pnl_pct": 2.2,
+      "pnl_amount": 13177.5
     }
   ],
   "DELHIVERY": [
@@ -4926,6 +4952,32 @@
       "exit_date": "2026-04-10",
       "pnl_pct": 5.0,
       "pnl_amount": 48222.0
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-08",
+      "entry_order_id": null,
+      "tradingsymbol": "CUMMINSIND25AUGFUT",
+      "lot_size": 200,
+      "entry_price": 3815.7,
+      "signal_entry": 3789.67,
+      "signal_slLevel": 3675.98,
+      "sl_price": 3701.23,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 4006.49,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 3805.8,
+      "exit_date": "2025-08-13",
+      "pnl_pct": -0.26,
+      "pnl_amount": -1980.0
     }
   ],
   "SHRIRAMFIN": [
@@ -5120,6 +5172,34 @@
       "exit_date": "2025-09-11",
       "pnl_pct": 0.81,
       "pnl_amount": 5029.0
+    }
+  ],
+  "APOLLOHOSP": [
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-13",
+      "entry_order_id": null,
+      "tradingsymbol": "APOLLOHOSP25AUGFUT",
+      "lot_size": 125,
+      "entry_price": 7824,
+      "signal_entry": 7788.18,
+      "signal_slLevel": 7554.53,
+      "sl_price": 7589.28,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 8215.2,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 7847.5,
+      "exit_date": "2025-08-19",
+      "pnl_pct": 0.3,
+      "pnl_amount": 2937.5
     }
   ]
 }
