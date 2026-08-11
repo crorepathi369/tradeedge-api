@@ -2703,6 +2703,17 @@
       <button class="btn btn-secondary" onclick="clearResults()">✕ Clear</button>
       <button class="btn btn-secondary" onclick="saveStrategyDefaults()" title="Save current parameters as your defaults">💾 Save</button>
       <button class="btn btn-secondary" onclick="resetStrategyDefaults()" title="Reset current strategy parameters to defaults">↺ Defaults</button>
+      <div id="overnightPresetBar" style="display:flex;align-items:center;gap:6px;">
+        <div style="width:1px;height:24px;background:var(--border);"></div>
+        <span style="font-size:11px;font-weight:500;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap;">Presets</span>
+        <select id="overnightPresetSelect" onchange="applyOvernightPreset(this.value)"
+          style="padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);color:var(--text);cursor:pointer;max-width:160px;"
+          title="Load a saved parameter combination">
+          <option value="">— Select preset —</option>
+        </select>
+        <button class="btn btn-secondary" onclick="saveOvernightPresetAs()" title="Save current parameters as a new named preset">💾 Save As…</button>
+        <button class="btn btn-secondary" onclick="deleteOvernightPreset()" title="Delete the selected preset">🗑</button>
+      </div>
     </div>
 
     <div class="progress-wrap" id="progressWrap" style="margin-top:14px;">
@@ -3396,6 +3407,48 @@ function _syncGapSettingsToServer(saved) {
   }).then(r => r.json())
     .then(j => console.log('[GapSettings] Synced to server:', j))
     .catch(e => console.warn('[GapSettings] Could not sync to server:', e));
+}
+
+// ── Named Overnight Gap presets — server sync ─────────────────────────────────
+// The server (via /gap-presets) is the source of truth so presets saved on
+// desktop show up on mobile and vice versa; TE_OVERNIGHT_PRESETS in
+// localStorage is just a fast-loading cache, refreshed from the server on
+// page load. Fire-and-forget on save/delete, same pattern as
+// _syncGapSettingsToServer — if the Render free-tier server is cold or
+// unreachable, the local cache still works, it just won't be shared yet.
+function _syncGapPresetToServer(name, params) {
+  fetch(`${TRADEEDGE_API_URL}/gap-presets`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ name, params }),
+  }).then(r => r.json())
+    .then(j => console.log('[GapPresets] Synced to server:', j))
+    .catch(e => console.warn('[GapPresets] Could not sync to server:', e));
+}
+
+function _deleteGapPresetOnServer(name) {
+  fetch(`${TRADEEDGE_API_URL}/gap-presets/delete`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ name }),
+  }).then(r => r.json())
+    .then(j => console.log('[GapPresets] Deleted on server:', j))
+    .catch(e => console.warn('[GapPresets] Could not delete on server:', e));
+}
+
+// Pulls the full preset library from the server and overwrites the local
+// cache — last-write-wins, same conflict model as gap-settings (no merge).
+// Called on page load; safe to call again any time (e.g. a manual refresh).
+function fetchGapPresetsFromServer() {
+  return fetch(`${TRADEEDGE_API_URL}/gap-presets`)
+    .then(r => r.json())
+    .then(presets => {
+      if (presets && typeof presets === 'object' && !presets.error) {
+        localStorage.setItem('TE_OVERNIGHT_PRESETS', JSON.stringify(presets));
+        refreshOvernightPresetSelect();
+      }
+    })
+    .catch(e => console.warn('[GapPresets] Could not fetch from server, using local cache:', e));
 }
 
 // ── Kite login — daily token authorization for the Gap automation ──────────
@@ -6556,6 +6609,9 @@ function setStrategy(s) {
   document.getElementById('overnightParams').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('intradayParams').style.display  = s === 'intraday'  ? '' : 'none';
   document.getElementById('pullbackParams').style.display  = s === 'pullback'  ? '' : 'none';
+  // Named presets only exist for Overnight Gap
+  const presetBar = document.getElementById('overnightPresetBar');
+  if (presetBar) presetBar.style.display = s === 'overnight' ? 'flex' : 'none';
   // Automation only exists for the Gap (Overnight) strategy — hide the whole
   // section rather than show it empty/irrelevant under Momentum or Pullback.
   const tradesTakenSection = document.getElementById('msTradesTaken');
@@ -6813,6 +6869,221 @@ function readOvernightParams() {
   };
 }
 
+// Shared by saveStrategyDefaults() and the named-presets feature (saveOvernightPresetAs())
+// so both write the exact same object shape that _syncGapSettingsToServer() expects.
+function _buildOvernightSavedObject() {
+  return {
+    minGap:         +document.getElementById('minGap').value,
+    maxGap:         +document.getElementById('maxGap').value,
+    slType:          document.getElementById('slType').value,
+    slPct:          +document.getElementById('slPct').value,
+    tpType:          document.getElementById('tpType').value,
+    tpPct:          +document.getElementById('tpPct').value,
+    holdDays:       +document.getElementById('holdDays').value,
+    maxSignalsDay:  +document.getElementById('maxSignalsDay').value,
+    wrThreshold:    +document.getElementById('scanWrThreshold').value,
+    pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
+    capitalPerTrade:+document.getElementById('capitalPerTrade').value,
+    rankingMode:     document.getElementById('rankingMode').value,
+    direction:       _direction,
+    // Included so the server-side automation job's historical WR/expectancy
+    // window matches the app's own backtest range exactly, rather than
+    // guessing at a lookback period.
+    fromDate:        document.getElementById('fromDate').value,
+    toDate:           document.getElementById('toDate').value,
+    closeFilter:      document.getElementById('closeFilter').value,
+    // Fail-safe default 'paper' — never sync as 'live' unless the toggle
+    // was explicitly clicked to Live in this session.
+    tradingMode:      _tradingMode || 'paper',
+  };
+}
+
+// Shared by loadSavedDefaults(), resetStrategyDefaults() and applyOvernightPreset() so
+// all three apply a saved/preset object to the form identically. Deliberately does NOT
+// touch the Paper/Live toggle — callers that should (loadSavedDefaults, resetStrategyDefaults)
+// set _tradingMode themselves afterward; presets are backtest-only and must never flip
+// live trading mode as a side effect of comparing parameter sets.
+function _applyOvernightParamsToForm(rawD) {
+  const d = { ...OVERNIGHT_DEFAULTS, ...rawD };
+  document.getElementById('minGap').value  = d.minGap;
+  document.getElementById('maxGap').value  = d.maxGap;
+  document.getElementById('slType').value  = d.slType;
+  document.getElementById('slPct').value   = d.slPct;
+  document.getElementById('tpType').value  = d.tpType;
+  document.getElementById('tpPct').value   = d.tpPct;
+  document.getElementById('holdDays').value = d.holdDays;
+  document.getElementById('maxSignalsDay').value = d.maxSignalsDay;
+  if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+  if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+  if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
+  if (d.rankingMode)    document.getElementById('rankingMode').value      = d.rankingMode;
+  // Field visibility must follow the loaded tpType/slType, not be hardcoded —
+  // a Fixed % TP preset (see Hold Days) needs tpPctGrp/holdDaysGrp visible.
+  document.getElementById('slPctGrp').style.display    = d.slType === 'pct' ? '' : 'none';
+  document.getElementById('tpPctGrp').style.display    = d.tpType === 'pct' ? '' : 'none';
+  document.getElementById('holdDaysGrp').style.display = d.tpType === 'pct' ? '' : 'none';
+  _lockDirection(false);
+  if (d.direction) setDirection(d.direction);
+  if (d.fromDate) document.getElementById('fromDate').value = d.fromDate;
+  if (d.toDate)   document.getElementById('toDate').value   = d.toDate;
+  _syncWrThresholdHidden('overnight', document.getElementById('scanWrThreshold').value);
+  _syncPnlThresholdHidden('overnight', document.getElementById('scanPnlThreshold').value);
+  _syncMaxDayHidden('overnight', document.getElementById('maxSignalsDay').value);
+}
+
+// Mobile counterparts of _buildOvernightSavedObject()/_applyOvernightParamsToForm()
+// above — the mobile settings panel is a separate set of `mob*`-prefixed DOM
+// elements (not the same inputs as desktop), kept in sync one-directionally via
+// closeMobSettings(). Used by the presets feature so Save As/Apply work correctly
+// when triggered from the mobile settings panel.
+function _buildOvernightSavedObjectMobile() {
+  return {
+    minGap:         +document.getElementById('mobMinGap').value,
+    maxGap:         +document.getElementById('mobMaxGap').value,
+    slType:          document.getElementById('mobSlType').value,
+    slPct:          +document.getElementById('mobSlPct').value,
+    tpType:          document.getElementById('mobTpType').value,
+    tpPct:          +document.getElementById('mobTpPctVal').value,
+    holdDays:       +document.getElementById('mobHoldDays').value,
+    maxSignalsDay:  +document.getElementById('mobMaxDay').value,
+    wrThreshold:    +document.getElementById('mobWrInput')?.value  || 40,
+    pnlThreshold:   +document.getElementById('mobPnlInput')?.value || 0.3,
+    capitalPerTrade:+document.getElementById('mobCapital')?.value  || 1000000,
+    rankingMode:     document.getElementById('rankingMode')?.value || 'expectancy',
+    direction:       _mobDir || 'both',
+    fromDate:        document.getElementById('mobFromDate')?.value || document.getElementById('fromDate').value,
+    toDate:          document.getElementById('mobToDate')?.value   || document.getElementById('toDate').value,
+    closeFilter:      document.getElementById('closeFilter')?.value || 'strict',
+    tradingMode:      _tradingMode || 'paper',
+  };
+}
+
+function _applyOvernightParamsToMobForm(rawD) {
+  const d = { ...OVERNIGHT_DEFAULTS, ...rawD };
+  document.getElementById('mobMinGap').value   = d.minGap;
+  document.getElementById('mobMaxGap').value   = d.maxGap;
+  document.getElementById('mobSlType').value   = d.slType;
+  document.getElementById('mobSlPct').value    = d.slPct;
+  document.getElementById('mobTpType').value   = d.tpType;
+  document.getElementById('mobTpPctVal').value = d.tpPct;
+  document.getElementById('mobHoldDays').value = d.holdDays;
+  document.getElementById('mobMaxDay').value   = d.maxSignalsDay;
+  const wrEl  = document.getElementById('mobWrInput');
+  const pnlEl = document.getElementById('mobPnlInput');
+  const capEl = document.getElementById('mobCapital');
+  if (wrEl  && d.wrThreshold)    wrEl.value  = d.wrThreshold;
+  if (pnlEl && d.pnlThreshold)   pnlEl.value = d.pnlThreshold;
+  if (capEl && d.capitalPerTrade) capEl.value = d.capitalPerTrade;
+  // Same fix as _applyOvernightParamsToForm — visibility follows tpType/slType,
+  // not a hardcoded reset, so a Fixed % TP preset shows TP%/Hold Days.
+  const slRow = document.getElementById('mobSlPctRow');
+  const tpRow = document.getElementById('mobTpPctRow');
+  const hdRow = document.getElementById('mobHoldDaysRow');
+  if (slRow) slRow.style.display = d.slType === 'pct' ? '' : 'none';
+  if (tpRow) tpRow.style.display = d.tpType === 'pct' ? '' : 'none';
+  if (hdRow) hdRow.style.display = d.tpType === 'pct' ? '' : 'none';
+  const mfEl = document.getElementById('mobFromDate');
+  const mtEl = document.getElementById('mobToDate');
+  if (mfEl && d.fromDate) mfEl.value = d.fromDate;
+  if (mtEl && d.toDate)   mtEl.value = d.toDate;
+  mobSetDir(d.direction || 'both');
+  mobSetRanking(d.rankingMode || 'expectancy');
+}
+
+// ── Named presets — Overnight Gap only ────────────────────────────────────────
+// Lets a user save several distinct parameter combinations (e.g. a tight
+// high-conviction setup vs. a looser multi-day-hold setup) and switch between
+// them for backtesting/comparison, from either the desktop or mobile UI —
+// applying a preset always updates BOTH forms so the two stay in sync regardless
+// of which one triggered the load. Deliberately separate from TE_OVERNIGHT_DEFAULTS:
+// loading a preset never touches Paper/Live mode; only the existing "💾 Save"
+// button commits a config as the live automation default.
+function _isMobileView() {
+  const shell = document.getElementById('mobileShell');
+  return !!shell && getComputedStyle(shell).display !== 'none';
+}
+function getOvernightPresets() {
+  try { return JSON.parse(localStorage.getItem('TE_OVERNIGHT_PRESETS')) || {}; }
+  catch(e) { console.warn('[getOvernightPresets] parse error', e); return {}; }
+}
+
+// Populates both the desktop (#overnightPresetSelect) and mobile
+// (#mobOvernightPresetSelect) dropdowns from the same underlying data —
+// they read the same TE_OVERNIGHT_PRESETS cache, so one refresh covers both.
+function refreshOvernightPresetSelect(selectName) {
+  const presets = getOvernightPresets();
+  const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+  ['overnightPresetSelect', 'mobOvernightPresetSelect'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '';
+    sel.add(new Option('— Select preset —', ''));
+    names.forEach(n => sel.add(new Option(n, n)));
+    if (selectName && presets[selectName]) sel.value = selectName;
+  });
+}
+
+// selectId lets the mobile presets bar reuse this against its own dropdown
+// (#mobOvernightPresetSelect) for the "suggest current name" prefill.
+function saveOvernightPresetAs(selectId) {
+  const sel = document.getElementById(selectId || 'overnightPresetSelect');
+  const name = prompt('Save current Overnight Gap parameters as preset:', sel ? sel.value : '');
+  if (name == null) return;
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const presets = getOvernightPresets();
+  const overwrite = !!presets[trimmed];
+  presets[trimmed] = _isMobileView() ? _buildOvernightSavedObjectMobile() : _buildOvernightSavedObject();
+  localStorage.setItem('TE_OVERNIGHT_PRESETS', JSON.stringify(presets));
+  refreshOvernightPresetSelect(trimmed);
+  _syncGapPresetToServer(trimmed, presets[trimmed]);
+  _showSaveToast(`Preset "${trimmed}" ${overwrite ? 'updated' : 'saved'} ✓`);
+}
+
+function applyOvernightPreset(name) {
+  if (!name) return;
+  const presets = getOvernightPresets();
+  const d = presets[name];
+  if (!d) return;
+  // Applied to both forms unconditionally so desktop and mobile never drift —
+  // whichever dropdown triggered this, the other one's fields update too.
+  _applyOvernightParamsToForm(d);
+  if (document.getElementById('mobMinGap')) _applyOvernightParamsToMobForm(d);
+  refreshOvernightPresetSelect(name);
+  _showSaveToast(`Preset "${name}" loaded ✓`);
+  // Re-run so the backtest results on screen reflect the preset just loaded,
+  // matching the same "instant feedback" behaviour as saveStrategyDefaults()/
+  // saveMobDefaults() — but only on whichever view is actually visible.
+  if (_isMobileView()) {
+    _rerunMobBacktestAfterSettingsChange();
+  } else if (getAllLoadedSymbols().length > 0) {
+    runBacktestSilent().then(() => {
+      if (!allTrades.length) return;
+      buildResults([]);
+      document.getElementById('results').style.display = 'block';
+      document.getElementById('emptyState').style.display = 'none';
+      const tradedSyms = new Set(allTrades.map(t => t.sym)).size;
+      setProgress(100, `Done. ${allTrades.length} trades across ${tradedSyms} symbols.`);
+      refreshScannerGate();
+    });
+  }
+}
+
+// selectId lets the mobile presets bar reuse this against its own dropdown
+// (#mobOvernightPresetSelect) instead of the desktop one.
+function deleteOvernightPreset(selectId) {
+  const sel = document.getElementById(selectId || 'overnightPresetSelect');
+  const name = sel ? sel.value : '';
+  if (!name) { _showSaveToast('Select a preset to delete'); return; }
+  if (!confirm(`Delete preset "${name}"?`)) return;
+  const presets = getOvernightPresets();
+  delete presets[name];
+  localStorage.setItem('TE_OVERNIGHT_PRESETS', JSON.stringify(presets));
+  refreshOvernightPresetSelect();
+  _deleteGapPresetOnServer(name);
+  _showSaveToast(`Preset "${name}" deleted`);
+}
+
 function readIntradayParams() {
   return {
     idMinMove:   +document.getElementById('idMinMove').value,
@@ -6877,21 +7148,9 @@ function loadSavedDefaults() {
   const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
   if (onRaw) {
     try {
-      const d = { ...OVERNIGHT_DEFAULTS, ...JSON.parse(onRaw) };
-      document.getElementById('minGap').value         = d.minGap;
-      document.getElementById('maxGap').value         = d.maxGap;
-      document.getElementById('slType').value         = d.slType;
-      document.getElementById('slPct').value          = d.slPct;
-      document.getElementById('tpType').value         = d.tpType;
-      document.getElementById('tpPct').value          = d.tpPct;
-      document.getElementById('holdDays').value       = d.holdDays;
-      document.getElementById('maxSignalsDay').value  = d.maxSignalsDay;
-      if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-      if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
-      if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
-      if (d.rankingMode)    document.getElementById('rankingMode').value      = d.rankingMode;
-      if (d.direction)      setDirection(d.direction);
-      setTradingMode(d.tradingMode === 'live' ? 'live' : 'paper'); // fail-safe: anything but exactly 'live' loads as paper
+      const rawD = JSON.parse(onRaw);
+      _applyOvernightParamsToForm(rawD);
+      setTradingMode(rawD.tradingMode === 'live' ? 'live' : 'paper'); // fail-safe: anything but exactly 'live' loads as paper
     } catch(e) { console.warn('[loadSavedDefaults] overnight parse error', e); }
   }
 
@@ -6959,30 +7218,7 @@ function saveStrategyDefaults() {
   localStorage.setItem('TE_PNL_THRESHOLD', pnl);
 
   if (_strategy === 'overnight') {
-    const saved = {
-      minGap:         +document.getElementById('minGap').value,
-      maxGap:         +document.getElementById('maxGap').value,
-      slType:          document.getElementById('slType').value,
-      slPct:          +document.getElementById('slPct').value,
-      tpType:          document.getElementById('tpType').value,
-      tpPct:          +document.getElementById('tpPct').value,
-      holdDays:       +document.getElementById('holdDays').value,
-      maxSignalsDay:  +document.getElementById('maxSignalsDay').value,
-      wrThreshold:    +document.getElementById('scanWrThreshold').value,
-      pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
-      capitalPerTrade:+document.getElementById('capitalPerTrade').value,
-      rankingMode:     document.getElementById('rankingMode').value,
-      direction:       _direction,
-      // Included so the server-side automation job's historical WR/expectancy
-      // window matches the app's own backtest range exactly, rather than
-      // guessing at a lookback period.
-      fromDate:        document.getElementById('fromDate').value,
-      toDate:           document.getElementById('toDate').value,
-      closeFilter:      document.getElementById('closeFilter').value,
-      // Fail-safe default 'paper' — never sync as 'live' unless the toggle
-      // was explicitly clicked to Live in this session.
-      tradingMode:      _tradingMode || 'paper',
-    };
+    const saved = _buildOvernightSavedObject();
     localStorage.setItem('TE_OVERNIGHT_DEFAULTS', JSON.stringify(saved));
     _syncGapSettingsToServer(saved);
     _showSaveToast(`Overnight Gap defaults saved ✓ (${(_tradingMode || 'paper') === 'live' ? '🔴 LIVE' : '🧪 Paper'} mode)`);
@@ -7068,25 +7304,9 @@ function resetStrategyDefaults() {
   if (_strategy === 'overnight') {
     // Load saved defaults if available, otherwise fall back to hardcoded
     const savedRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
-    const d = savedRaw ? { ...OVERNIGHT_DEFAULTS, ...JSON.parse(savedRaw) } : OVERNIGHT_DEFAULTS;
-    document.getElementById('minGap').value  = d.minGap;
-    document.getElementById('maxGap').value  = d.maxGap;
-    document.getElementById('slType').value  = d.slType;
-    document.getElementById('slPct').value   = d.slPct;
-    document.getElementById('tpType').value  = d.tpType;
-    document.getElementById('tpPct').value   = d.tpPct;
-    document.getElementById('holdDays').value = d.holdDays;
-    document.getElementById('maxSignalsDay').value = d.maxSignalsDay;
-    if (d.wrThreshold)   document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-    if (d.pnlThreshold)  document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
-    if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
-    if (d.rankingMode)   document.getElementById('rankingMode').value       = d.rankingMode;
-    document.getElementById('slPctGrp').style.display   = '';
-    document.getElementById('tpPctGrp').style.display   = 'none';
-    document.getElementById('holdDaysGrp').style.display = 'none';
-    if (!d.rankingMode) document.getElementById('rankingMode').value = 'expectancy';
-    _lockDirection(false);
-    if (d.direction) setDirection(d.direction);
+    const rawD = savedRaw ? JSON.parse(savedRaw) : {};
+    _applyOvernightParamsToForm(rawD);
+    if (!rawD.rankingMode) document.getElementById('rankingMode').value = 'expectancy';
   } else if (_strategy === 'intraday') {
     const entryType = document.getElementById('idEntryType')?.value || 'd2_open';
     const key = entryType === 'd1_close' ? 'TE_INTRADAY_D1_DEFAULTS' : 'TE_INTRADAY_D2_DEFAULTS';
@@ -11593,6 +11813,15 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSymDril
 
 updateDataStatusBar();
 loadSavedDefaults();
+// Deferred to DOMContentLoaded: the mobile shell's #mobOvernightPresetSelect is
+// markup further down the document, past this script block, so calling these
+// synchronously here would silently no-op on the mobile dropdown (element not
+// parsed yet). refreshOvernightPresetSelect() itself no-ops per-select when an
+// id isn't found, so this only matters for the mobile one.
+document.addEventListener('DOMContentLoaded', () => {
+  refreshOvernightPresetSelect(); // instant paint from local cache
+  fetchGapPresetsFromServer();    // then reconcile against the server (source of truth)
+});
 </script>
 <div id="symDrillModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);overflow-y:auto;padding:16px 12px;">
   <div style="max-width:900px;margin:0 auto;background:var(--surface);border-radius:16px;box-shadow:0 8px 48px rgba(0,0,0,0.2);overflow:hidden;">
@@ -12234,6 +12463,24 @@ loadSavedDefaults();
 
 
 
+    <!-- Named presets — Overnight Gap only, mirrors the desktop Presets bar -->
+    <div class="mob-settings-group" id="mobOvernightPresetGroup">
+      <div class="mob-settings-group-title">Presets</div>
+      <div class="mob-settings-row" style="border:none;padding-top:0;gap:8px;">
+        <select id="mobOvernightPresetSelect" onchange="applyOvernightPreset(this.value)"
+          style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;
+            font-family:'DM Mono',monospace;font-size:13px;background:var(--surface);color:var(--text);">
+          <option value="">— Select preset —</option>
+        </select>
+        <button onclick="saveOvernightPresetAs('mobOvernightPresetSelect')" style="padding:8px 12px;
+          background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;
+          font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;white-space:nowrap;">💾 Save As…</button>
+        <button onclick="deleteOvernightPreset('mobOvernightPresetSelect')" style="padding:8px 10px;
+          background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;
+          font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;">🗑</button>
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px;margin-top:20px;">
       <button onclick="saveMobDefaults()" style="flex:1;padding:14px;background:var(--text);
         color:var(--surface);border:1px solid var(--text);border-radius:10px;
@@ -12353,6 +12600,9 @@ function mobSetStrategy(s) {
   document.getElementById('mobOvernightSettings').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('mobIntradaySettings').style.display  = s === 'intraday'  ? '' : 'none';
   document.getElementById('mobPullbackSettings').style.display  = s === 'pullback'  ? '' : 'none';
+  // Named presets only exist for Overnight Gap
+  const mobPresetGroup = document.getElementById('mobOvernightPresetGroup');
+  if (mobPresetGroup) mobPresetGroup.style.display = s === 'overnight' ? '' : 'none';
   // Intraday defaults to Short — direction locked. Overnight + Pullback: both, unlocked.
   if (s === 'intraday') { mobSetDir('short'); _lockDirection(true); }
   else { mobSetDir('both'); _lockDirection(false); }

@@ -703,6 +703,12 @@ _kite = KiteConnect(api_key=KITE_API_KEY) if (KiteConnect and KITE_API_KEY) else
 # rides along with the existing GitHub data-branch backup/restore.
 GAP_SETTINGS_FILE = DATA_DIR / "gap_settings.json"
 
+# Named Overnight Gap presets ({name: paramsObject}), same DATA_DIR pattern as
+# GAP_SETTINGS_FILE above. The server is the source of truth here (not just a
+# mirror) — the frontend's localStorage copy is a cache, refreshed from here
+# on load, so presets saved on desktop show up on mobile and vice versa.
+GAP_PRESETS_FILE = DATA_DIR / "gap_presets.json"
+
 try:
     from breeze_connect import BreezeConnect
     _BREEZE_AVAILABLE = True
@@ -1860,6 +1866,79 @@ def get_gap_settings():
             return _json.load(f)
     except (FileNotFoundError, ValueError):
         return None
+
+
+# ── Named Overnight Gap presets ──────────────────────────────────────────────
+# Separate from GAP_SETTINGS_FILE above: gap-settings is the single "live"
+# config the automation reads; gap-presets is a named library of parameter
+# combinations the frontend lets the user save/switch between for backtesting.
+# DELETE isn't used anywhere else in this app and add_cors()/cors_response()
+# both hardcode Access-Control-Allow-Methods to "GET, OPTIONS", so deletion
+# goes through POST /gap-presets/delete rather than an actual DELETE verb —
+# consistent with every other mutating route here.
+
+def get_gap_presets():
+    """Returns the full {name: paramsObject} preset dict, or {} if none saved yet."""
+    try:
+        import json as _json
+        with open(GAP_PRESETS_FILE) as f:
+            return _json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def _save_gap_presets(presets):
+    import json as _json
+    with open(GAP_PRESETS_FILE, "w") as f:
+        _json.dump(presets, f, indent=2)
+
+
+@app.route("/gap-presets", methods=["GET", "OPTIONS"])
+def get_gap_presets_endpoint():
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    return cors_response(get_gap_presets())
+
+
+@app.route("/gap-presets", methods=["POST", "OPTIONS"])
+def save_gap_preset():
+    """Upserts one named preset. Body: {name, params}."""
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    body = request.get_json(force=True) or {}
+    name = (body.get("name") or "").strip()
+    params = body.get("params")
+    if not name or not isinstance(params, dict):
+        return cors_response({"error": "name_and_params_required"}, 400)
+
+    try:
+        presets = get_gap_presets()
+        presets[name] = params
+        _save_gap_presets(presets)
+        return cors_response({"ok": True, "msg": f"Preset '{name}' saved", "presets": presets})
+    except Exception as e:
+        return cors_response({"error": str(e)}, 500)
+
+
+@app.route("/gap-presets/delete", methods=["POST", "OPTIONS"])
+def delete_gap_preset():
+    """Removes one named preset. Body: {name}."""
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    body = request.get_json(force=True) or {}
+    name = (body.get("name") or "").strip()
+    if not name:
+        return cors_response({"error": "name_required"}, 400)
+
+    try:
+        presets = get_gap_presets()
+        presets.pop(name, None)
+        _save_gap_presets(presets)
+        return cors_response({"ok": True, "msg": f"Preset '{name}' deleted", "presets": presets})
+    except Exception as e:
+        return cors_response({"error": str(e)}, 500)
 
 
 # ── Gap automation — scan, entry, exit ──────────────────────────────────────
