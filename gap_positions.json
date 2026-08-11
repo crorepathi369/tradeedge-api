@@ -1358,6 +1358,32 @@
       "pnl_pct": 1.5,
       "pnl_amount": 13455.0,
       "preset": "Oneday-Setup"
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-05-14",
+      "entry_order_id": null,
+      "tradingsymbol": "ZYDUSLIFE26MAYFUT",
+      "lot_size": 900,
+      "entry_price": 996.05,
+      "signal_entry": 991.7,
+      "signal_slLevel": 961.95,
+      "sl_price": 966.17,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 1045.85,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1045.85,
+      "exit_date": "2026-05-19",
+      "pnl_pct": 5.0,
+      "pnl_amount": 44820.0
     }
   ],
   "PIIND": [
@@ -1425,6 +1451,32 @@
       "pnl_pct": 1.96,
       "pnl_amount": 10526.25,
       "preset": "Oneday-Setup"
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-05-22",
+      "entry_order_id": null,
+      "tradingsymbol": "MAXHEALTH26MAYFUT",
+      "lot_size": 525,
+      "entry_price": 1024.4,
+      "signal_entry": 1023.25,
+      "signal_slLevel": 1053.95,
+      "sl_price": 1055.13,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 973.18,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1000.45,
+      "exit_date": "2026-05-27",
+      "pnl_pct": 2.34,
+      "pnl_amount": 12573.75
     }
   ],
   "LODHA": [
@@ -1471,6 +1523,28 @@
       "pnl_pct": 0.68,
       "pnl_amount": 4062.5,
       "preset": "Oneday-Setup"
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-05-26",
+      "entry_order_id": null,
+      "tradingsymbol": "CONCOR26JUNFUT",
+      "lot_size": 1250,
+      "entry_price": 477.05,
+      "signal_entry": 475.9,
+      "signal_slLevel": 490.18,
+      "sl_price": 491.36,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 453.2,
+      "hold_days": 3,
+      "days_held": 1,
+      "gtt_id": null,
+      "status": "open"
     }
   ],
   "WIPRO": [
@@ -1601,6 +1675,32 @@
       "pnl_pct": 2.37,
       "pnl_amount": 15900.0,
       "preset": "Oneday-Setup"
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-06-09",
+      "entry_order_id": null,
+      "tradingsymbol": "ADANIGREEN26JUNFUT",
+      "lot_size": 600,
+      "entry_price": 1542.6,
+      "signal_entry": 1534.5,
+      "signal_slLevel": 1488.46,
+      "sl_price": 1496.32,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 1619.73,
+      "hold_days": 3,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 1496.32,
+      "exit_date": "2026-06-10",
+      "pnl_pct": -3.0,
+      "pnl_amount": -27768.0
     }
   ],
   "SUZLON": [
@@ -2174,6 +2274,28 @@
       "pnl_pct": -0.31,
       "pnl_amount": -2835.0,
       "preset": "Oneday-Setup"
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-05-25",
+      "entry_order_id": null,
+      "tradingsymbol": "HINDPETRO26JUNFUT",
+      "lot_size": 2025,
+      "entry_price": 405.1,
+      "signal_entry": 403.35,
+      "signal_slLevel": 391.25,
+      "sl_price": 392.95,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 425.36,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "open"
     }
   ],
   "NYKAA": [
@@ -2764,6 +2886,32 @@
       "exit_date": "2026-08-05",
       "pnl_pct": 0.4,
       "pnl_amount": 3250
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-06-08",
+      "entry_order_id": null,
+      "tradingsymbol": "POWERINDIA26JUNFUT",
+      "lot_size": 25,
+      "entry_price": 35065,
+      "signal_entry": 35010.0,
+      "signal_slLevel": 36060.3,
+      "sl_price": 36116.95,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 33311.75,
+      "hold_days": 3,
+      "days_held": 1,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 33311.75,
+      "exit_date": "2026-06-10",
+      "pnl_pct": 5.0,
+      "pnl_amount": 43831.25
     }
   ],
   "HINDZINC": [
@@ -2844,6 +2992,34 @@
       "exit_date": "2026-07-07",
       "pnl_pct": 2.22,
       "pnl_amount": 14140.0
+    }
+  ],
+  "TCS": [
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-06-03",
+      "entry_order_id": null,
+      "tradingsymbol": "TCS26JUNFUT",
+      "lot_size": 225,
+      "entry_price": 2240,
+      "signal_entry": 2241.7,
+      "signal_slLevel": 2308.95,
+      "sl_price": 2307.2,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 2128.0,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2163.6,
+      "exit_date": "2026-06-08",
+      "pnl_pct": 3.41,
+      "pnl_amount": 17190.0
     }
   ]
 }
