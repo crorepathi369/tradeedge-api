@@ -4432,16 +4432,17 @@ function renderMobLiveTrades() {
       <div style="font-family:'DM Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text3);">Net P&amp;L</div>
       <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;margin-top:2px;color:${_pnlColor(netPnl)}">${_pnlSign(netPnl)}₹${Math.abs(netPnl).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
     </div>
-    <div class="mob-stat" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:76px;">
-      <div style="font-family:'DM Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text3);">Slippage</div>
-      <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;margin-top:2px;">${avgSlip == null ? '—' : (avgSlip >= 0 ? '+' : '') + avgSlip.toFixed(2) + '%'}</div>
-    </div>
     <div class="mob-stat" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:92px;">
       <div style="font-family:'DM Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text3);">Total Trades</div>
       <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;margin-top:2px;">${total}</div>
       <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--text3);margin-top:1px;white-space:nowrap;">${wins.length}W · ${losses.length}L · ${slHits.length}SL</div>
     </div>
+    <div class="mob-stat" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:76px;">
+      <div style="font-family:'DM Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text3);">Slippage</div>
+      <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;margin-top:2px;">${avgSlip == null ? '—' : (avgSlip >= 0 ? '+' : '') + avgSlip.toFixed(2) + '%'}</div>
+    </div>
   `;
+
 
   if (_mobTtSubTab === 'daywise')   { renderMobTtDayCards();   return; }
   if (_mobTtSubTab === 'calendar')  { renderMobTtCalendar();   return; }
