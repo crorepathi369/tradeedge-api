@@ -797,7 +797,24 @@ def _close_open_positions_locked(kite, data_dir: Path, positions: dict, reconcil
 # just for a specific past date instead of "today".
 
 def _already_backfilled(positions: dict, symbol: str, entry_date: str, preset: str) -> bool:
-    return any(t.get("backfilled") and t.get("entry_date") == entry_date and t.get("preset") == preset
+    """
+    True if ANY trade already exists for this (symbol, entry_date, preset) —
+    backfilled OR real. A real live entry for that exact date already
+    correctly represents that day's activity; backfill must never create a
+    second record alongside it.
+
+    Bug found 2026-08-12: this used to only check other backfilled==True
+    records. If the live cron had already placed a real entry for a symbol
+    today, then someone cleared backfilled trades and re-ran backfill (a
+    normal workflow — see clear_backfilled_trades()), the old check never
+    saw the real entry (backfilled is unset on it) and happily created a
+    second, duplicate "backfilled" record for the same (symbol, date,
+    preset) — observed live: two OIL/Oneday-Setup entries for the same day,
+    one real, one backfilled. There is never a legitimate reason for two
+    trades to share (symbol, entry_date, preset) within a single preset's
+    automation — a symbol either signals on a given day or it doesn't.
+    """
+    return any(t.get("entry_date") == entry_date and t.get("preset") == preset
                for t in positions.get(symbol, []))
 
 
@@ -911,11 +928,14 @@ def backfill_paper_trade(kite, data_dir: Path, signal: dict, entry_date: date,
     approximation — exact historical lot sizes aren't recoverable this
     way, but they rarely change.
 
-    Idempotent — a (symbol, entry_date, preset) triple already backfilled is
-    skipped, so re-running a backfill request doesn't duplicate trades, and
-    two different presets backfilling the same historical (symbol, date)
-    don't collide with each other. Never raises; returns
-    {"ok": False, "error": ...} on any failure so a bad symbol/date doesn't
+    Idempotent — a (symbol, entry_date, preset) triple that already has ANY
+    trade (backfilled or real) is skipped, so re-running a backfill request
+    never duplicates trades, including against a real entry the live cron
+    already placed for that exact date (see _already_backfilled()). Two
+    different presets backfilling the same historical (symbol, date) still
+    don't collide with each other, since the check is scoped per-preset.
+    Never raises; returns {"ok": False, "error": ...} on any failure so a
+    bad symbol/date doesn't
     abort the whole batch. Runs under _positions_lock end-to-end, same
     reasoning as place_entry_order().
     """
