@@ -12290,7 +12290,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   <!-- Live Trades Tab content — real Kite-executed trades, sibling of mobScannerContent / mobTradesTab -->
   <div id="mobLiveTradesTab" style="display:none;flex-direction:column;min-height:0;flex:1;">
-    <div id="mobTtStratHdr" style="padding:10px 12px 0;"></div>
+    <div style="display:flex;align-items:stretch;gap:8px;padding:10px 12px 0;">
+      <div id="mobTtStratHdr" style="flex:1;min-width:0;"></div>
+      <button class="mob-settings-icon-btn" onclick="mobSetStrategy(_mobLiveTradesStrat); openMobSettings();" title="Scanner settings"
+        style="width:auto;height:auto;padding:0 16px;font-size:26px;flex-shrink:0;">⚙</button>
+    </div>
     <div id="mobTtGapControls">
       <div id="mobTtStats" style="display:flex;gap:8px;padding:10px 12px 4px;overflow-x:auto;"></div>
       <div style="display:flex;gap:6px;padding:8px 12px;">
