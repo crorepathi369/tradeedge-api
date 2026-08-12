@@ -3742,22 +3742,28 @@ function sortTradesTaken(field) {
   renderTradesTaken();
 }
 
-// Preset-only filter, shared by _ttFilteredSorted() (status/side/preset,
-// used by the table/day-cards/calendar/stockwise sub-tabs) and _ttStats()/
-// _ttStatsExtended() (preset only — those two deliberately ignore status/
-// side so the stat row stays a full picture regardless of table filters,
-// but preset SHOULD narrow the stats too since comparing setups side by
-// side is the whole point of tagging trades by preset).
+// Shared base filter (preset + status + side) used by everything: the
+// table/day-cards/calendar/stockwise sub-tabs via _ttFilteredSorted(), AND
+// the summary stat cards via _ttStats()/_ttStatsExtended() below. Previously
+// the stats deliberately used preset-only filtering so the stat row stayed
+// a "full picture" regardless of table filters — changed on request so the
+// summary numbers now track whatever status/side selection is active,
+// e.g. picking "Long" shows Long-only win rate/net P&L, not everything.
 function _ttPresetFiltered() {
   return _tradesTakenFilter.preset
     ? _tradesTakenData.filter(r => r.preset === _tradesTakenFilter.preset)
     : _tradesTakenData;
 }
 
-function _ttFilteredSorted() {
-  let rows = _ttPresetFiltered().slice();
+function _ttBaseFiltered() {
+  let rows = _ttPresetFiltered();
   if (_tradesTakenFilter.status !== 'all') rows = rows.filter(r => r.status === _tradesTakenFilter.status);
   if (_tradesTakenFilter.side   !== 'all') rows = rows.filter(r => r.direction === _tradesTakenFilter.side);
+  return rows;
+}
+
+function _ttFilteredSorted() {
+  let rows = _ttBaseFiltered().slice();
 
   const { field, dir } = _tradesTakenSort;
   const mul = dir === 'asc' ? 1 : -1;
@@ -3812,7 +3818,7 @@ function _ttSlHTML(r) {
 
 // Computes the shared stat-strip values — used by both desktop and mobile.
 function _ttStats() {
-  const all    = _ttPresetFiltered();
+  const all    = _ttBaseFiltered();
   const open   = all.filter(r => r.status === 'open');
   const closed = all.filter(r => r.status !== 'open');
   const wins   = closed.filter(r => (r.pnl_pct ?? 0) > 0);
@@ -3831,7 +3837,7 @@ function _ttStats() {
 // so the rupee card is labelled accordingly rather than implying the two
 // are on the same basis.
 function _ttStatsExtended() {
-  const all    = _ttPresetFiltered();
+  const all    = _ttBaseFiltered();
   const closed = all.filter(r => r.status !== 'open');
   const open   = all.filter(r => r.status === 'open');
   const longs  = all.filter(r => r.direction === 'LONG');
