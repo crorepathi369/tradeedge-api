@@ -20,7 +20,11 @@
       "hold_days": 3,
       "days_held": 2,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "Oneday-Setup",
@@ -724,7 +728,11 @@
       "hold_days": 3,
       "days_held": 0,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "Multiday-Fixed-TP",
@@ -876,7 +884,11 @@
       "hold_days": 1,
       "days_held": 0,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "Oneday-Setup",
@@ -2902,7 +2914,11 @@
       "hold_days": 3,
       "days_held": 1,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "Oneday-Setup",
@@ -2950,7 +2966,11 @@
       "hold_days": 3,
       "days_held": 1,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     }
   ],
   "ADANIGREEN": [
@@ -4026,7 +4046,11 @@
       "hold_days": 3,
       "days_held": 1,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "High-Conviction-Fixed-TP",
@@ -4095,8 +4119,12 @@
       "sl_price": 459.34,
       "sl_price_source": "paper_simulated_fill",
       "gtt_id": null,
-      "status": "open",
-      "preset": "Oneday-Setup"
+      "status": "closed_eod",
+      "preset": "Oneday-Setup",
+      "exit_price": 472.5,
+      "exit_date": "2026-08-12",
+      "pnl_pct": -0.22,
+      "pnl_amount": -1470.0
     },
     {
       "preset": "Multiday-Fixed-TP",
@@ -4280,7 +4308,11 @@
       "hold_days": 3,
       "days_held": 2,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "Multiday-Fixed-TP",
@@ -4354,7 +4386,11 @@
       "hold_days": 3,
       "days_held": 2,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "High-Conviction-Fixed-TP",
@@ -5824,7 +5860,11 @@
       "hold_days": 3,
       "days_held": 0,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "High-Conviction-Fixed-TP",
@@ -6962,7 +7002,11 @@
       "hold_days": 3,
       "days_held": 1,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "Multiday-Fixed-TP",
@@ -7412,7 +7456,11 @@
       "hold_days": 3,
       "days_held": 1,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "Oneday-Setup",
@@ -7460,7 +7508,11 @@
       "hold_days": 3,
       "days_held": 1,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_eod",
+      "exit_price": null,
+      "exit_date": "2026-08-12",
+      "pnl_pct": null,
+      "pnl_amount": null
     },
     {
       "preset": "High-Conviction-Fixed-TP",
