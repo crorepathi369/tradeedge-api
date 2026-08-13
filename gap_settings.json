@@ -1,6 +1,6 @@
 {
-  "minGap": 2,
-  "maxGap": 4.5,
+  "minGap": 1.8,
+  "maxGap": 6,
   "slType": "pct",
   "slPct": 3,
   "tpType": "d2_close",
@@ -16,5 +16,5 @@
   "toDate": "2026-08-07",
   "closeFilter": "strict",
   "tradingMode": "paper",
-  "_syncedAt": "2026-08-13 11:16:09"
+  "_syncedAt": "2026-08-13 11:22:41"
 }
