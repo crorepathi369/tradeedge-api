@@ -3705,5 +3705,33 @@
       "pnl_pct": 2.84,
       "pnl_amount": 16300.0
     }
+  ],
+  "HDFCBANK": [
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-07-20",
+      "entry_order_id": null,
+      "tradingsymbol": "HDFCBANK26JULFUT",
+      "lot_size": 650,
+      "entry_price": 779.35,
+      "signal_entry": 777.6,
+      "signal_slLevel": 800.93,
+      "sl_price": 802.73,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 762.95,
+      "exit_date": "2026-07-21",
+      "pnl_pct": 2.1,
+      "pnl_amount": 10660.0
+    }
   ]
 }
