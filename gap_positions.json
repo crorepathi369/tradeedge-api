@@ -1030,6 +1030,32 @@
       "exit_date": "2026-03-23",
       "pnl_pct": 5.0,
       "pnl_amount": 25044.25
+    },
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-05-26",
+      "entry_order_id": null,
+      "tradingsymbol": "RVNL26JUNFUT",
+      "lot_size": 1925,
+      "entry_price": 259.35,
+      "signal_entry": 259.75,
+      "signal_slLevel": 267.54,
+      "sl_price": 267.13,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 250.65,
+      "exit_date": "2026-05-27",
+      "pnl_pct": 3.35,
+      "pnl_amount": 16747.5
     }
   ],
   "CONCOR": [
@@ -3760,6 +3786,62 @@
       "exit_date": "2026-07-08",
       "pnl_pct": 2.21,
       "pnl_amount": 12760.0
+    }
+  ],
+  "PIIND": [
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-05-20",
+      "entry_order_id": null,
+      "tradingsymbol": "PIIND26MAYFUT",
+      "lot_size": 175,
+      "entry_price": 2883.9,
+      "signal_entry": 2901.2,
+      "signal_slLevel": 2988.24,
+      "sl_price": 2970.42,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2730.5,
+      "exit_date": "2026-05-21",
+      "pnl_pct": 5.32,
+      "pnl_amount": 26845.0
+    }
+  ],
+  "ASHOKLEY": [
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-06-12",
+      "entry_order_id": null,
+      "tradingsymbol": "ASHOKLEY26JUNFUT",
+      "lot_size": 5000,
+      "entry_price": 152.98,
+      "signal_entry": 152.45,
+      "signal_slLevel": 147.88,
+      "sl_price": 148.39,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 158.06,
+      "exit_date": "2026-06-15",
+      "pnl_pct": 3.32,
+      "pnl_amount": 25400.0
     }
   ]
 }
