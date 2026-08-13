@@ -1,11 +1,11 @@
 {
-  "minGap": 2,
-  "maxGap": 4.5,
+  "minGap": 3,
+  "maxGap": 6,
   "slType": "pct",
   "slPct": 3,
-  "tpType": "pct",
-  "tpPct": 5,
-  "holdDays": 3,
+  "tpType": "d2_close",
+  "tpPct": 1,
+  "holdDays": 1,
   "maxSignalsDay": 5,
   "wrThreshold": 60,
   "pnlThreshold": 1.8,
@@ -16,5 +16,5 @@
   "toDate": "2026-08-07",
   "closeFilter": "strict",
   "tradingMode": "paper",
-  "_syncedAt": "2026-08-13 12:26:13"
+  "_syncedAt": "2026-08-13 16:40:11"
 }
