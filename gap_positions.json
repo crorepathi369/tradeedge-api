@@ -1117,7 +1117,11 @@
       "hold_days": 3,
       "days_held": 0,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_by_sl",
+      "exit_price": 405.56,
+      "exit_date": "2026-08-13",
+      "pnl_pct": -3.0,
+      "pnl_amount": -23512.5
     },
     {
       "preset": "Oneday-Setup",
@@ -1138,7 +1142,11 @@
       "hold_days": 1,
       "days_held": 0,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_by_sl",
+      "exit_price": 405.56,
+      "exit_date": "2026-08-13",
+      "pnl_pct": -3.0,
+      "pnl_amount": -23512.5
     },
     {
       "preset": "High-Conviction-Fixed-TP",
@@ -1159,7 +1167,11 @@
       "hold_days": 3,
       "days_held": 0,
       "gtt_id": null,
-      "status": "open"
+      "status": "closed_by_sl",
+      "exit_price": 405.56,
+      "exit_date": "2026-08-13",
+      "pnl_pct": -3.0,
+      "pnl_amount": -23512.5
     }
   ],
   "CGPOWER": [
