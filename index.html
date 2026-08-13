@@ -2849,18 +2849,18 @@
           <table class="trade-table" id="tradesTakenTable">
             <thead>
               <tr>
-                <th style="cursor:pointer;" onclick="sortTradesTaken('sym')">Symbol</th>
+                <th id="ttThsym" style="cursor:pointer;" onclick="sortTradesTaken('sym')">Symbol</th>
                 <th>Side</th>
-                <th style="cursor:pointer;" onclick="sortTradesTaken('entry_date')">Entry Date</th>
-                <th style="cursor:pointer;" onclick="sortTradesTaken('lot_size')">Qty (Lot)</th>
+                <th id="ttThentry_date" style="cursor:pointer;" onclick="sortTradesTaken('entry_date')">Entry Date</th>
+                <th id="ttThlot_size" style="cursor:pointer;" onclick="sortTradesTaken('lot_size')">Qty (Lot)</th>
                 <th>Entry (Fut.)</th>
                 <th>Signal Ref (Cash)</th>
                 <th>Slippage</th>
                 <th>SL</th>
-                <th>Exit Date</th>
+                <th id="ttThexit_date" style="cursor:pointer;" onclick="sortTradesTaken('exit_date')">Exit Date</th>
                 <th>Exit (Fut.)</th>
-                <th style="cursor:pointer;" onclick="sortTradesTaken('pnl_pct')">P&amp;L %</th>
-                <th style="cursor:pointer;" onclick="sortTradesTaken('pnl_amount')">P&amp;L ₹</th>
+                <th id="ttThpnl_pct" style="cursor:pointer;" onclick="sortTradesTaken('pnl_pct')">P&amp;L %</th>
+                <th id="ttThpnl_amount" style="cursor:pointer;" onclick="sortTradesTaken('pnl_amount')">P&amp;L ₹</th>
                 <th style="width:110px;max-width:110px;">Status</th>
               </tr>
             </thead>
@@ -3945,10 +3945,26 @@ function renderTradesTakenStatsExtended() {
     </div>`).join('');
 }
 
+// Puts a ▲/▼ suffix on whichever All-Trades column header is currently
+// driving the sort (per _tradesTakenSort), clearing it from the rest —
+// headers are static HTML (only <tbody> re-renders per data change), so
+// this runs every renderTradesTaken() to keep the indicator in sync.
+function _updateTtSortIndicators() {
+  const fields = ['sym', 'entry_date', 'lot_size', 'exit_date', 'pnl_pct', 'pnl_amount'];
+  const labels = { sym: 'Symbol', entry_date: 'Entry Date', lot_size: 'Qty (Lot)', exit_date: 'Exit Date', pnl_pct: 'P&L %', pnl_amount: 'P&L ₹' };
+  fields.forEach(f => {
+    const th = document.getElementById('ttTh' + f);
+    if (!th) return;
+    const arrow = _tradesTakenSort.field === f ? (_tradesTakenSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+    th.textContent = labels[f] + arrow;
+  });
+}
+
 function renderTradesTaken() {
   const rows = _ttFilteredSorted();
   const { all } = _ttStats();
   renderTradesTakenStatsExtended();
+  _updateTtSortIndicators();
 
   // Shows which setup's data is on screen right in the section title, so it's
   // never ambiguous which preset the numbers below belong to — e.g. "(Oneday-Setup)"
