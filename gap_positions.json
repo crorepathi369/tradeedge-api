@@ -3733,5 +3733,33 @@
       "pnl_pct": 2.1,
       "pnl_amount": 10660.0
     }
+  ],
+  "COCHINSHIP": [
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-07-07",
+      "entry_order_id": null,
+      "tradingsymbol": "COCHINSHIP26JULFUT",
+      "lot_size": 400,
+      "entry_price": 1441,
+      "signal_entry": 1445.7,
+      "signal_slLevel": 1489.07,
+      "sl_price": 1484.23,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1409.1,
+      "exit_date": "2026-07-08",
+      "pnl_pct": 2.21,
+      "pnl_amount": 12760.0
+    }
   ]
 }
