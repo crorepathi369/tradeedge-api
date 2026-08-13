@@ -3910,14 +3910,14 @@ function renderTradesTakenStatsExtended() {
     },
     {
       label: 'Net ₹ P&amp;L',
-      val: `${s.totalRupee >= 0 ? '+' : ''}₹${Math.abs(s.totalRupee).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
-      sub: `Win ₹${s.winRupee.toLocaleString('en-IN', { maximumFractionDigits: 0 })} · Loss ₹${s.lossRupee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+      val: `${s.totalRupee >= 0 ? '+' : ''}₹${fmtRupee(s.totalRupee)}`,
+      sub: `Win ₹${fmtRupee(s.winRupee)} · Loss ₹${fmtRupee(s.lossRupee)}`,
       cls: s.totalRupee >= 0 ? 'bull' : 'bear',
       tip: 'Real lot-size-based P&L from actual futures fills — not a capital-normalized simulation like the backtest\'s ₹/trade figure, so treat this as the real-money-equivalent number, not a like-for-like ₹ comparison.',
     },
     {
       label: 'Net PnL  ·  Avg / Trade',
-      val: `${s.totalPnl >= 0 ? '+' : ''}${s.totalPnl.toFixed(1)}%  ·  ${s.avgPnl >= 0 ? '+' : ''}${s.avgPnl.toFixed(2)}%`,
+      val: `${s.totalPnl >= 0 ? '+' : ''}${Math.round(s.totalPnl)}%  ·  ${s.avgPnl >= 0 ? '+' : ''}${s.avgPnl.toFixed(2)}%`,
       sub: `Win Σ +${s.totalWinPnl.toFixed(1)}%  ·  Loss Σ ${s.totalLossPnl.toFixed(1)}%`,
       cls: s.totalPnl >= 0 ? 'bull' : 'bear',
     },
@@ -3928,7 +3928,7 @@ function renderTradesTakenStatsExtended() {
     },
     {
       label: 'Best Day ₹ / Worst Day ₹',
-      val: `<span style="color:var(--bull)">+₹${s.bestDayRupee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span> / <span style="color:var(--bear)">₹${s.worstDayRupee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>`,
+      val: `<span style="color:var(--bull)">+₹${fmtRupee(s.bestDayRupee)}</span> / <span style="color:var(--bear)">₹${fmtRupee(s.worstDayRupee)}</span>`,
       sub: `Best ${s.bestDayPct.toFixed(1)}% · Worst ${s.worstDayPct.toFixed(1)}% (% terms)`, cls: '',
     },
     {
@@ -4158,8 +4158,8 @@ function _ttCalendarBuild(rows, year) {
       const pnlStr  = dClosed.length ? _pnlSign(dPnl) + dPnl.toFixed(2) + '%' : '';
       const wlLabel = dClosed.length ? (dSL > 0 ? `${dWins}W/${dSL}SL` : `${dWins}W/${dClosed.length-dWins}L`) : (dRows.length + ' open');
       const symList = dRows.map(r => r.sym).join(',');
-      grid += `<div title="${dateStr}: ${dRows.length}T ${symList}"
-        style="text-align:center;padding:3px 1px 4px;border-radius:4px;background:${bg};font-family:'DM Mono',monospace;">
+      grid += `<div onclick="openTtCalDay('${dateStr}')" title="${dateStr}: ${dRows.length}T ${symList}"
+        style="text-align:center;padding:3px 1px 4px;border-radius:4px;background:${bg};font-family:'DM Mono',monospace;cursor:pointer;">
         <div style="font-size:8px;color:var(--text3);line-height:1.3;">${day}</div>
         <div style="font-size:9px;font-weight:700;color:${color};line-height:1.3;">${pnlStr}</div>
         <div style="font-size:7px;color:var(--text3);line-height:1.2;">${wlLabel}</div>
@@ -4191,6 +4191,85 @@ function _ttCalendarBuild(rows, year) {
     </div>`;
   }
   return { year, summaryHTML, gridHTML, byDay, dates };
+}
+
+// Day-drill popup for the Automated Trades Calendar View — reuses the exact
+// same generic modal (#calDayModal/#calModalTitle/#calModalBody/closeCalModal())
+// the backtest's own Calendar View already uses, just built from the
+// Automated Trades data model (kite_orders.py trade record field names —
+// entry_price/sl_price/tp_price/exit_price/status — rather than the
+// backtest's entry/sl/tp/exit/outcome). Re-derives trades for the date
+// directly from _ttFilteredSorted() rather than a cached byDay, so it always
+// reflects whatever preset/status/side filter is currently active — same
+// source the calendar cells themselves render from. Shared by desktop and
+// mobile (both dispatch through the same onclick in _ttCalendarBuild()).
+function openTtCalDay(dateStr) {
+  const trades = _ttFilteredSorted().filter(r => r.entry_date === dateStr);
+  if (!trades.length) return;
+
+  const dt = new Date(dateStr + 'T00:00:00');
+  const dtFmt = dt.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
+  const closed = trades.filter(r => r.status !== 'open');
+  const wins   = closed.filter(r => (r.pnl_pct ?? 0) > 0).length;
+  const slHits = closed.filter(r => r.status === 'closed_by_sl').length;
+  const losses = closed.length - wins - slHits;
+  const openCt = trades.length - closed.length;
+  const pnl    = closed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+  const pnlCls = _pnlColor(pnl);
+
+  document.getElementById('calModalTitle').innerHTML =
+    `${dtFmt} &nbsp;<span style="font-family:'DM Mono',monospace;font-size:12px;color:${pnlCls};font-weight:700;">${_pnlSign(pnl)}${pnl.toFixed(2)}%</span>`;
+
+  const summary = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-family:'DM Mono',monospace;font-size:12px;">
+    <span>${trades.length} trade${trades.length === 1 ? '' : 's'}</span>
+    <span style="color:var(--bull);">✓ ${wins} Win</span>
+    <span style="color:var(--bear);">✗ ${losses} Loss</span>
+    ${slHits ? `<span style="color:#e65100;">⚑ ${slHits} SL</span>` : ''}
+    ${openCt ? `<span style="color:var(--accent);">◉ ${openCt} Open</span>` : ''}
+    <span style="color:${pnlCls};font-weight:700;">${_pnlSign(pnl)}${pnl.toFixed(2)}% net</span>
+  </div>`;
+
+  const rows = trades.map(t => {
+    const isBull = t.direction === 'LONG';
+    const isOpen = t.status === 'open';
+    const isSL   = t.status === 'closed_by_sl';
+    const isWin  = !isOpen && !isSL && (t.pnl_pct ?? 0) > 0;
+    const outCls   = isOpen ? 'var(--accent)' : (isWin ? 'var(--bull)' : 'var(--bear)');
+    const outLabel = isOpen ? '◉ OPEN' : (isWin ? '✓ WIN' : (isSL ? '⚑ SL' : '✗ LOSS'));
+    const pnlStr   = (t.pnl_pct != null) ? `${_pnlSign(t.pnl_pct)}${t.pnl_pct.toFixed(2)}%` : '—';
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px 10px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">${t.sym}</td>
+      <td style="padding:8px 10px;font-size:11px;color:${isBull ? 'var(--bull)' : 'var(--bear)'};">${isBull ? '▲ LONG' : '▼ SHORT'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;">₹${t.entry_price != null ? t.entry_price.toFixed(2) : '—'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--bear);">₹${t.sl_price != null ? t.sl_price.toFixed(2) : '—'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--bull);">${t.tp_price != null ? '₹' + t.tp_price.toFixed(2) : '—'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;">${t.exit_price != null ? '₹' + t.exit_price.toFixed(2) : '—'}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${outCls};">${outLabel}</td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${outCls};">${pnlStr}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('calModalBody').innerHTML = summary + `
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);">
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Symbol</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Dir</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Entry</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--bear);text-transform:uppercase;">SL</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--bull);text-transform:uppercase;">Target</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Exit</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">Result</th>
+            <th style="padding:6px 10px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;">PnL%</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('calDayModal').style.display = '';
 }
 
 function renderTTCalendar() {
@@ -5722,7 +5801,12 @@ function backtest(ohlc, symId, params, debug = false) {
       // SL for fixed % is checked intraday via D2 Low (Long) / D2 High (Short) — not D2 Open
     }
 
-    let exitPrice, outcome, exitNote;
+    let exitPrice, outcome, exitNote, resolvedH = null; // resolvedH: the actual hold-day
+      // (h) a multi-day %-TP position exited on — declared here (not inside the
+      // tpType==='pct' block below) because it's read later at exitDayIdx
+      // regardless of which tpType branch ran; a block-scoped `let` inside that
+      // branch alone threw "resolvedH is not defined" for every tpType==='pct'
+      // trade, since `let`/`const` don't escape their block in JS.
 
     // Helper: check intraday SL using tomorrow's high/low
     const intradaySLCheck = () => {
@@ -5770,6 +5854,12 @@ function backtest(ohlc, symId, params, debug = false) {
       const hold    = Math.max(1, params.holdDays || 1);
 
       let resolved = false;
+      // resolvedH (the actual hold-day the position exited on) is declared in
+      // the outer scope above — captured directly at resolution time here
+      // instead of re-derived later by price-matching, which was the root
+      // cause of a bug where a hold-expiry exit's date silently collapsed to
+      // D2 whenever an earlier day's High/Low happened to coincide with the
+      // final exit price without that day actually triggering TP/SL.
       for (let h = 1; h <= hold && (i + h) < ohlc.length; h++) {
         const dayCandle = ohlc[i + h];
         const isLastDay = (h === hold) || (i + h + 1 >= ohlc.length);
@@ -5784,7 +5874,7 @@ function backtest(ohlc, symId, params, debug = false) {
         if (slHitOpen) {
           exitPrice = dayCandle.open;
           exitNote  = `D${h+1} Open (SL gap)`;
-          slHit     = true; outcome = 'SL'; resolved = true; break;
+          slHit     = true; outcome = 'SL'; resolved = true; resolvedH = h; break;
         }
 
         // Check TP hit intraday
@@ -5794,11 +5884,11 @@ function backtest(ohlc, symId, params, debug = false) {
 
         if (slHitIntra && tpHit) {
           // Both same day — conservative: SL first
-          exitPrice = sl; exitNote = `D${h+1} SL`; slHit = true; outcome = 'SL'; resolved = true; break;
+          exitPrice = sl; exitNote = `D${h+1} SL`; slHit = true; outcome = 'SL'; resolved = true; resolvedH = h; break;
         } else if (slHitIntra) {
-          exitPrice = sl; exitNote = `D${h+1} SL`; slHit = true; outcome = 'SL'; resolved = true; break;
+          exitPrice = sl; exitNote = `D${h+1} SL`; slHit = true; outcome = 'SL'; resolved = true; resolvedH = h; break;
         } else if (tpHit) {
-          exitPrice = tpLevel; exitNote = `TP hit D${h+1} (${params.tpPct}%)`; outcome = 'WIN'; resolved = true; break;
+          exitPrice = tpLevel; exitNote = `TP hit D${h+1} (${params.tpPct}%)`; outcome = 'WIN'; resolved = true; resolvedH = h; break;
         }
 
         if (isLastDay) {
@@ -5809,7 +5899,7 @@ function backtest(ohlc, symId, params, debug = false) {
           outcome = Math.abs(diff) < 0.00001 ? 'FLAT'
             : side === 'LONG' ? (exitPrice > entry ? 'WIN' : 'LOSS')
             : (exitPrice < entry ? 'WIN' : 'LOSS');
-          resolved = true;
+          resolved = true; resolvedH = h;
         }
       }
       if (!resolved) {
@@ -5820,6 +5910,7 @@ function backtest(ohlc, symId, params, debug = false) {
         outcome = Math.abs(diff) < 0.00001 ? 'FLAT'
           : side === 'LONG' ? (exitPrice > entry ? 'WIN' : 'LOSS')
           : (exitPrice < entry ? 'WIN' : 'LOSS');
+        resolvedH = hold;
       }
     } else {
       // TP = D2 close (default) — hold full day but monitor SL intraday
@@ -5845,18 +5936,15 @@ function backtest(ohlc, symId, params, debug = false) {
       ? +(side === 'LONG' ? entry * (1 + params.tpPct/100) : entry * (1 - params.tpPct/100)).toFixed(2)
       : null;
 
-    // Determine actual exit date (may be beyond D2 for multi-day holds)
-    const holdUsed = params.tpType === 'pct' ? (params.holdDays || 1) : 1;
-    let exitDayIdx = i + 1;
-    if (params.tpType === 'pct' && holdUsed > 1) {
-      // Find which candle we actually exited on by matching exitPrice
-      for (let h = 1; h <= holdUsed && (i + h) < ohlc.length; h++) {
-        exitDayIdx = i + h;
-        const c = ohlc[i + h];
-        if (exitPrice === +c.open.toFixed(2) || exitPrice === +c.close.toFixed(2) ||
-            (side === 'LONG' ? c.high >= exitPrice : c.low <= exitPrice)) break;
-      }
-    }
+    // Determine actual exit date (may be beyond D2 for multi-day holds).
+    // Read directly from resolvedH (the hold-day the resolution loop actually
+    // exited on, captured above) rather than re-derived by matching exitPrice
+    // against later candles — that price-match was unreliable for hold-expiry
+    // exits in particular, since the final exit price is just that day's close
+    // and can coincidentally fall within an earlier day's High/Low range without
+    // that earlier day having actually triggered TP/SL, silently pulling the
+    // exit date back to D2 regardless of the real hold length.
+    const exitDayIdx = (params.tpType === 'pct') ? (i + (resolvedH || 1)) : (i + 1);
     const exitDate = ohlc[Math.min(exitDayIdx, ohlc.length-1)].date;
 
     trades.push({
@@ -9126,7 +9214,7 @@ function buildSummaryCards() {
     },
     {
       label: 'Net PnL  ·  Avg / Trade',
-      val: `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(1)}%  ·  ${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(2)}%`,
+      val: `${totalPnl >= 0 ? '+' : ''}${Math.round(totalPnl)}%  ·  ${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(2)}%`,
       sub: `Win Σ +${totalWinPnl.toFixed(1)}%  ·  Loss Σ ${totalLossPnl.toFixed(1)}%`,
       cls: totalPnl >= 0 ? 'bull' : 'bear',
       tip: 'Sum of all individual trade PnL%. Not compounded — each trade % measured from its own entry.'
@@ -9981,7 +10069,7 @@ function buildOvernightSweep() {
 
   // SL values to sweep (no fixed TP — exit determined by tpType: D2 Close or D2 Open)
   const slValues   = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
-  const gapValues  = [0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0];
+  const gapValues  = [1.0, 1.5, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0];
 
   // Base params from current overnight config — includes maxGap, closeFilter, tpType etc.
   const from      = document.getElementById('fromDate')?.value || '';
@@ -11910,7 +11998,7 @@ function openSymDrill(sym, tradesSource, sideFilter) {
           ? `<span style="color:var(--bear);">₹${t.sl.toFixed(2)}</span>${t.slHit?' ⚡':''} / <span style="color:var(--bull);">₹${t.tp.toFixed(2)}</span>`
           : `₹${t.nextOpen.toFixed(2)}${t.slHit?' ⚡':''}`}
       </td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px;">₹${t.exit.toFixed(2)}<span style="font-size:9px;color:var(--text3);margin-left:3px;">(${t.exitNote})</span></td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;">₹${t.exit.toFixed(2)}<span style="font-size:9px;color:var(--text3);margin-left:3px;">(${t.exitNote})</span>${t.exitDate ? `<br><span style="font-size:9px;color:var(--text3);">Exit: ${new Date(t.exitDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</span>` : ''}</td>
       <td class="${t.pnlPct>=0?'pos-val':'neg-val'}" style="font-family:'DM Mono',monospace;font-size:12px;">${t.pnlPct>=0?'+':''}${t.pnlPct.toFixed(2)}%</td>
       <td style="padding:6px 12px;"><span class="outcome-badge ${t.slHit?'sl':t.outcome==='WIN'?'win':t.outcome==='FLAT'?'flat':'loss'}">${t.slHit?'SL':t.outcome}</span></td>
     </tr>`).join('')}
@@ -11952,7 +12040,13 @@ loadSavedDefaults();
 // id isn't found, so this only matters for the mobile one.
 document.addEventListener('DOMContentLoaded', () => {
   refreshOvernightPresetSelect();     // instant paint from local cache
-  fetchGapPresetsFromServer();        // then reconcile against the server (source of truth)
+  fetchGapPresetsFromServer().then(() => {
+    // Default the Presets dropdown to "Oneday-Setup" on every load (desktop +
+    // mobile, both updated by applyOvernightPreset()) rather than starting
+    // blank — checked after the server round-trip (or its local-cache
+    // fallback on failure) so this reflects real preset data either way.
+    if (getOvernightPresets()['Oneday-Setup']) applyOvernightPreset('Oneday-Setup');
+  });
   fetchGapAutomationConfigFromServer(); // same, for "Include in Automated Trades" flags
 });
 </script>
