@@ -760,6 +760,32 @@
       "exit_date": "2026-08-05",
       "pnl_pct": 1.65,
       "pnl_amount": 9845.0
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-31",
+      "entry_order_id": null,
+      "tradingsymbol": "HYUNDAI26AUGFUT",
+      "lot_size": 275,
+      "entry_price": 2164.2,
+      "signal_entry": 2160.07,
+      "signal_slLevel": 2073.67,
+      "sl_price": 2077.63,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 6,
+      "tp_price": 2294.05,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2200,
+      "exit_date": "2026-08-05",
+      "pnl_pct": 1.65,
+      "pnl_amount": 9845.0
     }
   ],
   "GODREJPROP": [
@@ -4350,6 +4376,62 @@
       "exit_date": "2026-04-09",
       "pnl_pct": 3.94,
       "pnl_amount": 27641.25
+    }
+  ],
+  "KEI": [
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-08-04",
+      "entry_order_id": null,
+      "tradingsymbol": "KEI26AUGFUT",
+      "lot_size": 175,
+      "entry_price": 5521.5,
+      "signal_entry": 5500.0,
+      "signal_slLevel": 5280.0,
+      "sl_price": 5300.64,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 6,
+      "tp_price": 5852.79,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 5616.2,
+      "exit_date": "2026-08-07",
+      "pnl_pct": 1.72,
+      "pnl_amount": 16572.5
+    }
+  ],
+  "UPL": [
+    {
+      "preset": "High-Conviction-Only",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-02-23",
+      "entry_order_id": null,
+      "tradingsymbol": "UPL26MARFUT",
+      "lot_size": 1355,
+      "entry_price": 644.1,
+      "signal_entry": 644.8,
+      "signal_slLevel": 664.14,
+      "sl_price": 663.42,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 1,
+      "tp_price": null,
+      "hold_days": 1,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 630.7,
+      "exit_date": "2026-02-24",
+      "pnl_pct": 2.08,
+      "pnl_amount": 18157.0
     }
   ]
 }
