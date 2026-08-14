@@ -643,7 +643,13 @@
     margin-bottom: 24px;
     box-shadow: var(--shadow);
   }
-  #equityCanvas { width: 100%!important; height: 260px!important; }
+  /* Size the WRAPPER, not the canvas itself — Chart.js's responsive:true sets
+     the canvas's own style.width/height dynamically as it resizes to fit its
+     parent; fighting that with !important CSS directly on the canvas is a
+     documented Chart.js pitfall that can cause it to grow on every interaction
+     (each resize computes against a canvas whose own forced size disagrees
+     with what Chart.js just set, nudging the next measurement up a notch). */
+  #equityCanvasWrap { position: relative; width: 100%; height: 260px; }
 
   /* TABS */
   .tabs-wrap { margin-bottom: 24px; }
@@ -2829,7 +2835,12 @@
 
       <div class="tab-content active" id="ttPane_equity" style="padding:16px 0 0;">
         <div id="ttEquityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-bottom:10px;"></div>
-        <canvas id="ttEquityCanvas" style="width:100%!important;height:260px!important;"></canvas>
+        <!-- Size THIS wrapper, not the canvas — see #equityCanvasWrap's comment
+             for why forcing width/height directly on a responsive:true canvas
+             causes it to grow on every interaction. -->
+        <div style="position:relative;width:100%;height:260px;">
+          <canvas id="ttEquityCanvas"></canvas>
+        </div>
       </div>
 
       <div class="tab-content" id="ttPane_all">
@@ -2962,7 +2973,9 @@
       <!-- EQUITY CURVE -->
       <div class="tab-content active" id="tab-equity">
         <div id="equityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin:12px 0 10px;"></div>
-        <canvas id="equityCanvas"></canvas>
+        <div id="equityCanvasWrap">
+          <canvas id="equityCanvas"></canvas>
+        </div>
       </div>
 
       <!-- DAY-WISE -->
@@ -4467,9 +4480,16 @@ function renderMobTtEquity() {
     return;
   }
 
+  // Size the wrapper, not the canvas — see #equityCanvasWrap's comment (desktop
+  // backtest chart) for why forcing width/height directly on a responsive:true
+  // canvas causes it to grow on every interaction.
   inner.innerHTML = `
     <div id="mobTtEquityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);padding:10px 12px 8px;"></div>
-    <div style="padding:0 12px;"><canvas id="mobTtEquityCanvas" style="width:100%!important;height:220px!important;"></canvas></div>`;
+    <div style="padding:0 12px;">
+      <div style="position:relative;width:100%;height:220px;">
+        <canvas id="mobTtEquityCanvas"></canvas>
+      </div>
+    </div>`;
 
   const result = _renderEquityChart('mobTtEquityCanvas', dayEntries);
   ttMobEquityChart = result ? result.chart : null;
@@ -10140,11 +10160,13 @@ function buildIntradaySweep() {
   const tpValues = [1, 1.5, 2, 2.5, 3, 3.5, 4, 5];
 
   // Base params from current intraday config (everything except SL/TP which we sweep)
-  const { idMinMove, idMaxMove, idSkipPct, idMaxOnGap } = readIntradayParams();
-  const baseParams = { idMinMove, idMaxMove, idSkipPct, idMaxOnGap, direction: _direction };
+  const { idMinMove, idMaxMove, idSkipPct, idMaxOnGap, idEntryType } = readIntradayParams();
+  const baseParams = { idMinMove, idMaxMove, idSkipPct, idMaxOnGap, idEntryType, direction: _direction };
   const from = document.getElementById('idFromDate').value;
   const to   = document.getElementById('idToDate').value;
   const maxPerDay = +_maxDayEl().value || 0;
+  const wrThresh  = +_wrThreshEl().value  || 0;
+  const pnlThresh = +_pnlThreshEl().value || 0;
   const ohlcSlices = [];
   syms.forEach(sym => {
     const ohlcFull = _loadedOHLC[sym];
@@ -10160,9 +10182,11 @@ function buildIntradaySweep() {
 
   // Helper: apply max/day cap same way as runBacktest — walk-forward via
   // _applyMaxPerDayCap(), so this heatmap doesn't recommend SL/TP combos that only
-  // looked good because the day-cap ranking had hindsight.
+  // looked good because the day-cap ranking had hindsight. wrThresh/pnlThresh were
+  // previously hardcoded to 0 here, silently ignoring the Adj WR/Net PnL filters
+  // even when configured — now reads the real values, same as the Overnight sweep.
   function applyMaxPerDay(trades, maxN) {
-    return _applyMaxPerDayCap(trades, trades, maxN, 0, 0);
+    return _applyMaxPerDayCap(trades, trades, maxN, wrThresh, pnlThresh);
   }
 
   // Build result matrix
@@ -10330,6 +10354,12 @@ function buildOvernightSweep() {
         const trades = backtest(ohlc, sym, params);
         allT.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
       });
+
+      // Direction filter — matches runBacktest()'s own post-processing. Without
+      // this, every cell's WR/expectancy silently blended Long and Short trades
+      // together regardless of the Direction setting.
+      if (_direction === 'long')  allT = allT.filter(t => t.side === 'LONG');
+      if (_direction === 'short') allT = allT.filter(t => t.side === 'SHORT');
 
       // Step 2: apply same Max/day cap + Min Signals gate + Adj WR / Net PnL filters +
       // rank as main backtest — walk-forward via _applyMaxPerDayCap(), same reasoning
