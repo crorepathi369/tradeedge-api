@@ -568,6 +568,32 @@
       "days_held": 2,
       "gtt_id": null,
       "status": "open"
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-06-12",
+      "entry_order_id": null,
+      "tradingsymbol": "HINDPETRO26JUNFUT",
+      "lot_size": 2025,
+      "entry_price": 390.6,
+      "signal_entry": 388.9,
+      "signal_slLevel": 373.34,
+      "sl_price": 374.98,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 6,
+      "tp_price": 414.04,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 404.15,
+      "exit_date": "2026-06-17",
+      "pnl_pct": 3.47,
+      "pnl_amount": 27438.75
     }
   ],
   "COFORGE": [
