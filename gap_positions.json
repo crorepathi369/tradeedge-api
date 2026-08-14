@@ -1498,5 +1498,61 @@
       "pnl_pct": 5.82,
       "pnl_amount": 43605.0
     }
+  ],
+  "HYUNDAI": [
+    {
+      "preset": "Oneday-Setup",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-31",
+      "entry_order_id": null,
+      "tradingsymbol": "HYUNDAI26AUGFUT",
+      "lot_size": 275,
+      "entry_price": 2164.2,
+      "signal_entry": 2160.07,
+      "signal_slLevel": 2116.87,
+      "sl_price": 2120.92,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 3,
+      "tp_price": null,
+      "hold_days": 2,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2176.7,
+      "exit_date": "2026-08-03",
+      "pnl_pct": 0.58,
+      "pnl_amount": 3437.5
+    }
+  ],
+  "BAJFINANCE": [
+    {
+      "preset": "Oneday-Setup",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-31",
+      "entry_order_id": null,
+      "tradingsymbol": "BAJFINANCE26AUGFUT",
+      "lot_size": 750,
+      "entry_price": 1144.8,
+      "signal_entry": 1141.2,
+      "signal_slLevel": 1118.38,
+      "sl_price": 1121.9,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 3,
+      "tp_price": null,
+      "hold_days": 2,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1147.5,
+      "exit_date": "2026-08-03",
+      "pnl_pct": 0.24,
+      "pnl_amount": 2025.0
+    }
   ]
 }
