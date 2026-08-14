@@ -239,6 +239,32 @@ def clear_backfilled_trades(data_dir: Path, preset: str | None = None) -> int:
     return removed
 
 
+def clear_all_trades(data_dir: Path, preset: str | None = None) -> int:
+    """
+    Removes EVERY trade for a preset — backfilled and real (paper/live) alike.
+    For a deliberate full reset when a strategy's own logic/params have changed
+    enough that the existing log (including genuinely-executed automated trades)
+    no longer reflects how the preset actually behaves — not for routine backfill
+    cleanup, which is what clear_backfilled_trades() (real trades untouched) is for.
+    preset=None clears every preset. Returns the count removed.
+    """
+    with _positions_lock:
+        positions = load_positions(data_dir)
+        removed = 0
+        for symbol in list(positions.keys()):
+            kept = [
+                t for t in positions[symbol]
+                if preset is not None and t.get("preset") != preset
+            ]
+            removed += len(positions[symbol]) - len(kept)
+            if kept:
+                positions[symbol] = kept
+            else:
+                del positions[symbol]
+        save_positions(data_dir, positions)
+    return removed
+
+
 def tag_untagged_trades(data_dir: Path, preset_name: str) -> int:
     """
     One-time migration: tags every trade currently missing a 'preset' field

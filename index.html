@@ -2636,6 +2636,11 @@
         <input type="hidden" id="idMaxSignalsDay" value="1">
         <input type="hidden" id="pbMaxSignalsDay" value="3">
         <span style="width:1px;height:16px;background:var(--border);"></span>
+        <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;" title="Only trade a day if MORE than this many candidates qualified that day (0 = off, always trade). A day-level 'broad market momentum' gate — Overnight Gap only.">Min Signals &gt;</span>
+        <input type="number" id="minSignalsGate" value="0" min="0" max="200" step="1"
+          style="width:48px;padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;background:var(--surface);text-align:center;"
+          title="Only trade a day if MORE than this many candidates qualified that day (0 = off, always trade). Applied before the Max/day cap and ranking above." placeholder="0=off">
+        <span style="width:1px;height:16px;background:var(--border);"></span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;">Rank</span>
         <select id="rankingMode"
           style="padding:4px 5px;border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);cursor:pointer;"
@@ -6446,12 +6451,13 @@ async function runBacktestSilent() {
     _pullbackOpenPositions = _pullbackOpenPositions.filter(t => passesWrPnl(t.sym, t.side));
   }
 
-  if (maxN > 0) {
+  const minSignalsGate = _minSignalsGate();
+  if (maxN > 0 || minSignalsGate > 0) {
     // Walk-forward day-cap — see _applyMaxPerDayCap() for why this can't reuse the
     // passesWrPnl/scoreOf above: those are scored against the WHOLE date range, which
     // is correct for the open-positions filter just above (nothing "in the future" of
     // today's most recent data point) but would be hindsight for capping any past day.
-    localTrades = _applyMaxPerDayCap(localTrades, wrTrades, maxN, wrThresh, pnlThresh);
+    localTrades = _applyMaxPerDayCap(localTrades, wrTrades, maxN, wrThresh, pnlThresh, minSignalsGate);
   }
 
   // Backtest-only concurrent-position cap (Pullback). Runs after the Max/day
@@ -6575,10 +6581,11 @@ async function runBacktest() {
   // ranking must only reflect trades that had genuinely already closed by that day,
   // not the strategy's full-lifetime record (which no one on that day could see yet).
   const maxPerDay = +_maxDayEl().value || 0;
-  if (maxPerDay > 0) {
+  const minSignalsGate = _minSignalsGate();
+  if (maxPerDay > 0 || minSignalsGate > 0) {
     const wrThresh  = +_wrThreshEl().value || 0;
     const pnlThresh = +_pnlThreshEl().value || 0;
-    localTrades = _applyMaxPerDayCap(localTrades, wrTrades, maxPerDay, wrThresh, pnlThresh);
+    localTrades = _applyMaxPerDayCap(localTrades, wrTrades, maxPerDay, wrThresh, pnlThresh, minSignalsGate);
   }
 
   // Backtest-only concurrent-position cap (Pullback). Runs after the Max/day
@@ -6931,8 +6938,16 @@ function _histTradesAsOf(wrSource, sym, side, scanDate) {
 // the scanner cutoff: signalDate is the real decision moment for Overnight/Intraday
 // (entry is at D1 close), tradeDate is for Pullback (its confirmation window means
 // tradeDate — not signalDate — is the actual entry day).
-function _applyMaxPerDayCap(localTrades, wrTrades, maxPerDay, wrThresh, pnlThresh) {
-  if (!maxPerDay) return localTrades;
+//
+// minSignalsGate (Overnight Gap only, via _minSignalsGate()): a day-level filter,
+// applied BEFORE the per-symbol ranking below — skip the whole day unless MORE than
+// this many candidates qualified. The idea: a day where many stocks gap together is
+// a broad-market-momentum signal in its own right, largely independent of any single
+// stock's own history — favoring that over per-symbol WR/PnL track record, which
+// found real support testing High-Conviction-Fixed-TP (higher WR, much lower SL
+// hit rate on gated days vs. ungated, holding up across the full ~2yr backtest).
+function _applyMaxPerDayCap(localTrades, wrTrades, maxPerDay, wrThresh, pnlThresh, minSignalsGate) {
+  if (!maxPerDay && !minSignalsGate) return localTrades;
 
   const entryDayKey = _strategy === 'pullback' ? 'tradeDate' : 'signalDate';
   const sortedWr = [...wrTrades].sort((a, b) => a.exitDate.localeCompare(b.exitDate));
@@ -6954,13 +6969,19 @@ function _applyMaxPerDayCap(localTrades, wrTrades, maxPerDay, wrThresh, pnlThres
 
     // Absorb every trade that had genuinely closed before today's decision point.
     // sortedDayKeys are walked chronologically and decisionDate advances in lockstep,
-    // so this pointer only ever moves forward — no re-scan of sortedWr per day.
+    // so this pointer only ever moves forward — no re-scan of sortedWr per day. This
+    // must run unconditionally (before the gate below), so the running stats stay
+    // correct for whichever day comes next regardless of whether today gets gated out.
     while (wrPtr < sortedWr.length && sortedWr[wrPtr].exitDate < decisionDate) {
       const t = sortedWr[wrPtr];
       const key = t.sym + '_' + t.side;
       (statMap[key] = statMap[key] || []).push(t);
       wrPtr++;
     }
+
+    if (minSignalsGate > 0 && dayTrades.length <= minSignalsGate) return [];
+
+    if (!maxPerDay) return dayTrades; // 0 = no per-day cap, take every gate-passed candidate
 
     const scoreOf = (sym, side) => {
       const { wilson, expectancy } = _scoreFromTrades(statMap[sym + '_' + side] || []);
@@ -7041,6 +7062,14 @@ function _pnlThreshEl() {
   const id = _strategy === 'intraday' ? 'idScanPnlThreshold' : _strategy === 'pullback' ? 'pbScanPnlThreshold' : 'scanPnlThreshold';
   return document.getElementById(id);
 }
+// Overnight Gap only — a day-level "broad market momentum" gate: only trade a
+// day if MORE than this many candidates qualified that day, applied before the
+// per-symbol Max/day cap and ranking. No Intraday/Pullback field exists for
+// this, so it's always 0 (off) outside Overnight — safe by construction rather
+// than needing a per-strategy hidden-field dispatch like _maxDayEl() above.
+function _minSignalsGate() {
+  return _strategy === 'overnight' ? (+document.getElementById('minSignalsGate')?.value || 0) : 0;
+}
 
 function _getRankingMode() {
   const el = document.getElementById('rankingMode');
@@ -7062,7 +7091,7 @@ function _signalSortFn(a, b) {
 // ── Default values for each strategy ──────────────────────────────────────────
 const OVERNIGHT_DEFAULTS = {
   minGap: 2, maxGap: 5, minChangePct: 0, slType: 'pct', slPct: 3,
-  tpType: 'd2_close', tpPct: 1.0, holdDays: 1, maxSignalsDay: 1,
+  tpType: 'd2_close', tpPct: 1.0, holdDays: 1, maxSignalsDay: 1, minSignalsGate: 0,
   wrThreshold: 40, pnlThreshold: 0.3, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
 };
@@ -7151,6 +7180,7 @@ function _buildOvernightSavedObject() {
     tpPct:          +document.getElementById('tpPct').value,
     holdDays:       +document.getElementById('holdDays').value,
     maxSignalsDay:  +document.getElementById('maxSignalsDay').value,
+    minSignalsGate: +document.getElementById('minSignalsGate').value || 0,
     wrThreshold:    +document.getElementById('scanWrThreshold').value,
     pnlThreshold:   +document.getElementById('scanPnlThreshold').value,
     capitalPerTrade:+document.getElementById('capitalPerTrade').value,
@@ -7184,6 +7214,7 @@ function _applyOvernightParamsToForm(rawD) {
   document.getElementById('tpPct').value   = d.tpPct;
   document.getElementById('holdDays').value = d.holdDays;
   document.getElementById('maxSignalsDay').value = d.maxSignalsDay;
+  document.getElementById('minSignalsGate').value = d.minSignalsGate || 0;
   if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
   if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
   if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
@@ -7218,6 +7249,7 @@ function _buildOvernightSavedObjectMobile() {
     tpPct:          +document.getElementById('mobTpPctVal').value,
     holdDays:       +document.getElementById('mobHoldDays').value,
     maxSignalsDay:  +document.getElementById('mobMaxDay').value,
+    minSignalsGate: +document.getElementById('mobMinSignalsGate').value || 0,
     wrThreshold:    +document.getElementById('mobWrInput')?.value  || 40,
     pnlThreshold:   +document.getElementById('mobPnlInput')?.value || 0.3,
     capitalPerTrade:+document.getElementById('mobCapital')?.value  || 1000000,
@@ -7241,6 +7273,7 @@ function _applyOvernightParamsToMobForm(rawD) {
   document.getElementById('mobTpPctVal').value = d.tpPct;
   document.getElementById('mobHoldDays').value = d.holdDays;
   document.getElementById('mobMaxDay').value   = d.maxSignalsDay;
+  document.getElementById('mobMinSignalsGate').value = d.minSignalsGate || 0;
   const wrEl  = document.getElementById('mobWrInput');
   const pnlEl = document.getElementById('mobPnlInput');
   const capEl = document.getElementById('mobCapital');
@@ -7691,6 +7724,7 @@ function saveMobDefaults() {
       tpPct:         +document.getElementById('mobTpPctVal').value,
       holdDays:      +document.getElementById('mobHoldDays').value,
       maxSignalsDay: +document.getElementById('mobMaxDay').value,
+      minSignalsGate:+document.getElementById('mobMinSignalsGate').value || 0,
       wrThreshold:   +document.getElementById('mobWrInput')?.value  || 40,
       pnlThreshold:  +document.getElementById('mobPnlInput')?.value || 0.5,
       capitalPerTrade: capital,
@@ -7768,6 +7802,7 @@ function resetMobDefaults() {
     document.getElementById('mobTpPctVal').value  = d.tpPct;
     document.getElementById('mobHoldDays').value  = d.holdDays;
     document.getElementById('mobMaxDay').value    = d.maxSignalsDay;
+    document.getElementById('mobMinSignalsGate').value = d.minSignalsGate || 0;
     if (wrEl)  wrEl.value  = d.wrThreshold  || 40;
     if (pnlEl) pnlEl.value = d.pnlThreshold || 0.5;
     document.getElementById('mobSlPctRow').style.display    = '';
@@ -8065,8 +8100,14 @@ async function runScanner() {
   window.__lastRawScan = { scanDate, longs: longs.map(s => ({ ...s })), shorts: shorts.map(s => ({ ...s })) };
 
   const maxTotal = +_maxDayEl().value || 0;
-let longsOut, shortsOut;
-  if (maxTotal > 0) {
+  const minSignalsGate = _minSignalsGate();
+  const rawCandidateCount = longs.length + shorts.length;
+  const gatedOut = minSignalsGate > 0 && rawCandidateCount <= minSignalsGate;
+
+  let longsOut, shortsOut;
+  if (gatedOut) {
+    longsOut = []; shortsOut = [];
+  } else if (maxTotal > 0) {
     const allSigs = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
     allSigs.sort(_signalSortFn);
     // Apply filter with fallback — same logic as backtest cap
@@ -8080,7 +8121,8 @@ let longsOut, shortsOut;
     shortsOut = shorts.filter(s => s._passesFilter);
   }
 
-  renderScannerResults(scanDate, longsOut, shortsOut, params, wrThreshold, pnlThreshold);
+  renderScannerResults(scanDate, longsOut, shortsOut, params, wrThreshold, pnlThreshold,
+    gatedOut ? { minSignalsGate, rawCandidateCount } : null);
 
 
   document.getElementById('scanSpinner').classList.remove('show');
@@ -8802,7 +8844,7 @@ function renderScannerPullback(scanDate, longs, shorts, params) {
     </div>`;
 }
 
-function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, pnlThreshold = 0) {
+function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, pnlThreshold = 0, gateNote = null) {
   const dt      = new Date(scanDate + 'T00:00:00');
   const fmtDate = dt.toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'short', year:'numeric' });
   const total   = longs.length + shorts.length;
@@ -8823,11 +8865,15 @@ function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, 
   const pnlNote = pnlThreshold !== 0  ? ` · Net PnL ≥ ${pnlThreshold}%` : '';
 
   if (total === 0) {
+    const gateMsg = gateNote
+      ? `Only ${gateNote.rawCandidateCount} candidate${gateNote.rawCandidateCount===1?'':'s'} qualified on ${fmtDate} — below the Min Signals gate (&gt;${gateNote.minSignalsGate}). No trade today.<br>
+         <span style="font-size:11px;margin-top:4px;display:inline-block;">This is a deliberate skip, not a data issue — lower Min Signals or set it to 0 to trade every day.</span>`
+      : `No qualifying gap signals on ${fmtDate}${wrNote}${pnlNote}.<br>
+         <span style="font-size:11px;margin-top:4px;display:inline-block;">Try lowering Min Gap%, WR or Net PnL threshold.</span>`;
     document.getElementById('scannerBody').innerHTML = `
       <div class="scanner-empty">
-        <div style="font-size:28px;margin-bottom:8px;">🔍</div>
-        No qualifying gap signals on ${fmtDate}${wrNote}${pnlNote}.<br>
-        <span style="font-size:11px;margin-top:4px;display:inline-block;">Try lowering Min Gap%, WR or Net PnL threshold.</span>
+        <div style="font-size:28px;margin-bottom:8px;">${gateNote ? '⏸' : '🔍'}</div>
+        ${gateMsg}
       </div>`;
     return;
   }
@@ -10131,9 +10177,11 @@ function buildOvernightSweep() {
   const syms = getAllLoadedSymbols();
   if (!syms.length) return;
 
-  // SL values to sweep (no fixed TP — exit determined by tpType: D2 Close or D2 Open)
-  const slValues   = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
-  const gapValues  = [1.0, 1.5, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0];
+  // SL values to sweep (no fixed TP — exit determined by tpType: D2 Close or D2 Open).
+  // Bracketed around the params actually in use (minGap 3%, SL 6%) rather than the
+  // original 0.5-4% / 1-4% ranges, which no longer cover where live tuning has landed.
+  const slValues   = [2, 3, 4, 5, 6, 7, 8, 9];
+  const gapValues  = [1.5, 2, 2.5, 3, 3.5, 4, 5, 6];
 
   // Base params from current overnight config — includes maxGap, closeFilter, tpType etc.
   const from      = document.getElementById('fromDate')?.value || '';
@@ -10157,6 +10205,7 @@ function buildOvernightSweep() {
   const maxPerDay   = +_maxDayEl().value || 0;
   const wrThresh    = +_wrThreshEl().value  || 0;
   const pnlThresh   = +_pnlThreshEl().value || 0;
+  const minSignalsGate = _minSignalsGate();
 
   // Build result matrix — SL% rows x MinGap% cols
   // Keep all other params (maxGap, closeFilter, tpType, holdDays) from current config
@@ -10174,10 +10223,11 @@ function buildOvernightSweep() {
         allT.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
       });
 
-      // Step 2: apply same Max/day cap + Adj WR / Net PnL filters + rank as main backtest —
-      // walk-forward via _applyMaxPerDayCap(), same reasoning as runBacktest()'s own cap.
-      if (maxPerDay > 0) {
-        allT = _applyMaxPerDayCap(allT, allT, maxPerDay, wrThresh, pnlThresh);
+      // Step 2: apply same Max/day cap + Min Signals gate + Adj WR / Net PnL filters +
+      // rank as main backtest — walk-forward via _applyMaxPerDayCap(), same reasoning
+      // as runBacktest()'s own cap.
+      if (maxPerDay > 0 || minSignalsGate > 0) {
+        allT = _applyMaxPerDayCap(allT, allT, maxPerDay, wrThresh, pnlThresh, minSignalsGate);
       }
 
       const total  = allT.length;
@@ -12553,6 +12603,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div><div class="mob-settings-label">Max/day</div><div class="mob-settings-sub">Signals per day (0=∞)</div></div>
         <div class="mob-settings-control"><input class="mob-settings-input" id="mobMaxDay" type="number" value="1" step="1" min="0" placeholder="0=∞"></div>
       </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Min Signals &gt;</div><div class="mob-settings-sub">Only trade if more qualify (0=off)</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobMinSignalsGate" type="number" value="0" step="1" min="0" placeholder="0=off"></div>
+      </div>
       <div class="mob-settings-row" style="flex-direction:column;align-items:stretch;gap:8px;">
         <div class="mob-settings-label">Gap Automation Mode</div>
         <div class="mob-dir-toggle" style="width:100%;">
@@ -12968,6 +13022,7 @@ function closeMobSettings() {
     s('tpPct',           g('mobTpPctVal'));
     s('holdDays',        g('mobHoldDays'));
     s('maxSignalsDay',   g('mobMaxDay'));
+    s('minSignalsGate',  g('mobMinSignalsGate'));
     s('capitalPerTrade', g('mobCapital'));
     s('scanWrThreshold', g('mobWrInput'));
     s('scanPnlThreshold',g('mobPnlInput'));
@@ -13059,6 +13114,7 @@ async function runMobileScanner() {
     document.getElementById('closeFilter').value = 'strict';
     _strategy   = 'overnight';
     _maxDayEl().value = document.getElementById('mobMaxDay').value;
+    document.getElementById('minSignalsGate').value = document.getElementById('mobMinSignalsGate').value;
     document.getElementById('fromDate').value = document.getElementById('mobFromDate').value;
     document.getElementById('toDate').value   = document.getElementById('mobToDate').value;
   } else if (mobStrategy === 'intraday') {
@@ -13295,8 +13351,14 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
 
   const maxDayId = _strategy === 'intraday' ? 'mobIdMaxDay' : _strategy === 'pullback' ? 'mobPbMaxDay' : 'mobMaxDay';
   const maxTotal = +document.getElementById(maxDayId).value || 0;
+  const minSignalsGate = _minSignalsGate();
+  const rawCandidateCount = longs.length + shorts.length;
+  const gatedOut = minSignalsGate > 0 && rawCandidateCount <= minSignalsGate;
+
   let longsOut, shortsOut;
-  if (maxTotal > 0) {
+  if (gatedOut) {
+    longsOut = []; shortsOut = [];
+  } else if (maxTotal > 0) {
     const allSigs = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
     allSigs.sort(_signalSortFn);
     const filteredMob = allSigs.filter(s => s._passesFilter);
@@ -13310,10 +13372,13 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
 
   const total = longsOut.length + shortsOut.length;
   if (total === 0) {
+    const mobGateMsg = gatedOut
+      ? `Only ${rawCandidateCount} candidate${rawCandidateCount===1?'':'s'} today — below the Min Signals gate (&gt;${minSignalsGate}). No trade today.`
+      : 'Try lowering Min Gap% or WR threshold';
     container.innerHTML = `<div id="mobEmpty">
-      <div class="mob-empty-icon">🔍</div>
-      <div>No signals found</div>
-      <div style="font-size:11px;margin-top:4px;color:var(--text3);">Try lowering Min Gap% or WR threshold</div>
+      <div class="mob-empty-icon">${gatedOut ? '⏸' : '🔍'}</div>
+      <div>${gatedOut ? 'Gated — not enough signals' : 'No signals found'}</div>
+      <div style="font-size:11px;margin-top:4px;color:var(--text3);">${mobGateMsg}</div>
     </div>`;
     return;
   }
@@ -13633,6 +13698,7 @@ async function _runMobTradeBacktest(strat) {
     const mobTp      = document.getElementById('mobTpPctVal');
     const mobHold    = document.getElementById('mobHoldDays');
     const mobMaxDay  = document.getElementById('mobMaxDay');
+    const mobMinSig  = document.getElementById('mobMinSignalsGate');
     if (mobMin)    document.getElementById('minGap').value        = mobMin.value;
     if (mobMax)    document.getElementById('maxGap').value        = mobMax.value;
     if (mobChange) document.getElementById('minChangePct').value  = mobChange.value;
@@ -13642,6 +13708,7 @@ async function _runMobTradeBacktest(strat) {
     if (mobTp)     document.getElementById('tpPct').value          = mobTp.value;
     if (mobHold)   document.getElementById('holdDays').value      = mobHold.value;
     if (mobMaxDay) _maxDayEl().value = mobMaxDay.value;
+    if (mobMinSig) document.getElementById('minSignalsGate').value = mobMinSig.value;
   }
 
   // Date range: use user's selected dates from mobile settings
@@ -15243,6 +15310,7 @@ function syncMobileDefaults() {
       if (el('mobTpPctVal'))  el('mobTpPctVal').value  = d.tpPct;
       if (el('mobHoldDays'))  el('mobHoldDays').value  = d.holdDays;
       if (el('mobMaxDay'))    el('mobMaxDay').value     = d.maxSignalsDay;
+      if (el('mobMinSignalsGate')) el('mobMinSignalsGate').value = d.minSignalsGate || 0;
       setTradingMode(d.tradingMode === 'live' ? 'live' : 'paper'); // fail-safe: anything but exactly 'live' loads as paper
     } catch(e) { console.warn('[syncMobileDefaults] overnight error', e); }
   }

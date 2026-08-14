@@ -2554,6 +2554,28 @@ def gap_orders_clear_backfill():
     return cors_response({"removed": removed, "preset": preset_name})
 
 
+@app.route("/gap-orders/clear-all", methods=["POST", "OPTIONS"])
+def gap_orders_clear_all():
+    """
+    Removes EVERY trade for a preset — backfilled AND real (paper/live) alike.
+    Unlike /gap-orders/clear-backfill, this also erases genuinely-executed
+    automated trades — for a deliberate full reset when a strategy's params
+    have changed enough that the existing log no longer reflects how the
+    preset actually behaves. Requires an explicit `preset` query param (no
+    unscoped "clear everything" default here — the blast radius is real trade
+    history, not just re-creatable backfill data, so an accidental omission
+    must not wipe every preset at once).
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+    preset_name = request.args.get("preset")
+    if not preset_name:
+        return cors_response({"error": "preset_required"}, 400)
+    removed = kite_orders.clear_all_trades(DATA_DIR, preset=preset_name)
+    push_positions_to_github()
+    return cors_response({"removed": removed, "preset": preset_name})
+
+
 @app.route("/gap-orders/migrate-preset-tag", methods=["POST", "OPTIONS"])
 def gap_orders_migrate_preset_tag():
     """

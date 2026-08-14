@@ -110,6 +110,12 @@ def backtest_overnight(ohlc: list[dict], sym_id: str, params: dict) -> list[dict
             if gap_dir == "DOWN" and today_return > 0:
                 continue
 
+        min_change_pct = params.get("minChangePct", 0) or 0
+        if min_change_pct > 0:
+            change_pct = ((today["close"] - prev_ref) / prev_ref) * 100
+            if abs(change_pct) < min_change_pct:
+                continue
+
         side = "LONG" if gap_dir == "UP" else "SHORT"
         entry = today["close"]
         next_open = tomorrow["open"]
@@ -287,6 +293,10 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
         "tpType":      settings.get("tpType", "d2_close"),
         "tpPct":       settings.get("tpPct", 1.0),
         "holdDays":    settings.get("holdDays", 1),
+        # 0 = off. Minimum |D1 close vs prior close| move required to qualify —
+        # filters out weak-conviction gap-closes that only just cleared minGap
+        # but didn't show real follow-through during the day.
+        "minChangePct": settings.get("minChangePct", 0) or 0,
     }
     direction = settings.get("direction", "both")
     wr_threshold = settings.get("wrThreshold", 0) or 0
@@ -330,6 +340,11 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
             if gap_dir == "UP" and today_return < 0:
                 continue
             if gap_dir == "DOWN" and today_return > 0:
+                continue
+
+        if params["minChangePct"] > 0:
+            change_pct = ((today["close"] - prev_ref) / prev_ref) * 100
+            if abs(change_pct) < params["minChangePct"]:
                 continue
 
         side = "LONG" if gap_dir == "UP" else "SHORT"
@@ -382,6 +397,15 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
 
     longs.sort(key=lambda s: _signal_sort_key(s, ranking_mode))
     shorts.sort(key=lambda s: _signal_sort_key(s, ranking_mode))
+
+    # Min Signals gate — a day-level "broad market momentum" filter, mirrors the JS
+    # scanner exactly: skip the whole day (no entries at all) unless MORE than this
+    # many raw candidates qualified, checked BEFORE the WR/PnL _passesFilter below.
+    min_signals_gate = settings.get("minSignalsGate", 0) or 0
+    raw_candidate_count = len(longs) + len(shorts)
+    if min_signals_gate > 0 and raw_candidate_count <= min_signals_gate:
+        return {"longs": longs, "shorts": shorts, "selected": [], "gatedOut": True,
+                "rawCandidateCount": raw_candidate_count, "minSignalsGate": min_signals_gate}
 
     if max_per_day > 0:
         all_sigs = longs + shorts
