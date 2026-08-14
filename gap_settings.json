@@ -1,21 +1,22 @@
 {
   "minGap": 3,
-  "maxGap": 6,
+  "maxGap": 9,
   "minChangePct": 0,
   "slType": "pct",
   "slPct": 6,
   "tpType": "pct",
-  "tpPct": 5,
-  "holdDays": 3,
-  "maxSignalsDay": 2,
+  "tpPct": 12,
+  "holdDays": 10,
+  "maxSignalsDay": 10,
+  "minSignalsGate": 2,
   "wrThreshold": 0,
   "pnlThreshold": 0,
   "capitalPerTrade": 300000,
-  "rankingMode": "expectancy",
+  "rankingMode": "wilson",
   "direction": "long",
   "fromDate": "2025-08-09",
   "toDate": "2026-08-07",
   "closeFilter": "strict",
   "tradingMode": "paper",
-  "_syncedAt": "2026-08-14 04:43:13"
+  "_syncedAt": "2026-08-14 05:41:53"
 }
