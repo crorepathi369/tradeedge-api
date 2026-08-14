@@ -4147,12 +4147,15 @@ function _ttCalendarBuild(rows, year) {
     const firstDow     = new Date(year, m - 1, 1).getDay();
     const mRows = dates.filter(d => d.startsWith(monthPfx)).flatMap(d => byDay[d]);
     if (!mRows.length) continue;
-    const mClosed = mRows.filter(r => r.status !== 'open');
-    const mWins   = mClosed.filter(r => (r.pnl_pct ?? 0) > 0).length;
-    const mSL     = mClosed.filter(r => r.status === 'closed_by_sl').length;
-    const mLoss   = mClosed.length - mWins - mSL;
-    const mPnl    = mClosed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
-    const mPnlCls = _pnlColor(mPnl);
+    const mClosed  = mRows.filter(r => r.status !== 'open');
+    const mWins    = mClosed.filter(r => (r.pnl_pct ?? 0) > 0).length;
+    const mSL      = mClosed.filter(r => r.status === 'closed_by_sl').length;
+    const mLoss    = mClosed.length - mWins - mSL;
+    const mPnl     = mClosed.reduce((s, r) => s + (r.pnl_pct || 0), 0);
+    const mPnlCls  = _pnlColor(mPnl);
+    const mWinRate = mClosed.length ? (mWins / mClosed.length * 100) : 0;
+    const mAvgPnl  = mClosed.length ? (mPnl / mClosed.length) : 0;
+    const mAvgCls  = _pnlColor(mAvgPnl);
 
     let grid = DOW.map(d => `<div style="text-align:center;font-family:'DM Mono',monospace;font-size:8px;font-weight:600;color:var(--text3);padding:1px 0;">${d}</div>`).join('');
     for (let i = 0; i < firstDow; i++) grid += '<div></div>';
@@ -4190,14 +4193,22 @@ function _ttCalendarBuild(rows, year) {
       <div style="padding:0 10px 8px;">
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;">${grid}</div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--border);background:var(--surface2);">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--border);background:var(--surface2);">
         <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Trades</div>
           <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--accent);">${mRows.length}</div>
         </div>
         <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Win Rate</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--text);">${mClosed.length ? mWinRate.toFixed(0) + '%' : '—'}</div>
+        </div>
+        <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">W/L/SL</div>
           <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:11px;color:var(--text);">${mWins}/${mLoss}/${mSL}</div>
+        </div>
+        <div style="text-align:center;padding:6px 4px;border-right:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Avg/T</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:${mAvgCls};">${mClosed.length ? _pnlSign(mAvgPnl) + mAvgPnl.toFixed(2) + '%' : '—'}</div>
         </div>
         <div style="text-align:center;padding:6px 4px;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;">Net PnL</div>
