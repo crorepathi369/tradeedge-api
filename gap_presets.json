@@ -1,23 +1,4 @@
 {
-  "High-Conviction-Only": {
-    "capitalPerTrade": 1000000,
-    "closeFilter": "strict",
-    "direction": "both",
-    "fromDate": "2025-08-09",
-    "holdDays": 1,
-    "maxGap": 6,
-    "maxSignalsDay": 5,
-    "minGap": 3,
-    "pnlThreshold": 0,
-    "rankingMode": "expectancy",
-    "slPct": 3,
-    "slType": "pct",
-    "toDate": "2026-08-07",
-    "tpPct": 1,
-    "tpType": "d2_close",
-    "tradingMode": "paper",
-    "wrThreshold": 0
-  },
   "Multiday-Fixed-TP": {
     "capitalPerTrade": 1000000,
     "closeFilter": "strict",
