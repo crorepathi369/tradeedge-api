@@ -23,7 +23,7 @@
   "High-Conviction-Fixed-TP": {
     "capitalPerTrade": 300000,
     "closeFilter": "strict",
-    "direction": "both",
+    "direction": "long",
     "fromDate": "2025-08-09",
     "holdDays": 10,
     "maxGap": 9,
@@ -32,7 +32,7 @@
     "minGap": 3,
     "minSignalsGate": 3,
     "pnlThreshold": 0,
-    "rankingMode": "expectancy",
+    "rankingMode": "wilson",
     "slPct": 6,
     "slType": "pct",
     "toDate": "2026-08-07",
