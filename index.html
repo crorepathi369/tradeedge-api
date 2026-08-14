@@ -7595,23 +7595,20 @@ function readCurrentParams() {
 
 // ── Load saved defaults on startup ────────────────────────────────────────────
 function loadSavedDefaults() {
-  // Always restore capital, WR, PnL first — shared keys, independent of strategy
-  const savedCapital = localStorage.getItem('TE_CAPITAL');
-  const savedWr      = localStorage.getItem('TE_WR_THRESHOLD');
-  const savedPnl     = localStorage.getItem('TE_PNL_THRESHOLD');
-  if (savedCapital) document.getElementById('capitalPerTrade').value = +savedCapital;
-  if (savedWr)      document.getElementById('scanWrThreshold').value  = +savedWr;
-  if (savedPnl)     document.getElementById('scanPnlThreshold').value = +savedPnl;
-  setTradingMode('paper'); // fail-safe default, overridden below only if a saved mode exists
-  // Overnight Gap — apply saved if exists
-  const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
-  if (onRaw) {
-    try {
-      const rawD = JSON.parse(onRaw);
-      _applyOvernightParamsToForm(rawD);
-      setTradingMode(rawD.tradingMode === 'live' ? 'live' : 'paper'); // fail-safe: anything but exactly 'live' loads as paper
-    } catch(e) { console.warn('[loadSavedDefaults] overnight parse error', e); }
-  }
+  // Capital/WR/PnL and the whole Overnight Gap block are deliberately NOT
+  // restored here anymore. This function runs synchronously at page load,
+  // BEFORE the async named-preset fetch below even starts — and Overnight
+  // always ends up preset-driven a moment later (see the DOMContentLoaded
+  // listener), which is the real source of truth. Restoring from the generic
+  // TE_CAPITAL/TE_WR_THRESHOLD/TE_PNL_THRESHOLD/TE_OVERNIGHT_DEFAULTS
+  // localStorage snapshot here — even just transiently, before the preset
+  // fetch resolves — opened a window where a stale locally-cached value (an
+  // old 40% WR threshold, from before it was set to 0) could show, and if
+  // anything wrote the form back to the server during that window (e.g. a
+  // "Save" click), it would permanently overwrite the live preset with the
+  // stale value. Intraday/Pullback have no server-backed presets yet, so
+  // they still restore from their own localStorage keys below as before.
+  setTradingMode('paper'); // fail-safe default, overridden once the preset auto-load resolves
 
   // Intraday — apply saved based on current entry type
   const entryType = document.getElementById('idEntryType')?.value || 'd2_open';
