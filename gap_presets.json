@@ -64,15 +64,15 @@
     "holdDays": 3,
     "maxGap": 5,
     "maxSignalsDay": 5,
-    "minGap": 2,
-    "pnlThreshold": 1.8,
+    "minGap": 3,
+    "pnlThreshold": 0,
     "rankingMode": "expectancy",
-    "slPct": 4,
+    "slPct": 5,
     "slType": "pct",
     "toDate": "2026-08-07",
-    "tpPct": 5,
+    "tpPct": 4,
     "tpType": "pct",
     "tradingMode": "paper",
-    "wrThreshold": 60
+    "wrThreshold": 50
   }
 }
