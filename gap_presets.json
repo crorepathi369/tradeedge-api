@@ -57,22 +57,23 @@
     "wrThreshold": 40
   },
   "High-Conviction-Fixed-TP": {
-    "capitalPerTrade": 1000000,
+    "capitalPerTrade": 300000,
     "closeFilter": "strict",
-    "direction": "both",
+    "direction": "long",
     "fromDate": "2025-08-09",
-    "holdDays": 9,
+    "holdDays": 3,
     "maxGap": 6,
-    "maxSignalsDay": 0,
+    "maxSignalsDay": 2,
     "minGap": 3,
     "pnlThreshold": 0,
     "rankingMode": "expectancy",
     "slPct": 6,
     "slType": "pct",
     "toDate": "2026-08-07",
-    "tpPct": 6,
+    "tpPct": 5,
     "tpType": "pct",
     "tradingMode": "paper",
-    "wrThreshold": 0
+    "wrThreshold": 0,
+    "minChangePct": 0
   }
 }
