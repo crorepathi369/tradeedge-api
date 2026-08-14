@@ -2538,12 +2538,13 @@
     <!-- OVERNIGHT PARAMS -->
     <div id="overnightParams">
       <!-- Row 1: dates + gap params + SL + TP -->
-      <div class="controls-grid" style="grid-template-columns:140px 140px 1px 80px 80px 1px 190px 70px 1px 170px 70px 90px;align-items:end;gap:12px;margin-bottom:0;">
+      <div class="controls-grid" style="grid-template-columns:140px 140px 1px 80px 80px 90px 1px 190px 70px 1px 170px 70px 90px;align-items:end;gap:12px;margin-bottom:0;">
         <div class="control-group"><label>From Date</label><input type="date" id="fromDate"></div>
         <div class="control-group"><label>To Date</label><input type="date" id="toDate"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
         <div class="control-group"><label>Min Gap %</label><input type="number" id="minGap" value="2" step="0.05" min="0.05" max="5"></div>
         <div class="control-group"><label>Max Gap %</label><input type="number" id="maxGap" value="5" step="0.5" min="1" max="20"></div>
+        <div class="control-group"><label title="Minimum |D1 close vs prior close| move required to qualify (0 = off). Filters out weak-conviction gap-closes that only just cleared Min Gap but didn't show real follow-through.">Min Change %</label><input type="number" id="minChangePct" value="0" step="0.5" min="0" max="20" placeholder="0=off" title="0 = off. Minimum full-day move (prior close → D1 close) required, regardless of direction."></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
         <div class="control-group">
           <label>Stop Loss Type</label>
@@ -5806,6 +5807,14 @@ function backtest(ohlc, symId, params, debug = false) {
       if (gapDir === 'DOWN' && todayReturn > 0) { if(debug) console.log(symId, today.date, `SKIP: gap DOWN but closed GREEN (${todayReturn.toFixed(2)})`); continue; }
     }
 
+    // 0 = off. Minimum |D1 close vs prior close| move required to qualify — filters
+    // out weak-conviction gap-closes that only just cleared minGap but didn't show
+    // real follow-through during the day. Distinct from gapPct (open-based).
+    if (params.minChangePct > 0) {
+      const changePct = ((today.close - prevRef) / prevRef) * 100;
+      if (Math.abs(changePct) < params.minChangePct) { if(debug) console.log(symId, today.date, `SKIP: change ${changePct.toFixed(2)}% < minChangePct ${params.minChangePct}`); continue; }
+    }
+
     if(debug) console.log(symId, today.date, `SIGNAL: gap ${gapPct.toFixed(2)}% dir=${gapDir} entry=${today.close.toFixed(2)} nextOpen=${tomorrow.open.toFixed(2)}`);
 
     // Signal: buy/sell at Day1 close
@@ -6417,10 +6426,6 @@ async function runBacktestSilent() {
     if (!statMap[key]) statMap[key] = [];
     statMap[key].push(t);
   });
-  const scoreOf = (sym, side) => {
-    const { wilson, expectancy } = _scoreFromTrades(statMap[sym+'_'+side] || []);
-    return _getRankingMode() === 'expectancy' ? expectancy : wilson;
-  };
   const wrThresh  = +_wrThreshEl().value || 0;
   const pnlThresh = +_pnlThreshEl().value || 0;
   const wilsonOf = (sym, side) => {
@@ -6442,19 +6447,11 @@ async function runBacktestSilent() {
   }
 
   if (maxN > 0) {
-    const byDay = {};
-    // Group by tradeDate (actual entry day), not signalDate — for Overnight/Intraday
-    // those are always the same trading day apart so this changes nothing, but for
-    // Pullback: the confirmation window means different signal days can resolve to
-    // the same entry day, and the cap needs to catch that.
-    localTrades.forEach(t => { (byDay[t.tradeDate]=byDay[t.tradeDate]||[]).push(t); });
-    localTrades = Object.values(byDay).flatMap(day => {
-      let candidates = day.filter(t => passesWrPnl(t.sym, t.side));
-      return candidates.sort((a,b) => {
-        const sd = scoreOf(b.sym,b.side) - scoreOf(a.sym,a.side);
-        return Math.abs(sd) > 0.0001 ? sd : Math.abs(b.gapPct)-Math.abs(a.gapPct);
-      }).slice(0,maxN);
-    });
+    // Walk-forward day-cap — see _applyMaxPerDayCap() for why this can't reuse the
+    // passesWrPnl/scoreOf above: those are scored against the WHOLE date range, which
+    // is correct for the open-positions filter just above (nothing "in the future" of
+    // today's most recent data point) but would be hindsight for capping any past day.
+    localTrades = _applyMaxPerDayCap(localTrades, wrTrades, maxN, wrThresh, pnlThresh);
   }
 
   // Backtest-only concurrent-position cap (Pullback). Runs after the Max/day
@@ -6574,51 +6571,14 @@ async function runBacktest() {
     wrTrades.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to && t.outcome !== 'OPEN'));
   }
 
-  // Max signals per day cap — uses shared _getRankingMode() + _scoreFromTrades()
+  // Max signals per day cap — walk-forward, see _applyMaxPerDayCap() for why: a day's
+  // ranking must only reflect trades that had genuinely already closed by that day,
+  // not the strategy's full-lifetime record (which no one on that day could see yet).
   const maxPerDay = +_maxDayEl().value || 0;
   if (maxPerDay > 0) {
-    const statMap = {};
-    wrTrades.forEach(t => {
-      const key = t.sym + '_' + t.side;
-      if (!statMap[key]) statMap[key] = [];
-      statMap[key].push(t);
-    });
-    const scoreOf = (sym, side) => {
-      const trades = statMap[sym + '_' + side] || [];
-      const { wilson, expectancy } = _scoreFromTrades(trades);
-      return _getRankingMode() === 'expectancy' ? expectancy : wilson;
-    };
-    // Apply same WR threshold as scanner — so backtest cap and scanner pick identical signals
     const wrThresh  = +_wrThreshEl().value || 0;
     const pnlThresh = +_pnlThreshEl().value || 0;
-    const wilsonOf = (sym, side) => {
-      const trades = statMap[sym + '_' + side] || [];
-      const total = trades.length;
-      const wins  = trades.filter(t => t.outcome === 'WIN').length;
-      return total > 0 ? Math.round((wins + 1) / (total + 2) * 100) : 50;
-    };
-    const avgPnlOf = (sym, side) => {
-      const trades = statMap[sym + '_' + side] || [];
-      return trades.length > 0 ? trades.reduce((s,t) => s + t.pnlPct, 0) / trades.length : 0;
-    };
-    const byDay = {};
-    // Group by tradeDate (actual entry day), not signalDate — see runBacktestSilent()
-    // for why this matters once signal day and entry day can differ (Pullback).
-    localTrades.forEach(t => { (byDay[t.tradeDate] = byDay[t.tradeDate] || []).push(t); });
-    localTrades = Object.values(byDay).flatMap(dayTrades => {
-      // Filter by WR + PnL threshold — same as scanner
-      let candidates = dayTrades.filter(t =>
-        (wrThresh  <= 0 || wilsonOf(t.sym, t.side) >= wrThresh) &&
-        (pnlThresh === 0 || avgPnlOf(t.sym, t.side) >= pnlThresh)
-      );
-      const sorted = candidates.sort((a, b) => {
-        const sDiff = scoreOf(b.sym, b.side) - scoreOf(a.sym, a.side);
-        if (Math.abs(sDiff) > 0.0001) return sDiff;
-        return Math.abs(b.gapPct) - Math.abs(a.gapPct);
-      });
-
-      return sorted.slice(0, maxPerDay);
-    });
+    localTrades = _applyMaxPerDayCap(localTrades, wrTrades, maxPerDay, wrThresh, pnlThresh);
   }
 
   // Backtest-only concurrent-position cap (Pullback). Runs after the Max/day
@@ -6946,6 +6906,91 @@ function wrDataMatchesStrategy() {
     && _lastBacktestedParamsFingerprint === _computeParamsFingerprint();
 }
 
+// Historical trades for a symbol/side, as they would have been known on scanDate —
+// i.e. only trades that had already closed BEFORE scanDate. wrSource (_allTradesForWR)
+// is one backtest over the whole configured date range, so without this cutoff a
+// scan of a past date silently scores its WR/expectancy using trades that closed
+// AFTER that date — hindsight the live scanner (and the real Kite automation in
+// gap_scan.py, which already truncates its own backtest window to scan_date) never
+// actually had. Scanning today has no effect here since nothing in range closes
+// after today anyway.
+function _histTradesAsOf(wrSource, sym, side, scanDate) {
+  return wrSource.filter(t => t.sym === sym && t.side === side && t.outcome !== 'SKIP' && t.exitDate < scanDate);
+}
+
+// Caps each trading day's candidate signals to maxPerDay, ranked by Wilson/expectancy
+// score — walk-forward: a trade only contributes to the ranking score for a given day
+// once it had ALREADY CLOSED before that day's own entry decision, same principle as
+// _histTradesAsOf() above (used by the live scanner for the identical reason). Without
+// this, every day's cap pick benefited from the strategy's full-lifetime track record —
+// including trades that hadn't happened yet — which is exactly what surfaced as a
+// mismatch between the (now-honest) scanner and this cap for 19-Mar-2026: the backtest
+// was hand-picking, with hindsight, whichever candidates went on to have the best
+// overall record, not the candidates that actually looked best as of that day.
+// entryDayKey mirrors the same per-strategy convention used for Calendar bucketing and
+// the scanner cutoff: signalDate is the real decision moment for Overnight/Intraday
+// (entry is at D1 close), tradeDate is for Pullback (its confirmation window means
+// tradeDate — not signalDate — is the actual entry day).
+function _applyMaxPerDayCap(localTrades, wrTrades, maxPerDay, wrThresh, pnlThresh) {
+  if (!maxPerDay) return localTrades;
+
+  const entryDayKey = _strategy === 'pullback' ? 'tradeDate' : 'signalDate';
+  const sortedWr = [...wrTrades].sort((a, b) => a.exitDate.localeCompare(b.exitDate));
+  let wrPtr = 0;
+  const statMap = {};
+
+  const byDay = {};
+  // Group by tradeDate (actual entry day), not signalDate — for Overnight/Intraday
+  // those are always the same trading day apart so this changes nothing, but for
+  // Pullback: the confirmation window means different signal days can resolve to
+  // the same entry day, and the cap needs to catch that.
+  localTrades.forEach(t => { (byDay[t.tradeDate] = byDay[t.tradeDate] || []).push(t); });
+
+  return Object.keys(byDay).sort().flatMap(day => {
+    const dayTrades = byDay[day];
+    // decisionDate is the same for every trade in this group (Overnight/Intraday: one
+    // shared signalDate = tradeDate's prior trading day; Pullback: tradeDate itself).
+    const decisionDate = dayTrades[0][entryDayKey];
+
+    // Absorb every trade that had genuinely closed before today's decision point.
+    // sortedDayKeys are walked chronologically and decisionDate advances in lockstep,
+    // so this pointer only ever moves forward — no re-scan of sortedWr per day.
+    while (wrPtr < sortedWr.length && sortedWr[wrPtr].exitDate < decisionDate) {
+      const t = sortedWr[wrPtr];
+      const key = t.sym + '_' + t.side;
+      (statMap[key] = statMap[key] || []).push(t);
+      wrPtr++;
+    }
+
+    const scoreOf = (sym, side) => {
+      const { wilson, expectancy } = _scoreFromTrades(statMap[sym + '_' + side] || []);
+      return _getRankingMode() === 'expectancy' ? expectancy : wilson;
+    };
+    const wilsonOf = (sym, side) => {
+      const trades = statMap[sym + '_' + side] || [];
+      const total = trades.length;
+      const wins  = trades.filter(t => t.outcome === 'WIN').length;
+      return total > 0 ? Math.round((wins + 1) / (total + 2) * 100) : 50;
+    };
+    const avgPnlOf = (sym, side) => {
+      const trades = statMap[sym + '_' + side] || [];
+      return trades.length > 0 ? trades.reduce((s,t) => s + t.pnlPct, 0) / trades.length : 0;
+    };
+
+    const candidates = dayTrades.filter(t =>
+      (wrThresh  <= 0 || wilsonOf(t.sym, t.side) >= wrThresh) &&
+      (pnlThresh === 0 || avgPnlOf(t.sym, t.side) >= pnlThresh)
+    );
+    const sorted = candidates.sort((a, b) => {
+      const sDiff = scoreOf(b.sym, b.side) - scoreOf(a.sym, a.side);
+      if (Math.abs(sDiff) > 0.0001) return sDiff;
+      return Math.abs(b.gapPct) - Math.abs(a.gapPct);
+    });
+
+    return sorted.slice(0, maxPerDay);
+  });
+}
+
 // ── Signal scoring ────────────────────────────────────────────────────────────
 // Computes wilson + expectancy stats from a trade array
 function _scoreFromTrades(histTrades) {
@@ -7016,7 +7061,7 @@ function _signalSortFn(a, b) {
 
 // ── Default values for each strategy ──────────────────────────────────────────
 const OVERNIGHT_DEFAULTS = {
-  minGap: 2, maxGap: 5, slType: 'pct', slPct: 3,
+  minGap: 2, maxGap: 5, minChangePct: 0, slType: 'pct', slPct: 3,
   tpType: 'd2_close', tpPct: 1.0, holdDays: 1, maxSignalsDay: 1,
   wrThreshold: 40, pnlThreshold: 0.3, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
@@ -7083,6 +7128,7 @@ function readOvernightParams() {
   return {
     minGap:      +document.getElementById('minGap').value,
     maxGap:      +document.getElementById('maxGap').value,
+    minChangePct:+document.getElementById('minChangePct').value || 0,
     closeFilter:  document.getElementById('closeFilter').value,
     slType:       document.getElementById('slType').value,
     slPct:       +document.getElementById('slPct').value,
@@ -7098,6 +7144,7 @@ function _buildOvernightSavedObject() {
   return {
     minGap:         +document.getElementById('minGap').value,
     maxGap:         +document.getElementById('maxGap').value,
+    minChangePct:   +document.getElementById('minChangePct').value || 0,
     slType:          document.getElementById('slType').value,
     slPct:          +document.getElementById('slPct').value,
     tpType:          document.getElementById('tpType').value,
@@ -7130,6 +7177,7 @@ function _applyOvernightParamsToForm(rawD) {
   const d = { ...OVERNIGHT_DEFAULTS, ...rawD };
   document.getElementById('minGap').value  = d.minGap;
   document.getElementById('maxGap').value  = d.maxGap;
+  document.getElementById('minChangePct').value = d.minChangePct;
   document.getElementById('slType').value  = d.slType;
   document.getElementById('slPct').value   = d.slPct;
   document.getElementById('tpType').value  = d.tpType;
@@ -7163,6 +7211,7 @@ function _buildOvernightSavedObjectMobile() {
   return {
     minGap:         +document.getElementById('mobMinGap').value,
     maxGap:         +document.getElementById('mobMaxGap').value,
+    minChangePct:   +document.getElementById('mobMinChangePct').value || 0,
     slType:          document.getElementById('mobSlType').value,
     slPct:          +document.getElementById('mobSlPct').value,
     tpType:          document.getElementById('mobTpType').value,
@@ -7185,6 +7234,7 @@ function _applyOvernightParamsToMobForm(rawD) {
   const d = { ...OVERNIGHT_DEFAULTS, ...rawD };
   document.getElementById('mobMinGap').value   = d.minGap;
   document.getElementById('mobMaxGap').value   = d.maxGap;
+  document.getElementById('mobMinChangePct').value = d.minChangePct;
   document.getElementById('mobSlType').value   = d.slType;
   document.getElementById('mobSlPct').value    = d.slPct;
   document.getElementById('mobTpType').value   = d.tpType;
@@ -7634,6 +7684,7 @@ function saveMobDefaults() {
     const saved = {
       minGap:        +document.getElementById('mobMinGap').value,
       maxGap:        +document.getElementById('mobMaxGap').value,
+      minChangePct:  +document.getElementById('mobMinChangePct').value || 0,
       slType:         document.getElementById('mobSlType').value,
       slPct:         +document.getElementById('mobSlPct').value,
       tpType:         document.getElementById('mobTpType').value,
@@ -7710,6 +7761,7 @@ function resetMobDefaults() {
     const d = savedRaw ? { ...OVERNIGHT_DEFAULTS, ...JSON.parse(savedRaw) } : OVERNIGHT_DEFAULTS;
     document.getElementById('mobMinGap').value    = d.minGap;
     document.getElementById('mobMaxGap').value    = d.maxGap;
+    document.getElementById('mobMinChangePct').value = d.minChangePct;
     document.getElementById('mobSlType').value    = d.slType;
     document.getElementById('mobSlPct').value     = d.slPct;
     document.getElementById('mobTpType').value    = d.tpType;
@@ -7928,6 +7980,11 @@ async function runScanner() {
       if (gapDir === 'DOWN' && todayReturn > 0) return;
     }
 
+    if (params.minChangePct > 0) {
+      const changePct = ((today.close - prevRef) / prevRef) * 100;
+      if (Math.abs(changePct) < params.minChangePct) return;
+    }
+
     let slLevel;
     if (params.slType === 'gap_fill') {
       slLevel = today.close;
@@ -7950,7 +8007,7 @@ async function runScanner() {
     // Use _allTradesForWR (full uncapped backtest) so the cap doesn't reduce trade counts
     // Exclude SKIP trades — they never executed, shouldn't affect WR
     const wrSource   = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
-    const histTrades = wrSource.filter(t => t.sym === sym && t.side === side && t.outcome !== 'SKIP');
+    const histTrades = _histTradesAsOf(wrSource, sym, side, scanDate);
     const histWins   = histTrades.filter(t => t.outcome === 'WIN').length;
     const histTotal  = histTrades.length;
     const histWR     = histTotal >= 5
@@ -8077,9 +8134,9 @@ function runScannerIntraday(scanDate, syms) {
     const slLevel = side === 'LONG' ? approxEntry * (1 - slPct) : approxEntry * (1 + slPct);
     const tpLevel = side === 'LONG' ? approxEntry * (1 + tpPct) : approxEntry * (1 - tpPct);
 
-    // Hist WR from backtest — exclude SKIP trades
+    // Hist WR from backtest — exclude SKIP trades, and anything not yet closed as of scanDate
     const wrSource   = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
-    const histTrades = wrSource.filter(t => t.sym === sym && t.side === side && t.outcome !== 'SKIP');
+    const histTrades = _histTradesAsOf(wrSource, sym, side, scanDate);
     const histWins   = histTrades.filter(t => t.outcome === 'WIN').length;
     const histTotal  = histTrades.length;
     const histWR     = histTotal >= 5 ? Math.round(histWins / histTotal * 100) : null;
@@ -8565,7 +8622,7 @@ function runScannerPullback(scanDate, syms) {
     const entryPrice = hasNextBar ? ohlc[idx + 1].open : sig.confirmClose;
 
     const wrSource   = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
-    const histTrades = wrSource.filter(t => t.sym === sym && t.side === sig.side && t.outcome !== 'SKIP');
+    const histTrades = _histTradesAsOf(wrSource, sym, sig.side, scanDate);
     const histWins   = histTrades.filter(t => t.outcome === 'WIN').length;
     const histTotal  = histTrades.length;
     const histWR     = histTotal >= 5 ? Math.round(histWins / histTotal * 100) : null;
@@ -9947,31 +10004,11 @@ function buildIntradaySweep() {
   // Current active SL/TP for highlighting
   const { idSlPct: activeSL, idTpPct: activeTP } = readIntradayParams();
 
-  // Helper: apply max/day cap same way as runBacktest
+  // Helper: apply max/day cap same way as runBacktest — walk-forward via
+  // _applyMaxPerDayCap(), so this heatmap doesn't recommend SL/TP combos that only
+  // looked good because the day-cap ranking had hindsight.
   function applyMaxPerDay(trades, maxN) {
-    if (!maxN) return trades;
-    // Build WR map for Wilson score ranking
-    const wrMap = {};
-    trades.forEach(t => {
-      const key = t.sym + '_' + t.side;
-      if (!wrMap[key]) wrMap[key] = { wins: 0, total: 0 };
-      wrMap[key].total++;
-      if (t.outcome === 'WIN') wrMap[key].wins++;
-    });
-    const wilson = (sym, side) => {
-      const e = wrMap[sym + '_' + side];
-      return e ? (e.wins + 1) / (e.total + 2) : 0;
-    };
-    const byDay = {};
-    trades.forEach(t => { (byDay[t.signalDate] = byDay[t.signalDate] || []).push(t); });
-    return Object.values(byDay).flatMap(dayTrades =>
-      dayTrades
-        .sort((a, b) => {
-          const wd = wilson(b.sym, b.side) - wilson(a.sym, a.side);
-          return Math.abs(wd) > 0.001 ? wd : Math.abs(b.gapPct) - Math.abs(a.gapPct);
-        })
-        .slice(0, maxN)
-    );
+    return _applyMaxPerDayCap(trades, trades, maxN, 0, 0);
   }
 
   // Build result matrix
@@ -10118,7 +10155,6 @@ function buildOvernightSweep() {
 
   // Cap / rank / filter settings — must match main backtest exactly
   const maxPerDay   = +_maxDayEl().value || 0;
-  const rankMode    = _getRankingMode(); // 'expectancy' | 'wilson'
   const wrThresh    = +_wrThreshEl().value  || 0;
   const pnlThresh   = +_pnlThreshEl().value || 0;
 
@@ -10138,39 +10174,10 @@ function buildOvernightSweep() {
         allT.push(...trades.filter(t => t.signalDate >= from && t.signalDate <= to));
       });
 
-      // Step 2: apply same Max/day cap + Adj WR / Net PnL filters + rank as main backtest
+      // Step 2: apply same Max/day cap + Adj WR / Net PnL filters + rank as main backtest —
+      // walk-forward via _applyMaxPerDayCap(), same reasoning as runBacktest()'s own cap.
       if (maxPerDay > 0) {
-        const statMap = {};
-        allT.forEach(t => {
-          const key = t.sym + '_' + t.side;
-          if (!statMap[key]) statMap[key] = [];
-          statMap[key].push(t);
-        });
-        const scoreOf = (sym, side) => {
-          const { wilson, expectancy } = _scoreFromTrades(statMap[sym + '_' + side] || []);
-          return rankMode === 'expectancy' ? expectancy : wilson;
-        };
-        const wilsonOf = (sym, side) => {
-          const trades = statMap[sym + '_' + side] || [];
-          const total = trades.length, wins = trades.filter(t => t.outcome === 'WIN').length;
-          return total > 0 ? Math.round((wins + 1) / (total + 2) * 100) : 50;
-        };
-        const avgPnlOf = (sym, side) => {
-          const trades = statMap[sym + '_' + side] || [];
-          return trades.length > 0 ? trades.reduce((s, t) => s + t.pnlPct, 0) / trades.length : 0;
-        };
-        const byDay = {};
-        allT.forEach(t => { (byDay[t.signalDate] = byDay[t.signalDate] || []).push(t); });
-        allT = Object.values(byDay).flatMap(dayTrades => {
-          let candidates = dayTrades.filter(t =>
-            (wrThresh  <= 0 || wilsonOf(t.sym, t.side) >= wrThresh) &&
-            (pnlThresh === 0 || avgPnlOf(t.sym, t.side) >= pnlThresh)
-          );
-          return candidates.sort((a, b) => {
-            const sd = scoreOf(b.sym, b.side) - scoreOf(a.sym, a.side);
-            return Math.abs(sd) > 0.0001 ? sd : Math.abs(b.gapPct) - Math.abs(a.gapPct);
-          }).slice(0, maxPerDay);
-        });
+        allT = _applyMaxPerDayCap(allT, allT, maxPerDay, wrThresh, pnlThresh);
       }
 
       const total  = allT.length;
@@ -11739,17 +11746,26 @@ function computeTradeStats(trades) {
   const wr01       = winRate / 100;
   const expectancy = (wr01 * avgWin) + ((1 - wr01) * avgLoss);
 
-  // Per-day bucketing (used by best/worst day, equity curve, monthly)
+  // Per-day bucketing (used by best/worst day, equity curve, calendar, monthly).
+  // byTradeDay is keyed by the same "entry day" field Day-wise Trades groups by
+  // (see groupKey convention at buildDayCards, ~line 9477): signalDate (Day1,
+  // when the position is actually entered) for Overnight/Intraday, tradeDate
+  // for Pullback (its confirmation window means tradeDate is the true entry
+  // day). Using the raw `tradeDate` field for all strategies here previously
+  // anchored the Calendar/Monthly views to Day2 for Overnight trades — one day
+  // later than Day-wise Trades and the Automated Trades calendar, both of
+  // which already group by the actual entry day.
+  const entryDayKey = _strategy === 'pullback' ? 'tradeDate' : 'signalDate';
   const bySignalDay = {}, byTradeDay = {};
   trades.forEach(t => {
-    (bySignalDay[t.signalDate] = bySignalDay[t.signalDate] || []).push(t);
-    (byTradeDay[t.tradeDate]   = byTradeDay[t.tradeDate]   || []).push(t);
+    (bySignalDay[t.signalDate]  = bySignalDay[t.signalDate]  || []).push(t);
+    (byTradeDay[t[entryDayKey]] = byTradeDay[t[entryDayKey]] || []).push(t);
   });
 
   // Also add SKIP trades to byTradeDay for calendar visibility
   // SKIPs don't affect PnL — they're tagged with outcome:'SKIP' for rendering only
   (_allTradesForWR || []).filter(t => t.outcome === 'SKIP').forEach(t => {
-    const d = t.tradeDate || t.signalDate;
+    const d = t[entryDayKey] || t.tradeDate || t.signalDate;
     (byTradeDay[d] = byTradeDay[d] || []).push(t);
   });
 
@@ -12497,6 +12513,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="mob-settings-control"><input class="mob-settings-input" id="mobMaxGap" type="number" value="5" step="0.5" min="1"></div>
       </div>
       <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Min Change %</div><div class="mob-settings-sub">Full-day move, 0=off</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobMinChangePct" type="number" value="0" step="0.5" min="0" placeholder="0=off"></div>
+      </div>
+      <div class="mob-settings-row">
         <div><div class="mob-settings-label">SL Type</div><div class="mob-settings-sub">How stop loss is set</div></div>
         <div class="mob-settings-control">
           <select class="mob-settings-input" id="mobSlType" style="width:130px;" onchange="document.getElementById('mobSlPctRow').style.display=this.value==='pct'?'':'none'">
@@ -12941,6 +12961,7 @@ function closeMobSettings() {
   if (_mobStrategy === 'overnight') {
     s('minGap',          g('mobMinGap'));
     s('maxGap',          g('mobMaxGap'));
+    s('minChangePct',    g('mobMinChangePct'));
     s('slType',          g('mobSlType'));
     s('slPct',           g('mobSlPct'));
     s('tpType',          g('mobTpType'));
@@ -13028,6 +13049,7 @@ async function runMobileScanner() {
   if (mobStrategy === 'overnight') {
     document.getElementById('minGap').value  = document.getElementById('mobMinGap').value;
     document.getElementById('maxGap').value  = document.getElementById('mobMaxGap').value;
+    document.getElementById('minChangePct').value = document.getElementById('mobMinChangePct').value;
     document.getElementById('slType').value  = document.getElementById('mobSlType').value;
     document.getElementById('slPct').value   = document.getElementById('mobSlPct').value;
   const mobCap = document.getElementById('mobCapital'); if (mobCap) document.getElementById('capitalPerTrade').value = mobCap.value;
@@ -13152,7 +13174,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         : sigMob.confirmClose * (1 - tpPctMob);
 
       const wrSrcRv    = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
-      const htRv       = wrSrcRv.filter(t => t.sym === sym && t.side === sigMob.side && t.outcome !== 'SKIP');
+      const htRv       = _histTradesAsOf(wrSrcRv, sym, sigMob.side, scanDate);
       const hwRv       = htRv.filter(t => t.outcome === 'WIN').length;
       const histWRRv   = htRv.length >= 5 ? Math.round(hwRv/htRv.length*100) : null;
       const wilsonRv   = htRv.length > 0 ? Math.round((hwRv+1)/(htRv.length+2)*100) : 50;
@@ -13181,7 +13203,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
       const slLevel = side === 'LONG' ? entry*(1-slPct) : entry*(1+slPct);
       const tpLevel = side === 'LONG' ? entry*(1+tpPct) : entry*(1-tpPct);
       const wrSrc = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
-      const ht = wrSrc.filter(t => t.sym===sym && t.side===side);
+      const ht = _histTradesAsOf(wrSrc, sym, side, scanDate);
       const hw = ht.filter(t => t.outcome==='WIN').length;
       const histWR = ht.length >= 5 ? Math.round(hw/ht.length*100) : null;
       const wilson = ht.length > 0 ? Math.round((hw+1)/(ht.length+2)*100) : 50;
@@ -13225,6 +13247,10 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         if (gapDir==='UP' && todayReturn<0) return;
         if (gapDir==='DOWN' && todayReturn>0) return;
       }
+      if (params.minChangePct > 0) {
+        const changePct = ((today.close - prevRef) / prevRef) * 100;
+        if (Math.abs(changePct) < params.minChangePct) return;
+      }
       const side = gapDir === 'UP' ? 'LONG' : 'SHORT';
       if (_mobDir==='long' && side!=='LONG') return;
       if (_mobDir==='short' && side!=='SHORT') return;
@@ -13241,7 +13267,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         tpLevel = side==='LONG' ? today.close*(1+tp) : today.close*(1-tp);
       }
       const wrSrc = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
-      const ht = wrSrc.filter(t => t.sym===sym && t.side===side);
+      const ht = _histTradesAsOf(wrSrc, sym, side, scanDate);
       const hw = ht.filter(t => t.outcome==='WIN').length;
       const histWR = ht.length >= 5 ? Math.round(hw/ht.length*100) : null;
       const wilson = ht.length > 0 ? Math.round((hw+1)/(ht.length+2)*100) : 50;
@@ -13600,6 +13626,7 @@ async function _runMobTradeBacktest(strat) {
   } else {
     const mobMin     = document.getElementById('mobMinGap');
     const mobMax     = document.getElementById('mobMaxGap');
+    const mobChange  = document.getElementById('mobMinChangePct');
     const mobSlType  = document.getElementById('mobSlType');
     const mobSl      = document.getElementById('mobSlPct');
     const mobTpType  = document.getElementById('mobTpType');
@@ -13608,6 +13635,7 @@ async function _runMobTradeBacktest(strat) {
     const mobMaxDay  = document.getElementById('mobMaxDay');
     if (mobMin)    document.getElementById('minGap').value        = mobMin.value;
     if (mobMax)    document.getElementById('maxGap').value        = mobMax.value;
+    if (mobChange) document.getElementById('minChangePct').value  = mobChange.value;
     if (mobSlType) document.getElementById('slType').value        = mobSlType.value;
     if (mobSl)     document.getElementById('slPct').value          = mobSl.value;
     if (mobTpType) document.getElementById('tpType').value        = mobTpType.value;
@@ -15208,6 +15236,7 @@ function syncMobileDefaults() {
       const d = { ...OVERNIGHT_DEFAULTS, ...JSON.parse(onRaw) };
       if (el('mobMinGap'))    el('mobMinGap').value    = d.minGap;
       if (el('mobMaxGap'))    el('mobMaxGap').value    = d.maxGap;
+      if (el('mobMinChangePct')) el('mobMinChangePct').value = d.minChangePct;
       if (el('mobSlType'))    el('mobSlType').value    = d.slType;
       if (el('mobSlPct'))     el('mobSlPct').value     = d.slPct;
       if (el('mobTpType'))    el('mobTpType').value    = d.tpType;
