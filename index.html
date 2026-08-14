@@ -6878,6 +6878,17 @@ function _syncPnlThresholdHidden(strategy, value) {
 function _wrPnlDefaultsFor(s) {
   try {
     if (s === 'overnight') {
+      // Prefer the currently-selected named preset over the generic
+      // TE_OVERNIGHT_DEFAULTS localStorage snapshot — that snapshot only
+      // updates via the "Save" button and can go stale (e.g. an old 40% WR
+      // threshold) long after presets have moved on. This function is called
+      // every time the mobile settings panel re-opens, so a stale snapshot
+      // would silently re-clobber a correctly-loaded preset's values.
+      const activePresetName = _tradesTakenFilter.preset;
+      const activePreset = activePresetName ? getOvernightPresets()[activePresetName] : null;
+      if (activePreset) {
+        return { wr: activePreset.wrThreshold, pnl: activePreset.pnlThreshold, maxDay: activePreset.maxSignalsDay };
+      }
       const raw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
       const d = raw ? { ...OVERNIGHT_DEFAULTS, ...JSON.parse(raw) } : OVERNIGHT_DEFAULTS;
       return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
@@ -15434,23 +15445,36 @@ function syncMobileDefaults() {
   if (el('mobWrInput'))  el('mobWrInput').value  = savedWr  ? +savedWr  : 40;
   if (el('mobPnlInput')) el('mobPnlInput').value = savedPnl ? +savedPnl : 0.3;
 
-  // Overnight Gap — strategy-specific params only
-  const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
-  if (onRaw) {
-    try {
-      const d = { ...OVERNIGHT_DEFAULTS, ...JSON.parse(onRaw) };
-      if (el('mobMinGap'))    el('mobMinGap').value    = d.minGap;
-      if (el('mobMaxGap'))    el('mobMaxGap').value    = d.maxGap;
-      if (el('mobMinChangePct')) el('mobMinChangePct').value = d.minChangePct;
-      if (el('mobSlType'))    el('mobSlType').value    = d.slType;
-      if (el('mobSlPct'))     el('mobSlPct').value     = d.slPct;
-      if (el('mobTpType'))    el('mobTpType').value    = d.tpType;
-      if (el('mobTpPctVal'))  el('mobTpPctVal').value  = d.tpPct;
-      if (el('mobHoldDays'))  el('mobHoldDays').value  = d.holdDays;
-      if (el('mobMaxDay'))    el('mobMaxDay').value     = d.maxSignalsDay;
-      if (el('mobMinSignalsGate')) el('mobMinSignalsGate').value = d.minSignalsGate || 0;
-      setTradingMode(d.tradingMode === 'live' ? 'live' : 'paper'); // fail-safe: anything but exactly 'live' loads as paper
-    } catch(e) { console.warn('[syncMobileDefaults] overnight error', e); }
+  // Overnight Gap — strategy-specific params only. Prefer the currently-selected
+  // named preset over the generic TE_OVERNIGHT_DEFAULTS localStorage snapshot —
+  // see _wrPnlDefaultsFor()'s comment for why: this function re-runs every time
+  // the mobile settings panel opens, so a stale "Save"d snapshot would silently
+  // revert a correctly-loaded preset's params (not just WR/PnL — minGap, slPct,
+  // tpPct, holdDays etc. too), producing a different trade count on mobile than
+  // what the same preset actually shows on desktop.
+  const activePresetName = _tradesTakenFilter.preset;
+  const activePreset = activePresetName ? getOvernightPresets()[activePresetName] : null;
+  if (activePreset) {
+    _applyOvernightParamsToMobForm(activePreset);
+    setTradingMode(activePreset.tradingMode === 'live' ? 'live' : 'paper');
+  } else {
+    const onRaw = localStorage.getItem('TE_OVERNIGHT_DEFAULTS');
+    if (onRaw) {
+      try {
+        const d = { ...OVERNIGHT_DEFAULTS, ...JSON.parse(onRaw) };
+        if (el('mobMinGap'))    el('mobMinGap').value    = d.minGap;
+        if (el('mobMaxGap'))    el('mobMaxGap').value    = d.maxGap;
+        if (el('mobMinChangePct')) el('mobMinChangePct').value = d.minChangePct;
+        if (el('mobSlType'))    el('mobSlType').value    = d.slType;
+        if (el('mobSlPct'))     el('mobSlPct').value     = d.slPct;
+        if (el('mobTpType'))    el('mobTpType').value    = d.tpType;
+        if (el('mobTpPctVal'))  el('mobTpPctVal').value  = d.tpPct;
+        if (el('mobHoldDays'))  el('mobHoldDays').value  = d.holdDays;
+        if (el('mobMaxDay'))    el('mobMaxDay').value     = d.maxSignalsDay;
+        if (el('mobMinSignalsGate')) el('mobMinSignalsGate').value = d.minSignalsGate || 0;
+        setTradingMode(d.tradingMode === 'live' ? 'live' : 'paper'); // fail-safe: anything but exactly 'live' loads as paper
+      } catch(e) { console.warn('[syncMobileDefaults] overnight error', e); }
+    }
   }
 
   // Intraday — strategy-specific params only
