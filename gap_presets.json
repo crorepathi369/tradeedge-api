@@ -73,6 +73,6 @@
     "tpPct": 4,
     "tpType": "pct",
     "tradingMode": "paper",
-    "wrThreshold": 50
+    "wrThreshold": 0
   }
 }
