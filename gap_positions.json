@@ -1416,6 +1416,32 @@
       "exit_date": "2026-05-20",
       "pnl_pct": 0.92,
       "pnl_amount": 5280.0
+    },
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2025-11-17",
+      "entry_order_id": null,
+      "tradingsymbol": "TMPV25NOVFUT",
+      "lot_size": 1600,
+      "entry_price": 372.4,
+      "signal_entry": 372.7,
+      "signal_slLevel": 387.61,
+      "sl_price": 387.3,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 6,
+      "tp_price": 350.06,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 360.9,
+      "exit_date": "2025-11-20",
+      "pnl_pct": 3.09,
+      "pnl_amount": 18400.0
     }
   ],
   "MAXHEALTH": [
@@ -6128,6 +6154,34 @@
       "exit_date": "2026-02-16",
       "pnl_pct": 1.25,
       "pnl_amount": 11750.0
+    }
+  ],
+  "INDIGO": [
+    {
+      "preset": "Multiday-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2025-12-08",
+      "entry_order_id": null,
+      "tradingsymbol": "INDIGO25DECFUT",
+      "lot_size": 150,
+      "entry_price": 4948,
+      "signal_entry": 4923.5,
+      "signal_slLevel": 5120.44,
+      "sl_price": 5145.92,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 6,
+      "tp_price": 4651.12,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 4844.5,
+      "exit_date": "2025-12-11",
+      "pnl_pct": 2.09,
+      "pnl_amount": 15525.0
     }
   ]
 }
