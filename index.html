@@ -310,7 +310,7 @@
   }
 
   /* Equity curve section */
-  #equityBody canvas {
+  #tab-equity canvas {
     border-radius: 8px;
   }
 
@@ -2819,14 +2819,28 @@
 
       <div class="tabs-wrap" style="margin:4px 0 0;">
         <div class="tabs">
-          <div class="tab active" id="ttTab_all" onclick="switchTTTab('all',this)">All Trades</div>
+          <div class="tab active" id="ttTab_equity" onclick="switchTTTab('equity',this)">📈 Equity Curve</div>
+          <div class="tab" id="ttTab_all" onclick="switchTTTab('all',this)">All Trades</div>
           <div class="tab" id="ttTab_daywise" onclick="switchTTTab('daywise',this)">Day-wise Trades</div>
           <div class="tab" id="ttTab_calendar" onclick="switchTTTab('calendar',this)">📅 Calendar View</div>
           <div class="tab" id="ttTab_stockwise" onclick="switchTTTab('stockwise',this)">Stockwise</div>
         </div>
       </div>
 
-      <div class="tab-content active" id="ttPane_all">
+      <div class="tab-content active" id="ttPane_equity" style="padding:16px 0 0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div id="ttEquityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button onclick="resetTTEquityZoom()" style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;
+              font-family:'Syne',sans-serif;font-weight:600;font-size:11px;cursor:pointer;
+              background:var(--surface);color:var(--text2);">↺ Reset Zoom</button>
+            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">Scroll to zoom · drag to pan</span>
+          </div>
+        </div>
+        <canvas id="ttEquityCanvas" style="width:100%!important;height:260px!important;"></canvas>
+      </div>
+
+      <div class="tab-content" id="ttPane_all">
         <div style="display:flex;align-items:center;gap:8px;margin:12px 0 12px;flex-wrap:wrap;">
           <select id="ttFilterStatus" onchange="setTradesTakenFilter('status',this.value)"
             style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);color:var(--text);">
@@ -2930,14 +2944,32 @@
       </div>
     </div>
 
-    <!-- EQUITY CURVE — collapsible -->
-    <div class="collapsible-section mobile-section" id="msEquity" style="margin-bottom:16px;">
-      <div class="section-header" onclick="toggleSection('equityBody','equityChevron')">
-        <span class="section-chevron" id="equityChevron">▼</span>
-        <span class="section-title">Equity Curve</span>
+    <!-- TRADE ANALYSIS — collapsible, contains all tabs (Equity Curve moved in as
+         the first tab — it's backtest-only data, same as everything else here,
+         so it belongs alongside Day-wise/All Trades/etc. rather than its own
+         separate section). -->
+    <div class="collapsible-section mobile-section" id="msTradeAnalysis" style="margin-bottom:16px;">
+      <div class="section-header" onclick="toggleSection('tradeAnalysisBody','tradeAnalysisChevron')">
+        <span class="section-chevron" id="tradeAnalysisChevron">▼</span>
+        <span class="section-title">Trade Analysis</span>
       </div>
-      <div id="equityBody" style="padding:16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div id="tradeAnalysisBody">
+    <!-- TABS -->
+    <div class="tabs-wrap mobile-section" id="msDaywise">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('equity',this)">📈 Equity Curve</div>
+        <div class="tab" onclick="switchTab('daywise',this)">Day-wise Trades</div>
+        <div class="tab" onclick="switchTab('alltrades',this)">All Trades</div>
+        <div class="tab" onclick="switchTab('calendar',this)">📅 Calendar View</div>
+        <div class="tab" onclick="switchTab('symbolSummary',this)">Stockwise</div>
+        <div class="tab" onclick="switchTab('insights',this)">💡 Insights</div>
+        <div class="tab" id="sweepTab" onclick="switchTab('sweep',this)" style="display:none;">🔬 Param Sweep</div>
+        <div class="tab" id="positionsTab" onclick="switchTab('positions',this)" style="display:none;">📍 Positions</div>
+      </div>
+
+      <!-- EQUITY CURVE -->
+      <div class="tab-content active" id="tab-equity">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 10px;flex-wrap:wrap;gap:8px;">
           <div id="equityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></div>
           <div style="display:flex;gap:6px;align-items:center;">
             <button onclick="resetEquityZoom()" style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;
@@ -2948,29 +2980,9 @@
         </div>
         <canvas id="equityCanvas"></canvas>
       </div>
-    </div>
-
-    <!-- TRADE ANALYSIS — collapsible, contains all four tabs -->
-    <div class="collapsible-section mobile-section" id="msTradeAnalysis" style="margin-bottom:16px;">
-      <div class="section-header" onclick="toggleSection('tradeAnalysisBody','tradeAnalysisChevron')">
-        <span class="section-chevron" id="tradeAnalysisChevron">▼</span>
-        <span class="section-title">Trade Analysis</span>
-      </div>
-      <div id="tradeAnalysisBody">
-    <!-- TABS -->
-    <div class="tabs-wrap mobile-section" id="msDaywise">
-      <div class="tabs">
-        <div class="tab active" onclick="switchTab('daywise',this)">Day-wise Trades</div>
-        <div class="tab" onclick="switchTab('alltrades',this)">All Trades</div>
-        <div class="tab" onclick="switchTab('calendar',this)">📅 Calendar View</div>
-        <div class="tab" onclick="switchTab('symbolSummary',this)">Stockwise</div>
-        <div class="tab" onclick="switchTab('insights',this)">💡 Insights</div>
-        <div class="tab" id="sweepTab" onclick="switchTab('sweep',this)" style="display:none;">🔬 Param Sweep</div>
-        <div class="tab" id="positionsTab" onclick="switchTab('positions',this)" style="display:none;">📍 Positions</div>
-      </div>
 
       <!-- DAY-WISE -->
-      <div class="tab-content active" id="tab-daywise">
+      <div class="tab-content" id="tab-daywise">
         <div class="filter-row" style="flex-wrap:wrap;gap:6px 10px;">
           <div style="display:flex;align-items:center;gap:6px;">
             <label style="font-size:11px;font-weight:500;color:var(--text2);white-space:nowrap;">From</label>
@@ -3251,7 +3263,6 @@ function _focusOnScanner() {
   // Collapse Summary, Equity, Trade Analysis
   [
     { body: 'summaryBody',       chevron: 'summaryChevron'       },
-    { body: 'equityBody',        chevron: 'equityChevron'        },
     { body: 'tradeAnalysisBody', chevron: 'tradeAnalysisChevron' },
   ].forEach(({ body, chevron }) => {
     const el = document.getElementById(body);
@@ -3971,6 +3982,11 @@ function renderTradesTaken() {
   const { all } = _ttStats();
   renderTradesTakenStatsExtended();
   _updateTtSortIndicators();
+  // Equity Curve is the default-active sub-tab, so it needs to be current on
+  // every render (filter change, preset switch, initial load) — not just lazily
+  // on tab click, unlike Day-wise/Calendar/Stockwise which stay stale until
+  // clicked (see switchTTTab()).
+  buildTTEquityCurve();
 
   // Shows which setup's data is on screen right in the section title, so it's
   // never ambiguous which preset the numbers below belong to — e.g. "(Oneday-Setup)"
@@ -4025,10 +4041,11 @@ let _ttCalYear = null;
 function switchTTTab(tab, el) {
   document.querySelectorAll('#msTradesTaken .tabs .tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
-  ['all', 'daywise', 'calendar', 'stockwise'].forEach(t => {
+  ['equity', 'all', 'daywise', 'calendar', 'stockwise'].forEach(t => {
     const pane = document.getElementById('ttPane_' + t);
     if (pane) pane.classList.toggle('active', t === tab);
   });
+  if (tab === 'equity')    buildTTEquityCurve();
   if (tab === 'daywise')   renderTTDayCards();
   if (tab === 'calendar')  renderTTCalendar();
   if (tab === 'stockwise') renderTTStockwise();
@@ -4105,6 +4122,54 @@ function _ttDayCardsHTML(rows, idPrefix) {
       </div>
     </div>`;
   }).join('');
+}
+
+let ttEquityChart = null;
+
+// Equity Curve for real Automated Trades (backfilled + live/paper), respecting
+// the current preset/status/side filters — same base set _ttStatsExtended()
+// uses, bucketed by exit_date (when P&L was actually realized) rather than
+// entry_date. Mirrors buildEquityCurve()'s day-bucketing shape but sources real
+// trade fields (pnl_pct/exit_date/status) instead of the backtest's
+// (pnlPct/tradeDate/outcome) — see _renderEquityChart() for the shared
+// cumulative/drawdown/Chart.js logic both call into.
+function buildTTEquityCurve() {
+  const closed = _ttBaseFiltered().filter(r => r.status !== 'open' && r.exit_date && r.pnl_pct != null);
+
+  const byDay = {};
+  closed.forEach(r => { (byDay[r.exit_date] = byDay[r.exit_date] || []).push(r); });
+  const dayEntries = Object.entries(byDay)
+    .map(([date, trades]) => ({
+      date,
+      dayPnl: trades.reduce((s, t) => s + t.pnl_pct, 0),
+      count:  trades.length,
+      wins:   trades.filter(t => t.pnl_pct > 0).length,
+      losses: trades.filter(t => t.pnl_pct <= 0).length,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (ttEquityChart) ttEquityChart.destroy();
+  const metaEl = document.getElementById('ttEquityMeta');
+
+  if (!dayEntries.length) {
+    ttEquityChart = null;
+    if (metaEl) metaEl.textContent = 'No closed trades yet';
+    return;
+  }
+
+  const result = _renderEquityChart('ttEquityCanvas', dayEntries);
+  ttEquityChart = result ? result.chart : null;
+
+  const ddText = result && result.maxDD >= 0.01 ? `  ·  Max DD −${result.maxDD.toFixed(2)}%` : '';
+  if (metaEl) {
+    metaEl.textContent = result
+      ? `${result.totalDays} trading days  ·  ${result.profDays} green / ${result.lossDays} red${ddText}`
+      : 'No trade data available';
+  }
+}
+
+function resetTTEquityZoom() {
+  if (ttEquityChart) ttEquityChart.resetZoom();
 }
 
 function renderTTDayCards() {
@@ -4372,7 +4437,7 @@ function renderTTStockwise() {
 // MOBILE — same 4 sub-tabs (All / Day-wise / Calendar / Stockwise), rendered
 // into the single #mobTtInner container and switched via a pill bar.
 // ─────────────────────────────────────────────────────────────────────────────
-let _mobTtSubTab = 'all';
+let _mobTtSubTab = 'equity';
 
 function mobSwitchTtSubTab(tab) {
   _mobTtSubTab = tab;
@@ -4382,10 +4447,64 @@ function mobSwitchTtSubTab(tab) {
 function _renderMobTtSubTabBar() {
   const bar = document.getElementById('mobTtSubTabBar');
   if (!bar) return;
-  const tabs = [['all','All Trades'], ['daywise','📅 Day-wise'], ['calendar','📅 Calendar'], ['stockwise','📊 Stockwise']];
+  const tabs = [['equity','📈 Equity'], ['all','All Trades'], ['daywise','📅 Day-wise'], ['calendar','📅 Calendar'], ['stockwise','📊 Stockwise']];
   bar.innerHTML = `<div class="mob-subtab-bar">
     ${tabs.map(([key, label]) => `<button class="mob-subtab-btn ${_mobTtSubTab === key ? 'active' : ''}" onclick="mobSwitchTtSubTab('${key}')">${label}</button>`).join('')}
   </div>`;
+}
+
+let ttMobEquityChart = null;
+
+// Mobile counterpart of buildTTEquityCurve() — same data/bucketing convention
+// (_ttBaseFiltered(), closed trades only, grouped by exit_date), but the canvas
+// doesn't exist as static markup here: #mobTtInner gets fully replaced on every
+// sub-tab switch (see renderMobLiveTrades()), so the canvas element itself must
+// be (re)created fresh before _renderEquityChart() can render into it.
+function renderMobTtEquity() {
+  const inner = document.getElementById('mobTtInner');
+  if (!inner) return;
+
+  const closed = _ttBaseFiltered().filter(r => r.status !== 'open' && r.exit_date && r.pnl_pct != null);
+  const byDay = {};
+  closed.forEach(r => { (byDay[r.exit_date] = byDay[r.exit_date] || []).push(r); });
+  const dayEntries = Object.entries(byDay)
+    .map(([date, trades]) => ({
+      date,
+      dayPnl: trades.reduce((s, t) => s + t.pnl_pct, 0),
+      count:  trades.length,
+      wins:   trades.filter(t => t.pnl_pct > 0).length,
+      losses: trades.filter(t => t.pnl_pct <= 0).length,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (ttMobEquityChart) { ttMobEquityChart.destroy(); ttMobEquityChart = null; }
+
+  if (!dayEntries.length) {
+    inner.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;
+      color:var(--text3);font-family:'DM Mono',monospace;font-size:12px;text-align:center;gap:10px;">
+      <div style="font-size:36px;opacity:0.35;">📈</div><div>No closed trades yet</div></div>`;
+    return;
+  }
+
+  inner.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px 8px;flex-wrap:wrap;gap:8px;">
+      <div id="mobTtEquityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></div>
+      <button onclick="resetMobTtEquityZoom()" style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;
+        font-family:'Syne',sans-serif;font-weight:600;font-size:11px;cursor:pointer;
+        background:var(--surface);color:var(--text2);">↺ Reset Zoom</button>
+    </div>
+    <div style="padding:0 12px;"><canvas id="mobTtEquityCanvas" style="width:100%!important;height:220px!important;"></canvas></div>`;
+
+  const result = _renderEquityChart('mobTtEquityCanvas', dayEntries);
+  ttMobEquityChart = result ? result.chart : null;
+
+  const ddText = result && result.maxDD >= 0.01 ? `  ·  Max DD −${result.maxDD.toFixed(2)}%` : '';
+  const metaEl = document.getElementById('mobTtEquityMeta');
+  if (metaEl && result) metaEl.textContent = `${result.totalDays} days  ·  ${result.profDays}G / ${result.lossDays}R${ddText}`;
+}
+
+function resetMobTtEquityZoom() {
+  if (ttMobEquityChart) ttMobEquityChart.resetZoom();
 }
 
 function renderMobTtDayCards() {
@@ -4556,6 +4675,7 @@ function renderMobLiveTrades() {
   `;
 
 
+  if (_mobTtSubTab === 'equity')    { renderMobTtEquity();     return; }
   if (_mobTtSubTab === 'daywise')   { renderMobTtDayCards();   return; }
   if (_mobTtSubTab === 'calendar')  { renderMobTtCalendar();   return; }
   if (_mobTtSubTab === 'stockwise') { renderMobTtStockwise();  return; }
@@ -6880,7 +7000,6 @@ function setStrategy(s) {
       setProgress(100, `Done. ${allTrades.length} trades across ${tradedSyms} symbols.`);
       [
         { body: 'summaryBody', chevron: 'summaryChevron' },
-        { body: 'equityBody',  chevron: 'equityChevron'  },
         { body: 'tradeAnalysisBody', chevron: 'tradeAnalysisChevron' },
       ].forEach(({ body, chevron }) => {
         const el = document.getElementById(body);
@@ -7215,10 +7334,14 @@ function _applyOvernightParamsToForm(rawD) {
   document.getElementById('holdDays').value = d.holdDays;
   document.getElementById('maxSignalsDay').value = d.maxSignalsDay;
   document.getElementById('minSignalsGate').value = d.minSignalsGate || 0;
-  if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
-  if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
-  if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
-  if (d.rankingMode)    document.getElementById('rankingMode').value      = d.rankingMode;
+  // Unconditional — d is always merged with OVERNIGHT_DEFAULTS above, so these are
+  // never undefined. A truthy guard here used to silently skip loading an explicit
+  // 0 (a legitimate "threshold off" value), leaving whatever the field previously
+  // showed instead of what the preset actually saved.
+  document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+  document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+  document.getElementById('capitalPerTrade').value  = d.capitalPerTrade;
+  document.getElementById('rankingMode').value      = d.rankingMode;
   // Field visibility must follow the loaded tpType/slType, not be hardcoded —
   // a Fixed % TP preset (see Hold Days) needs tpPctGrp/holdDaysGrp visible.
   document.getElementById('slPctGrp').style.display    = d.slType === 'pct' ? '' : 'none';
@@ -7277,9 +7400,11 @@ function _applyOvernightParamsToMobForm(rawD) {
   const wrEl  = document.getElementById('mobWrInput');
   const pnlEl = document.getElementById('mobPnlInput');
   const capEl = document.getElementById('mobCapital');
-  if (wrEl  && d.wrThreshold)    wrEl.value  = d.wrThreshold;
-  if (pnlEl && d.pnlThreshold)   pnlEl.value = d.pnlThreshold;
-  if (capEl && d.capitalPerTrade) capEl.value = d.capitalPerTrade;
+  // Null-checked only (element may not exist yet) — value itself is never gated on
+  // truthiness, so an explicit 0 loads correctly. See _applyOvernightParamsToForm().
+  if (wrEl)  wrEl.value  = d.wrThreshold;
+  if (pnlEl) pnlEl.value = d.pnlThreshold;
+  if (capEl) capEl.value = d.capitalPerTrade;
   // Same fix as _applyOvernightParamsToForm — visibility follows tpType/slType,
   // not a hardcoded reset, so a Fixed % TP preset shows TP%/Hold Days.
   const slRow = document.getElementById('mobSlPctRow');
@@ -7899,7 +8024,6 @@ function setTradingMode(mode) {
 function collapseForScanner() {
   const sections = [
     { body: 'summaryBody',       chevron: 'summaryChevron'       },
-    { body: 'equityBody',        chevron: 'equityChevron'        },
     { body: 'tradeAnalysisBody', chevron: 'tradeAnalysisChevron' },
   ];
   sections.forEach(({ body, chevron }) => {
@@ -9379,20 +9503,16 @@ function buildSummaryCards() {
 
 
 
-function buildEquityCurve() {
-  // ── 1. Bucket trades by tradeDate → daily PnL sums ─────────────────────────
-  // Using _tradeStats.byTradeDay which is already grouped
-  const dayEntries = Object.entries(_tradeStats.byTradeDay)
-    .map(([date, trades]) => ({
-      date,
-      dayPnl:  trades.reduce((s, t) => s + t.pnlPct, 0),
-      count:   trades.length,
-      wins:    trades.filter(t => t.outcome === 'WIN').length,
-      losses:  trades.filter(t => t.outcome !== 'WIN').length,
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  // ── 2. Cumulative equity + drawdown computation ─────────────────────────────
+// Shared Chart.js equity-curve renderer — used by both the backtest's own Equity
+// Curve and Automated Trades' Equity Curve (desktop + mobile). Callers pre-bucket
+// trades into {date, dayPnl, count, wins, losses} entries (sorted ascending, one
+// per trading day) since what counts as a "day" and a "win" differs between
+// backtest trades (tradeDate/outcome) and real automated trades (exit_date/pnl_pct)
+// — this function only owns the cumulative-equity/drawdown math and Chart.js
+// wiring, which is identical either way. Returns the new Chart instance plus the
+// meta-line numbers (totalDays/profDays/lossDays/maxDD) — caller destroys any
+// previous chart instance first and writes the meta text into its own DOM.
+function _renderEquityChart(canvasId, dayEntries) {
   const labels   = [];
   const cumData  = [];   // cumulative PnL% line
   const dayPnls  = [];   // per-day bar data (for tooltip context)
@@ -9400,8 +9520,8 @@ function buildEquityCurve() {
   const wins     = [];
   const losses   = [];
 
-  let cum = 0, peak = 0;
-  let maxDD = 0, maxDDStart = 0, maxDDEnd = 0, maxDDPeak = 0;
+  let cum = 0;
+  let maxDD = 0, maxDDStart = 0, maxDDEnd = 0;
   let runPeak = 0, runPeakIdx = 0;
 
   dayEntries.forEach((d, i) => {
@@ -9418,15 +9538,14 @@ function buildEquityCurve() {
     const dd = runPeak - cum;
     if (dd > maxDD) {
       maxDD      = dd;
-      maxDDPeak  = runPeak;
       maxDDStart = runPeakIdx;
       maxDDEnd   = i;
     }
   });
 
-  // ── 3. Build chart ──────────────────────────────────────────────────────────
-  if (equityChart) equityChart.destroy();
-  const ctx         = document.getElementById('equityCanvas').getContext('2d');
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  const ctx         = canvas.getContext('2d');
   const finalEquity = cumData[cumData.length - 1] || 0;
   const isPositive  = finalEquity >= 0;
   const lineColor   = isPositive ? '#1a6b3c' : '#b5290e';
@@ -9458,7 +9577,7 @@ function buildEquityCurve() {
     }
   };
 
-  equityChart = new Chart(ctx, {
+  const chart = new Chart(ctx, {
     type: 'line',
     plugins: [ddPlugin],
     data: {
@@ -9550,13 +9669,36 @@ function buildEquityCurve() {
     }
   });
 
-  // ── 4. Update meta line above chart ────────────────────────────────────────
-  const totalDays  = dayEntries.length;
-  const profDays   = dayEntries.filter(d => d.dayPnl > 0).length;
-  const lossDays   = dayEntries.filter(d => d.dayPnl < 0).length;
-  const ddText     = maxDD >= 0.01 ? `  ·  Max DD −${maxDD.toFixed(2)}%` : '';
-  document.getElementById('equityMeta').textContent =
-    `${totalDays} trading days  ·  ${profDays} green / ${lossDays} red${ddText}`;
+  return {
+    chart,
+    totalDays: dayEntries.length,
+    profDays:  dayEntries.filter(d => d.dayPnl > 0).length,
+    lossDays:  dayEntries.filter(d => d.dayPnl < 0).length,
+    maxDD,
+  };
+}
+
+function buildEquityCurve() {
+  // Bucket trades by tradeDate → daily PnL sums. Using _tradeStats.byTradeDay
+  // which is already grouped.
+  const dayEntries = Object.entries(_tradeStats.byTradeDay)
+    .map(([date, trades]) => ({
+      date,
+      dayPnl:  trades.reduce((s, t) => s + t.pnlPct, 0),
+      count:   trades.length,
+      wins:    trades.filter(t => t.outcome === 'WIN').length,
+      losses:  trades.filter(t => t.outcome !== 'WIN').length,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (equityChart) equityChart.destroy();
+  const result = _renderEquityChart('equityCanvas', dayEntries);
+  equityChart = result ? result.chart : null;
+
+  const ddText = result && result.maxDD >= 0.01 ? `  ·  Max DD −${result.maxDD.toFixed(2)}%` : '';
+  document.getElementById('equityMeta').textContent = result
+    ? `${result.totalDays} trading days  ·  ${result.profDays} green / ${result.lossDays} red${ddText}`
+    : 'No trade data available';
 }
 
 function resetEquityZoom() {
@@ -10824,7 +10966,6 @@ function toggleScannerResultsSections() {
     if (!scannerNowHidden || !allTrades || !allTrades.length) return;
     [
       { body: 'summaryBody',       chevron: 'summaryChevron'       },
-      { body: 'equityBody',        chevron: 'equityChevron'        },
       { body: 'tradeAnalysisBody', chevron: 'tradeAnalysisChevron' },
     ].forEach(({ body, chevron }) => {
       const el = document.getElementById(body);
@@ -11456,6 +11597,7 @@ function switchTab(id, el) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('tab-' + id).classList.add('active');
+  if (id === 'equity') buildEquityCurve();
   if (id === 'calendar') buildCalendar();
   if (id === 'alltrades') buildAllTradesTab();
 }
@@ -12134,11 +12276,11 @@ loadSavedDefaults();
 document.addEventListener('DOMContentLoaded', () => {
   refreshOvernightPresetSelect();     // instant paint from local cache
   fetchGapPresetsFromServer().then(() => {
-    // Default the Presets dropdown to "Oneday-Setup" on every load (desktop +
-    // mobile, both updated by applyOvernightPreset()) rather than starting
-    // blank — checked after the server round-trip (or its local-cache
+    // Default the Presets dropdown to "High-Conviction-Fixed-TP" on every load
+    // (desktop + mobile, both updated by applyOvernightPreset()) rather than
+    // starting blank — checked after the server round-trip (or its local-cache
     // fallback on failure) so this reflects real preset data either way.
-    if (getOvernightPresets()['Oneday-Setup']) applyOvernightPreset('Oneday-Setup');
+    if (getOvernightPresets()['High-Conviction-Fixed-TP']) applyOvernightPreset('High-Conviction-Fixed-TP');
   });
   fetchGapAutomationConfigFromServer(); // same, for "Include in Automated Trades" flags
 });
