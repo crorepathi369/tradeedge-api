@@ -31,14 +31,14 @@
     "minChangePct": 0,
     "minGap": 3,
     "minSignalsGate": 3,
-    "pnlThreshold": 0,
-    "rankingMode": "wilson",
+    "pnlThreshold": 0.3,
+    "rankingMode": "expectancy",
     "slPct": 6,
     "slType": "pct",
-    "toDate": "2026-08-13",
+    "toDate": "2026-08-14",
     "tpPct": 12,
     "tpType": "pct",
     "tradingMode": "paper",
-    "wrThreshold": 0
+    "wrThreshold": 40
   }
 }
