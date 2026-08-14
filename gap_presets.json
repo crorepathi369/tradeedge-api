@@ -7,7 +7,9 @@
     "holdDays": 2,
     "maxGap": 8,
     "maxSignalsDay": 2,
+    "minChangePct": 0,
     "minGap": 3,
+    "minSignalsGate": 1,
     "pnlThreshold": 0,
     "rankingMode": "wilson",
     "slPct": 2,
@@ -16,9 +18,7 @@
     "tpPct": 3,
     "tpType": "d2_close",
     "tradingMode": "paper",
-    "wrThreshold": 0,
-    "minChangePct": 0,
-    "minSignalsGate": 1
+    "wrThreshold": 0
   },
   "High-Conviction-Fixed-TP": {
     "capitalPerTrade": 300000,
