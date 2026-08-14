@@ -835,6 +835,32 @@
       "exit_date": "2026-04-16",
       "pnl_pct": 12.0,
       "pnl_amount": 66044.0
+    },
+    {
+      "preset": "Oneday-Setup",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-05-06",
+      "entry_order_id": null,
+      "tradingsymbol": "COFORGE26MAYFUT",
+      "lot_size": 475,
+      "entry_price": 1289.3,
+      "signal_entry": 1280.4,
+      "signal_slLevel": 1254.79,
+      "sl_price": 1263.51,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 3,
+      "tp_price": null,
+      "hold_days": 2,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1290.4,
+      "exit_date": "2026-05-07",
+      "pnl_pct": 0.09,
+      "pnl_amount": 522.5
     }
   ],
   "HDFCAMC": [
@@ -1687,6 +1713,34 @@
       "exit_date": "2026-06-15",
       "pnl_pct": 3.32,
       "pnl_amount": 25400.0
+    }
+  ],
+  "SRF": [
+    {
+      "preset": "Oneday-Setup",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-05-06",
+      "entry_order_id": null,
+      "tradingsymbol": "SRF26MAYFUT",
+      "lot_size": 200,
+      "entry_price": 2735.6,
+      "signal_entry": 2719.6,
+      "signal_slLevel": 2665.21,
+      "sl_price": 2680.89,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 3,
+      "tp_price": null,
+      "hold_days": 2,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 2680.89,
+      "exit_date": "2026-05-07",
+      "pnl_pct": -2.0,
+      "pnl_amount": -10942.0
     }
   ]
 }
