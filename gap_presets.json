@@ -61,19 +61,20 @@
     "closeFilter": "strict",
     "direction": "long",
     "fromDate": "2025-08-09",
-    "holdDays": 3,
+    "holdDays": 9,
     "maxGap": 6,
-    "maxSignalsDay": 2,
+    "maxSignalsDay": 6,
+    "minChangePct": 0,
     "minGap": 3,
+    "minSignalsGate": 3,
     "pnlThreshold": 0,
-    "rankingMode": "expectancy",
+    "rankingMode": "wilson",
     "slPct": 6,
     "slType": "pct",
     "toDate": "2026-08-07",
-    "tpPct": 5,
+    "tpPct": 10,
     "tpType": "pct",
     "tradingMode": "paper",
-    "wrThreshold": 0,
-    "minChangePct": 0
+    "wrThreshold": 0
   }
 }
