@@ -31,7 +31,7 @@
     "minChangePct": 0,
     "minGap": 3,
     "minSignalsGate": 3,
-    "pnlThreshold": 0.3,
+    "pnlThreshold": 0,
     "rankingMode": "expectancy",
     "slPct": 6,
     "slType": "pct",
@@ -39,6 +39,6 @@
     "tpPct": 12,
     "tpType": "pct",
     "tradingMode": "paper",
-    "wrThreshold": 40
+    "wrThreshold": 0
   }
 }
