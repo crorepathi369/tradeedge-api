@@ -2828,15 +2828,7 @@
       </div>
 
       <div class="tab-content active" id="ttPane_equity" style="padding:16px 0 0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-          <div id="ttEquityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></div>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <button onclick="resetTTEquityZoom()" style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;
-              font-family:'Syne',sans-serif;font-weight:600;font-size:11px;cursor:pointer;
-              background:var(--surface);color:var(--text2);">↺ Reset Zoom</button>
-            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">Scroll to zoom · drag to pan</span>
-          </div>
-        </div>
+        <div id="ttEquityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-bottom:10px;"></div>
         <canvas id="ttEquityCanvas" style="width:100%!important;height:260px!important;"></canvas>
       </div>
 
@@ -2969,15 +2961,7 @@
 
       <!-- EQUITY CURVE -->
       <div class="tab-content active" id="tab-equity">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 10px;flex-wrap:wrap;gap:8px;">
-          <div id="equityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></div>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <button onclick="resetEquityZoom()" style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;
-              font-family:'Syne',sans-serif;font-weight:600;font-size:11px;cursor:pointer;
-              background:var(--surface);color:var(--text2);">↺ Reset Zoom</button>
-            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">Scroll to zoom · drag to pan</span>
-          </div>
-        </div>
+        <div id="equityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin:12px 0 10px;"></div>
         <canvas id="equityCanvas"></canvas>
       </div>
 
@@ -4168,9 +4152,6 @@ function buildTTEquityCurve() {
   }
 }
 
-function resetTTEquityZoom() {
-  if (ttEquityChart) ttEquityChart.resetZoom();
-}
 
 function renderTTDayCards() {
   const container = document.getElementById('ttDayCards');
@@ -4487,12 +4468,7 @@ function renderMobTtEquity() {
   }
 
   inner.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px 8px;flex-wrap:wrap;gap:8px;">
-      <div id="mobTtEquityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);"></div>
-      <button onclick="resetMobTtEquityZoom()" style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;
-        font-family:'Syne',sans-serif;font-weight:600;font-size:11px;cursor:pointer;
-        background:var(--surface);color:var(--text2);">↺ Reset Zoom</button>
-    </div>
+    <div id="mobTtEquityMeta" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);padding:10px 12px 8px;"></div>
     <div style="padding:0 12px;"><canvas id="mobTtEquityCanvas" style="width:100%!important;height:220px!important;"></canvas></div>`;
 
   const result = _renderEquityChart('mobTtEquityCanvas', dayEntries);
@@ -4503,9 +4479,6 @@ function renderMobTtEquity() {
   if (metaEl && result) metaEl.textContent = `${result.totalDays} days  ·  ${result.profDays}G / ${result.lossDays}R${ddText}`;
 }
 
-function resetMobTtEquityZoom() {
-  if (ttMobEquityChart) ttMobEquityChart.resetZoom();
-}
 
 function renderMobTtDayCards() {
   const inner = document.getElementById('mobTtInner');
@@ -9632,10 +9605,6 @@ function _renderEquityChart(canvasId, dayEntries) {
               return null;
             }
           }
-        },
-        zoom: {
-          pan:  { enabled: true, mode: 'x' },
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
         }
       },
       scales: {
@@ -9701,9 +9670,6 @@ function buildEquityCurve() {
     : 'No trade data available';
 }
 
-function resetEquityZoom() {
-  if (equityChart) equityChart.resetZoom();
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DAY CARDS
