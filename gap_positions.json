@@ -563,6 +563,32 @@
       "exit_date": "2026-02-17",
       "pnl_pct": 1.57,
       "pnl_amount": 10753.2
+    },
+    {
+      "preset": "High-Conviction-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-09-19",
+      "entry_order_id": null,
+      "tradingsymbol": "ADANIENT25SEPFUT",
+      "lot_size": 309,
+      "entry_price": 2455.8,
+      "signal_entry": 2524.0,
+      "signal_slLevel": 2372.56,
+      "sl_price": 2308.45,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 12,
+      "tp_price": 2750.5,
+      "hold_days": 10,
+      "days_held": 9,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2509.8,
+      "exit_date": "2025-10-06",
+      "pnl_pct": 2.2,
+      "pnl_amount": 16686.0
     }
   ],
   "INOXWIND": [
@@ -973,6 +999,32 @@
       "exit_date": "2026-02-17",
       "pnl_pct": 5.39,
       "pnl_amount": 35606.25
+    },
+    {
+      "preset": "High-Conviction-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-09-19",
+      "entry_order_id": null,
+      "tradingsymbol": "ADANIENSOL25SEPFUT",
+      "lot_size": 675,
+      "entry_price": 879.15,
+      "signal_entry": 877.15,
+      "signal_slLevel": 824.52,
+      "sl_price": 826.4,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 12,
+      "tp_price": 984.65,
+      "hold_days": 10,
+      "days_held": 9,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 929.7,
+      "exit_date": "2025-10-06",
+      "pnl_pct": 5.75,
+      "pnl_amount": 34121.25
     }
   ],
   "PRESTIGE": [
@@ -1169,6 +1221,34 @@
       "exit_date": "2026-02-17",
       "pnl_pct": 5.4,
       "pnl_amount": 47100.0
+    }
+  ],
+  "ADANIGREEN": [
+    {
+      "preset": "High-Conviction-Fixed-TP",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-09-19",
+      "entry_order_id": null,
+      "tradingsymbol": "ADANIGREEN25SEPFUT",
+      "lot_size": 600,
+      "entry_price": 1035.25,
+      "signal_entry": 1030.7,
+      "signal_slLevel": 968.86,
+      "sl_price": 973.13,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 12,
+      "tp_price": 1159.48,
+      "hold_days": 10,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1159.48,
+      "exit_date": "2025-09-22",
+      "pnl_pct": 12.0,
+      "pnl_amount": 74538.0
     }
   ]
 }
