@@ -1043,6 +1043,32 @@
       "exit_date": "2026-05-07",
       "pnl_pct": 0.09,
       "pnl_amount": 522.5
+    },
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-28",
+      "entry_order_id": null,
+      "tradingsymbol": "COFORGE26AUGFUT",
+      "lot_size": 475,
+      "entry_price": 1683.7,
+      "signal_entry": 1682.14,
+      "signal_slLevel": 1631.68,
+      "sl_price": 1633.19,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 1767.89,
+      "hold_days": 3,
+      "days_held": 1,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1767.89,
+      "exit_date": "2026-07-30",
+      "pnl_pct": 5.0,
+      "pnl_amount": 39990.25
     }
   ],
   "HDFCAMC": [
@@ -1575,6 +1601,32 @@
       "exit_date": "2026-04-16",
       "pnl_pct": 0.67,
       "pnl_amount": 4758.75
+    },
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-27",
+      "entry_order_id": null,
+      "tradingsymbol": "HINDPETRO26AUGFUT",
+      "lot_size": 2025,
+      "entry_price": 375.6,
+      "signal_entry": 393.95,
+      "signal_slLevel": 382.13,
+      "sl_price": 364.33,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 394.38,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 371.5,
+      "exit_date": "2026-07-30",
+      "pnl_pct": -1.09,
+      "pnl_amount": -8302.5
     }
   ],
   "INDIGO": [
@@ -2543,6 +2595,62 @@
       "exit_date": "2025-11-17",
       "pnl_pct": -2.0,
       "pnl_amount": -15437.5
+    }
+  ],
+  "INDUSINDBK": [
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2026-07-23",
+      "entry_order_id": null,
+      "tradingsymbol": "INDUSINDBK26JULFUT",
+      "lot_size": 700,
+      "entry_price": 1003.1,
+      "signal_entry": 1005.5,
+      "signal_slLevel": 1035.66,
+      "sl_price": 1033.19,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 952.94,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 992.85,
+      "exit_date": "2026-07-28",
+      "pnl_pct": 1.02,
+      "pnl_amount": 7175.0
+    }
+  ],
+  "POWERINDIA": [
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-07-31",
+      "entry_order_id": null,
+      "tradingsymbol": "POWERINDIA26AUGFUT",
+      "lot_size": 25,
+      "entry_price": 32350,
+      "signal_entry": 32175.0,
+      "signal_slLevel": 31209.75,
+      "sl_price": 31379.5,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 33967.5,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 32480,
+      "exit_date": "2026-08-05",
+      "pnl_pct": 0.4,
+      "pnl_amount": 3250
     }
   ]
 }
