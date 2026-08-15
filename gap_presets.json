@@ -44,7 +44,7 @@
   "High-Conviction-WR-Based": {
     "minGap": 2,
     "maxGap": 4.5,
-    "minChangePct": 0,
+    "minChangePct": 3,
     "slType": "pct",
     "slPct": 3,
     "tpType": "pct",
