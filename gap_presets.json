@@ -40,5 +40,26 @@
     "tpType": "pct",
     "tradingMode": "paper",
     "wrThreshold": 0
+  },
+  "High-Conviction-WR-Based": {
+    "minGap": 2,
+    "maxGap": 4.5,
+    "minChangePct": 0,
+    "slType": "pct",
+    "slPct": 3,
+    "tpType": "pct",
+    "tpPct": 5,
+    "holdDays": 3,
+    "maxSignalsDay": 5,
+    "minSignalsGate": 0,
+    "wrThreshold": 60,
+    "pnlThreshold": 1.8,
+    "capitalPerTrade": 300000,
+    "rankingMode": "expectancy",
+    "direction": "both",
+    "fromDate": "2025-08-15",
+    "toDate": "2026-08-14",
+    "closeFilter": "strict",
+    "tradingMode": "paper"
   }
 }
