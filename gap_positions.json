@@ -3991,6 +3991,32 @@
       "exit_date": "2026-01-06",
       "pnl_pct": -2.99,
       "pnl_amount": -25016.25
+    },
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-11-11",
+      "entry_order_id": null,
+      "tradingsymbol": "IDEA25NOVFUT",
+      "lot_size": 71475,
+      "entry_price": 10.28,
+      "signal_entry": 10.24,
+      "signal_slLevel": 9.93,
+      "sl_price": 9.97,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 10.79,
+      "hold_days": 3,
+      "days_held": 1,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 10.79,
+      "exit_date": "2025-11-13",
+      "pnl_pct": 4.96,
+      "pnl_amount": 36452.25
     }
   ],
   "GODREJCP": [
@@ -4617,6 +4643,32 @@
       "exit_date": "2026-02-06",
       "pnl_pct": 2.84,
       "pnl_amount": 20062.5
+    },
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2025-11-07",
+      "entry_order_id": null,
+      "tradingsymbol": "ABB25NOVFUT",
+      "lot_size": 125,
+      "entry_price": 5002.5,
+      "signal_entry": 4996.07,
+      "signal_slLevel": 5145.95,
+      "sl_price": 5152.57,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 4752.38,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 4943.5,
+      "exit_date": "2025-11-12",
+      "pnl_pct": 1.18,
+      "pnl_amount": 7375.0
     }
   ],
   "BAJAJFINSV": [
@@ -5003,6 +5055,62 @@
       "exit_date": "2026-01-05",
       "pnl_pct": 2.6,
       "pnl_amount": 17187.5
+    }
+  ],
+  "SBILIFE": [
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-10-27",
+      "entry_order_id": null,
+      "tradingsymbol": "SBILIFE25NOVFUT",
+      "lot_size": 375,
+      "entry_price": 1899.9,
+      "signal_entry": 1900.46,
+      "signal_slLevel": 1843.45,
+      "sl_price": 1842.9,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 1994.9,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1970.5,
+      "exit_date": "2025-10-30",
+      "pnl_pct": 3.72,
+      "pnl_amount": 26475.0
+    }
+  ],
+  "DELHIVERY": [
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "SHORT",
+      "entry_date": "2025-11-06",
+      "entry_order_id": null,
+      "tradingsymbol": "DELHIVERY25NOVFUT",
+      "lot_size": 2075,
+      "entry_price": 442.8,
+      "signal_entry": 442.6,
+      "signal_slLevel": 455.88,
+      "sl_price": 456.08,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 420.66,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 432.15,
+      "exit_date": "2025-11-11",
+      "pnl_pct": 2.41,
+      "pnl_amount": 22098.75
     }
   ]
 }
