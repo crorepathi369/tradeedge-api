@@ -2339,6 +2339,32 @@
       "exit_date": "2025-10-13",
       "pnl_pct": -3.0,
       "pnl_amount": -19090.5
+    },
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-18",
+      "entry_order_id": null,
+      "tradingsymbol": "BLUESTARCO25AUGFUT",
+      "lot_size": 325,
+      "entry_price": 1909.8,
+      "signal_entry": 1915.7,
+      "signal_slLevel": 1858.23,
+      "sl_price": 1852.51,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 2005.29,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1900.4,
+      "exit_date": "2025-08-21",
+      "pnl_pct": -0.49,
+      "pnl_amount": -3055.0
     }
   ],
   "UNOMINDA": [
@@ -2605,6 +2631,32 @@
       "exit_date": "2026-02-06",
       "pnl_pct": 2.56,
       "pnl_amount": 16900.0
+    },
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-18",
+      "entry_order_id": null,
+      "tradingsymbol": "HAVELLS25AUGFUT",
+      "lot_size": 500,
+      "entry_price": 1554.2,
+      "signal_entry": 1540.19,
+      "signal_slLevel": 1493.98,
+      "sl_price": 1507.57,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 1631.91,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1552.8,
+      "exit_date": "2025-08-21",
+      "pnl_pct": -0.09,
+      "pnl_amount": -700.0
     }
   ],
   "MARUTI": [
@@ -3831,6 +3883,32 @@
       "exit_date": "2026-06-18",
       "pnl_pct": 2.09,
       "pnl_amount": 21625.0
+    },
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-18",
+      "entry_order_id": null,
+      "tradingsymbol": "CHOLAFIN25AUGFUT",
+      "lot_size": 625,
+      "entry_price": 1527.4,
+      "signal_entry": 1521.46,
+      "signal_slLevel": 1475.82,
+      "sl_price": 1481.58,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 1603.77,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1522.2,
+      "exit_date": "2025-08-21",
+      "pnl_pct": -0.34,
+      "pnl_amount": -3250.0
     }
   ],
   "IOC": [
@@ -4659,6 +4737,32 @@
       "exit_date": "2026-02-06",
       "pnl_pct": 2.85,
       "pnl_amount": 16140.0
+    },
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-18",
+      "entry_order_id": null,
+      "tradingsymbol": "DMART25AUGFUT",
+      "lot_size": 150,
+      "entry_price": 4532.8,
+      "signal_entry": 4558.0,
+      "signal_slLevel": 4421.26,
+      "sl_price": 4396.82,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 4759.44,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 4688.9,
+      "exit_date": "2025-08-21",
+      "pnl_pct": 3.44,
+      "pnl_amount": 23415.0
     }
   ],
   "PERSISTENT": [
@@ -5345,6 +5449,34 @@
       "exit_date": "2025-11-11",
       "pnl_pct": 2.41,
       "pnl_amount": 22098.75
+    }
+  ],
+  "NESTLEIND": [
+    {
+      "preset": "High-Conviction-WR-Based",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2025-08-18",
+      "entry_order_id": null,
+      "tradingsymbol": "NESTLEIND25AUGFUT",
+      "lot_size": 500,
+      "entry_price": 1147,
+      "signal_entry": 1137.96,
+      "signal_slLevel": 1103.82,
+      "sl_price": 1112.59,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "pct",
+      "tp_pct": 5,
+      "tp_price": 1204.35,
+      "hold_days": 3,
+      "days_held": 2,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1179.6,
+      "exit_date": "2025-08-21",
+      "pnl_pct": 2.84,
+      "pnl_amount": 16300.0
     }
   ]
 }
