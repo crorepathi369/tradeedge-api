@@ -1,5 +1,5 @@
 {
-  "minGap": 2.5,
+  "minGap": 3,
   "maxGap": 6,
   "maxChangePct": 0,
   "slType": "pct",
@@ -17,5 +17,5 @@
   "fromDate": "2025-08-15",
   "toDate": "2026-08-14",
   "tradingMode": "paper",
-  "_syncedAt": "2026-08-15 09:46:50"
+  "_syncedAt": "2026-08-15 09:49:38"
 }
