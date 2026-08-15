@@ -102,7 +102,7 @@ def restore_data_from_github():
     files = [
         f["path"] for f in tree.get("tree", [])
         if f["type"] == "blob" and (
-            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json", "gap_automation_config.json")
+            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json", "gap_automation_config.json", "kite_token.json")
         )
     ]
     print(f"[restore] {len(files)} files in data branch")
@@ -684,14 +684,15 @@ _BREEZE_TOKEN_MAX_AGE_SEC = 20 * 60 * 60  # 20h — mirrors TradeEdge's client-s
 
 # ── Kite Connect config ─────────────────────────────────────────────────────
 # Access token is re-generated each morning via manual /kite/login tap (no
-# credentials stored). Persisted to /tmp so it survives across requests —
-# same file-based pattern as the Breeze token above. A Render restart clears
-# /tmp, which just means a fresh login is needed that day — expected, since
-# Kite tokens expire nightly anyway.
+# credentials stored). Persisted to DATA_DIR/kite_token.json and pushed to the
+# GitHub data branch (push_kite_token_to_github(), same pattern as
+# gap_settings.json) so a Render restart mid-day doesn't force a re-login —
+# restore_data_from_github() pulls it back at startup. The token itself still
+# only lasts one trading day either way (Kite expires it nightly), so a fresh
+# /kite/login is still needed once per day regardless of restarts.
 KITE_API_KEY    = os.environ.get("KITE_API_KEY", "")
 KITE_API_SECRET = os.environ.get("KITE_API_SECRET", "")
-_KITE_TOKEN_FILE    = "/tmp/kite_access_token.txt"
-_KITE_TOKEN_TS_FILE = "/tmp/kite_token_ts.txt"
+_KITE_TOKEN_FILE = DATA_DIR / "kite_token.json"
 
 _kite = KiteConnect(api_key=KITE_API_KEY) if (KiteConnect and KITE_API_KEY) else None
 
@@ -1418,7 +1419,7 @@ def _do_pull_from_github():
     files = [
         f["path"] for f in tree.get("tree", [])
         if f["type"] == "blob" and (
-            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json", "gap_automation_config.json")
+            f["path"].endswith(".csv") or f["path"] in ("SECTOR_MAP.json", "gap_positions.json", "gap_presets.json", "gap_settings.json", "gap_automation_config.json", "kite_token.json")
         )
     ]
     _log(f"[pull] {len(files)} files found — downloading all (overwrite mode)")
@@ -1772,10 +1773,12 @@ def kite_callback():
             request_token, api_secret=KITE_API_SECRET
         )
         access_token = session_data["access_token"]
-        with open(_KITE_TOKEN_FILE, "w") as f:
-            f.write(access_token)
-        with open(_KITE_TOKEN_TS_FILE, "w") as f:
-            f.write(str(_time.time()))
+        import json as _json
+        _KITE_TOKEN_FILE.write_text(_json.dumps({
+            "access_token": access_token,
+            "timestamp": _time.time(),
+        }))
+        push_kite_token_to_github()
         print("[kite/callback] Access token stored for today")
         return "Kite login successful — token stored for today \u2705"
     except Exception as e:
@@ -1783,24 +1786,30 @@ def kite_callback():
         return cors_response({"error": str(e)}, 500)
 
 
+def _read_kite_token():
+    """Returns (token, token_date_str) from disk, or (None, None) if absent/unreadable."""
+    import json as _json
+    try:
+        data = _json.loads(_KITE_TOKEN_FILE.read_text())
+        token = (data.get("access_token") or "").strip()
+        token_date = datetime.fromtimestamp(float(data["timestamp"])).strftime("%Y-%m-%d")
+        return token, token_date
+    except (FileNotFoundError, ValueError, KeyError):
+        return None, None
+
+
 @app.route("/kite/token-status", methods=["GET", "OPTIONS"])
 def kite_token_status():
     """Check if a Kite access token is stored and still same-day fresh."""
     if request.method == "OPTIONS":
         return cors_response({"ok": True})
-    try:
-        with open(_KITE_TOKEN_FILE) as f:
-            token = f.read().strip()
-        with open(_KITE_TOKEN_TS_FILE) as f:
-            token_date = datetime.fromtimestamp(float(f.read().strip())).strftime("%Y-%m-%d")
-        today = datetime.now().strftime("%Y-%m-%d")
-        return cors_response({
-            "hasToken": bool(token),
-            "valid":    bool(token) and token_date == today,
-            "date":     token_date,
-        })
-    except FileNotFoundError:
-        return cors_response({"hasToken": False, "valid": False, "date": None})
+    token, token_date = _read_kite_token()
+    today = datetime.now().strftime("%Y-%m-%d")
+    return cors_response({
+        "hasToken": bool(token),
+        "valid":    bool(token) and token_date == today,
+        "date":     token_date,
+    })
 
 
 def get_kite_client():
@@ -1811,17 +1820,71 @@ def get_kite_client():
     """
     if _kite is None:
         return None
-    try:
-        with open(_KITE_TOKEN_FILE) as f:
-            token = f.read().strip()
-        with open(_KITE_TOKEN_TS_FILE) as f:
-            token_date = datetime.fromtimestamp(float(f.read().strip())).strftime("%Y-%m-%d")
-        if not token or token_date != datetime.now().strftime("%Y-%m-%d"):
-            return None
-        _kite.set_access_token(token)
-        return _kite
-    except FileNotFoundError:
+    token, token_date = _read_kite_token()
+    if not token or token_date != datetime.now().strftime("%Y-%m-%d"):
         return None
+    _kite.set_access_token(token)
+    return _kite
+
+
+def push_kite_token_to_github():
+    """
+    Pushes kite_token.json to the GitHub data branch — same PUT pattern as
+    push_gap_settings_to_github(). Without this, a Render restart between a
+    morning /kite/login and the 3:15 PM /gap-orders/enter cron wipes the
+    token (DATA_DIR is ephemeral like /tmp), silently turning today's
+    automation into a 401 "not_logged_in" until someone notices and logs in
+    again. Best-effort — a push failure here must never surface as a failure
+    of the login that already succeeded locally.
+
+    The repo this pushes to (crorepathi369/tradeedge-api, data branch) MUST
+    stay private — this file holds a live same-day trading credential, not
+    just config, unlike the other files this pattern is used for.
+    """
+    import urllib.request, urllib.error, json as _json, base64 as _b64
+
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    repo     = os.environ.get("GITHUB_REPO", "crorepathi369/tradeedge-api")
+    branch   = os.environ.get("GITHUB_DATA_BRANCH", "data")
+    if not gh_token:
+        print("[kite-token] GITHUB_TOKEN not set — skipping kite_token.json push")
+        return
+
+    if not _KITE_TOKEN_FILE.exists():
+        return
+
+    headers = {
+        "Authorization": f"token {gh_token}",
+        "Accept":        "application/vnd.github.v3+json",
+        "User-Agent":    "TradeEdge-App",
+        "Content-Type":  "application/json",
+    }
+    file_url = f"https://api.github.com/repos/{repo}/contents/kite_token.json"
+    try:
+        content_b64 = _b64.b64encode(_KITE_TOKEN_FILE.read_bytes()).decode()
+        sha = None
+        try:
+            get_req = urllib.request.Request(file_url + f"?ref={branch}", headers=headers)
+            meta = _json.loads(urllib.request.urlopen(get_req, timeout=10).read())
+            sha = meta.get("sha")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+
+        body = {
+            "message": f"kite_token.json update {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            "content": content_b64,
+            "branch":  branch,
+        }
+        if sha:
+            body["sha"] = sha
+
+        put_req = urllib.request.Request(
+            file_url, data=_json.dumps(body).encode(), headers=headers, method="PUT")
+        urllib.request.urlopen(put_req, timeout=15)
+        print("[kite-token] kite_token.json pushed to GitHub")
+    except Exception as e:
+        print(f"[kite-token] GitHub push failed for kite_token.json: {e}")
 
 
 @app.route("/gap-settings", methods=["POST", "OPTIONS"])
