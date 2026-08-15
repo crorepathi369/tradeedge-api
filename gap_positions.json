@@ -315,6 +315,32 @@
       "exit_date": "2026-02-11",
       "pnl_pct": 12.0,
       "pnl_amount": 68936.0
+    },
+    {
+      "preset": "Oneday-Setup",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-03-05",
+      "entry_order_id": null,
+      "tradingsymbol": "BSE26MARFUT",
+      "lot_size": 200,
+      "entry_price": 2765,
+      "signal_entry": 2761.4,
+      "signal_slLevel": 2706.17,
+      "sl_price": 2709.7,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 3,
+      "tp_price": null,
+      "hold_days": 2,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 2747.6,
+      "exit_date": "2026-03-06",
+      "pnl_pct": -0.63,
+      "pnl_amount": -3480.0
     }
   ],
   "GMRAIRPORT": [
@@ -479,6 +505,32 @@
       "exit_date": "2026-04-10",
       "pnl_pct": 5.6,
       "pnl_amount": 47850.0
+    },
+    {
+      "preset": "Oneday-Setup",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-03-05",
+      "entry_order_id": null,
+      "tradingsymbol": "BHARATFORG26MARFUT",
+      "lot_size": 500,
+      "entry_price": 1902,
+      "signal_entry": 1898.4,
+      "signal_slLevel": 1860.43,
+      "sl_price": 1863.96,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 3,
+      "tp_price": null,
+      "hold_days": 2,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 1916.9,
+      "exit_date": "2026-03-06",
+      "pnl_pct": 0.78,
+      "pnl_amount": 7450.0
     }
   ],
   "IREDA": [
@@ -1447,6 +1499,32 @@
       "exit_date": "2026-04-29",
       "pnl_pct": -5.75,
       "pnl_amount": -39960.0
+    },
+    {
+      "preset": "Oneday-Setup",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-03-10",
+      "entry_order_id": null,
+      "tradingsymbol": "INDIGO26MARFUT",
+      "lot_size": 150,
+      "entry_price": 4397.5,
+      "signal_entry": 4380.4,
+      "signal_slLevel": 4292.79,
+      "sl_price": 4309.55,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 3,
+      "tp_price": null,
+      "hold_days": 2,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_eod",
+      "exit_price": 4355.5,
+      "exit_date": "2026-03-11",
+      "pnl_pct": -0.96,
+      "pnl_amount": -6300.0
     }
   ],
   "LICI": [
@@ -2117,6 +2195,34 @@
       "exit_date": "2026-04-16",
       "pnl_pct": 2.83,
       "pnl_amount": 20055.0
+    }
+  ],
+  "DIXON": [
+    {
+      "preset": "Oneday-Setup",
+      "mode": "paper",
+      "backfilled": true,
+      "direction": "LONG",
+      "entry_date": "2026-03-10",
+      "entry_order_id": null,
+      "tradingsymbol": "DIXON26MARFUT",
+      "lot_size": 50,
+      "entry_price": 10965,
+      "signal_entry": 10908.0,
+      "signal_slLevel": 10689.84,
+      "sl_price": 10745.7,
+      "sl_price_source": "paper_simulated_fill",
+      "tp_type": "d2_close",
+      "tp_pct": 3,
+      "tp_price": null,
+      "hold_days": 2,
+      "days_held": 0,
+      "gtt_id": null,
+      "status": "closed_by_sl",
+      "exit_price": 10745.7,
+      "exit_date": "2026-03-11",
+      "pnl_pct": -2.0,
+      "pnl_amount": -10965.0
     }
   ]
 }
