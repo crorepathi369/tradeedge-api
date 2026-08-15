@@ -54,7 +54,7 @@
     "minSignalsGate": 0,
     "wrThreshold": 60,
     "pnlThreshold": 1.8,
-    "capitalPerTrade": 300000,
+    "capitalPerTrade": 1000000,
     "rankingMode": "expectancy",
     "direction": "both",
     "fromDate": "2025-08-15",
