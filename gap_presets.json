@@ -51,7 +51,7 @@
     "maxGap": 6,
     "maxSignalsDay": 20,
     "minChangePct": 0,
-    "minGap": 2.5,
+    "minGap": 3,
     "minSignalsGate": 15,
     "pnlThreshold": 0,
     "rankingMode": "expectancy",
