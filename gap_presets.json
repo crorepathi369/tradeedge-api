@@ -44,9 +44,10 @@
   "High-Conviction-WR-Based": {
     "capitalPerTrade": 300000,
     "closeFilter": "strict",
-    "direction": "both",
+    "direction": "long",
     "fromDate": "2025-08-15",
     "holdDays": 10,
+    "maxChangePct": 0,
     "maxGap": 6,
     "maxSignalsDay": 20,
     "minChangePct": 0,
@@ -60,7 +61,6 @@
     "tpPct": 12,
     "tpType": "pct",
     "tradingMode": "paper",
-    "wrThreshold": 0,
-    "maxChangePct": 0
+    "wrThreshold": 0
   }
 }
