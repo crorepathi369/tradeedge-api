@@ -2538,9 +2538,6 @@
     <div id="configBody" class="section-body-hidden">
   <div class="control-panel" style="border-radius:0 0 12px 12px;border-top:none;box-shadow:none;margin:0;">
 
-    <!-- closeFilter always strict — hidden -->
-    <input type="hidden" id="closeFilter" value="strict">
-
     <!-- OVERNIGHT PARAMS -->
     <div id="overnightParams">
       <!-- Row 1: dates + gap params + SL + TP -->
@@ -2548,9 +2545,9 @@
         <div class="control-group"><label>From Date</label><input type="date" id="fromDate"></div>
         <div class="control-group"><label>To Date</label><input type="date" id="toDate"></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
-        <div class="control-group"><label>Min Gap %</label><input type="number" id="minGap" value="2" step="0.05" min="0.05" max="5"></div>
+        <div class="control-group"><label title="D1 open vs prior close must fall in [Min Gap, Max Gap]. D1 close vs prior close must ALSO be beyond Min Gap in the same direction — confirms the move held through the close, not just at the open.">Min Gap %</label><input type="number" id="minGap" value="2" step="0.05" min="0.05" max="5"></div>
         <div class="control-group"><label>Max Gap %</label><input type="number" id="maxGap" value="5" step="0.5" min="1" max="20"></div>
-        <div class="control-group"><label title="Minimum |D1 close vs prior close| move required to qualify (0 = off). Filters out weak-conviction gap-closes that only just cleared Min Gap but didn't show real follow-through.">Min Change %</label><input type="number" id="minChangePct" value="0" step="0.5" min="0" max="20" placeholder="0=off" title="0 = off. Minimum full-day move (prior close → D1 close) required, regardless of direction."></div>
+        <div class="control-group"><label title="Reject if |D1 close vs prior close| exceeds this (0 = off). Caps out overextended gap-closes that already ran too far.">Max Change %</label><input type="number" id="maxChangePct" value="0" step="0.5" min="0" max="20" placeholder="0=off" title="0 = off. Maximum full-day move (prior close → D1 close) allowed, regardless of direction."></div>
         <div style="width:1px;background:var(--border);height:40px;align-self:center;"></div>
         <div class="control-group">
           <label>Stop Loss Type</label>
@@ -5919,18 +5916,17 @@ function backtest(ohlc, symId, params, debug = false) {
 
     const gapDir = gapPct > 0 ? 'UP' : 'DOWN';
 
-    if (params.closeFilter === 'strict') {
-      const todayReturn = today.close - today.open;
-      if (gapDir === 'UP'   && todayReturn < 0) { if(debug) console.log(symId, today.date, `SKIP: gap UP but closed RED (${todayReturn.toFixed(2)})`); continue; }
-      if (gapDir === 'DOWN' && todayReturn > 0) { if(debug) console.log(symId, today.date, `SKIP: gap DOWN but closed GREEN (${todayReturn.toFixed(2)})`); continue; }
-    }
+    // Mandatory: D1 close vs prior close must ALSO be beyond minGap%, same direction
+    // as the gap — confirms the move held through the close, not just at the open.
+    // Distinct from gapPct, which only looks at the open.
+    const changePct = ((today.close - prevRef) / prevRef) * 100;
+    if (gapDir === 'UP'   && changePct <  params.minGap) { if(debug) console.log(symId, today.date, `SKIP: close change ${changePct.toFixed(2)}% < minGap ${params.minGap} (UP)`); continue; }
+    if (gapDir === 'DOWN' && changePct > -params.minGap) { if(debug) console.log(symId, today.date, `SKIP: close change ${changePct.toFixed(2)}% > -minGap ${-params.minGap} (DOWN)`); continue; }
 
-    // 0 = off. Minimum |D1 close vs prior close| move required to qualify — filters
-    // out weak-conviction gap-closes that only just cleared minGap but didn't show
-    // real follow-through during the day. Distinct from gapPct (open-based).
-    if (params.minChangePct > 0) {
-      const changePct = ((today.close - prevRef) / prevRef) * 100;
-      if (Math.abs(changePct) < params.minChangePct) { if(debug) console.log(symId, today.date, `SKIP: change ${changePct.toFixed(2)}% < minChangePct ${params.minChangePct}`); continue; }
+    // 0 = off. Reject if |D1 close vs prior close| exceeds this — caps overextended
+    // gap-closes rather than requiring a minimum (that's the mandatory check above).
+    if (params.maxChangePct > 0) {
+      if (Math.abs(changePct) > params.maxChangePct) { if(debug) console.log(symId, today.date, `SKIP: change ${changePct.toFixed(2)}% > maxChangePct ${params.maxChangePct}`); continue; }
     }
 
     if(debug) console.log(symId, today.date, `SIGNAL: gap ${gapPct.toFixed(2)}% dir=${gapDir} entry=${today.close.toFixed(2)} nextOpen=${tomorrow.open.toFixed(2)}`);
@@ -7213,7 +7209,7 @@ function _signalSortFn(a, b) {
 
 // ── Default values for each strategy ──────────────────────────────────────────
 const OVERNIGHT_DEFAULTS = {
-  minGap: 2, maxGap: 5, minChangePct: 0, slType: 'pct', slPct: 3,
+  minGap: 2, maxGap: 5, maxChangePct: 0, slType: 'pct', slPct: 3,
   tpType: 'd2_close', tpPct: 1.0, holdDays: 1, maxSignalsDay: 1, minSignalsGate: 0,
   wrThreshold: 40, pnlThreshold: 0.3, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
@@ -7280,8 +7276,7 @@ function readOvernightParams() {
   return {
     minGap:      +document.getElementById('minGap').value,
     maxGap:      +document.getElementById('maxGap').value,
-    minChangePct:+document.getElementById('minChangePct').value || 0,
-    closeFilter:  document.getElementById('closeFilter').value,
+    maxChangePct:+document.getElementById('maxChangePct').value || 0,
     slType:       document.getElementById('slType').value,
     slPct:       +document.getElementById('slPct').value,
     tpType:       document.getElementById('tpType').value,
@@ -7296,7 +7291,7 @@ function _buildOvernightSavedObject() {
   return {
     minGap:         +document.getElementById('minGap').value,
     maxGap:         +document.getElementById('maxGap').value,
-    minChangePct:   +document.getElementById('minChangePct').value || 0,
+    maxChangePct:   +document.getElementById('maxChangePct').value || 0,
     slType:          document.getElementById('slType').value,
     slPct:          +document.getElementById('slPct').value,
     tpType:          document.getElementById('tpType').value,
@@ -7314,7 +7309,6 @@ function _buildOvernightSavedObject() {
     // guessing at a lookback period.
     fromDate:        document.getElementById('fromDate').value,
     toDate:           document.getElementById('toDate').value,
-    closeFilter:      document.getElementById('closeFilter').value,
     // Fail-safe default 'paper' — never sync as 'live' unless the toggle
     // was explicitly clicked to Live in this session.
     tradingMode:      _tradingMode || 'paper',
@@ -7330,7 +7324,7 @@ function _applyOvernightParamsToForm(rawD) {
   const d = { ...OVERNIGHT_DEFAULTS, ...rawD };
   document.getElementById('minGap').value  = d.minGap;
   document.getElementById('maxGap').value  = d.maxGap;
-  document.getElementById('minChangePct').value = d.minChangePct;
+  document.getElementById('maxChangePct').value = d.maxChangePct;
   document.getElementById('slType').value  = d.slType;
   document.getElementById('slPct').value   = d.slPct;
   document.getElementById('tpType').value  = d.tpType;
@@ -7369,7 +7363,7 @@ function _buildOvernightSavedObjectMobile() {
   return {
     minGap:         +document.getElementById('mobMinGap').value,
     maxGap:         +document.getElementById('mobMaxGap').value,
-    minChangePct:   +document.getElementById('mobMinChangePct').value || 0,
+    maxChangePct:   +document.getElementById('mobMaxChangePct').value || 0,
     slType:          document.getElementById('mobSlType').value,
     slPct:          +document.getElementById('mobSlPct').value,
     tpType:          document.getElementById('mobTpType').value,
@@ -7384,7 +7378,6 @@ function _buildOvernightSavedObjectMobile() {
     direction:       _mobDir || 'both',
     fromDate:        document.getElementById('mobFromDate')?.value || document.getElementById('fromDate').value,
     toDate:          document.getElementById('mobToDate')?.value   || document.getElementById('toDate').value,
-    closeFilter:      document.getElementById('closeFilter')?.value || 'strict',
     tradingMode:      _tradingMode || 'paper',
   };
 }
@@ -7393,7 +7386,7 @@ function _applyOvernightParamsToMobForm(rawD) {
   const d = { ...OVERNIGHT_DEFAULTS, ...rawD };
   document.getElementById('mobMinGap').value   = d.minGap;
   document.getElementById('mobMaxGap').value   = d.maxGap;
-  document.getElementById('mobMinChangePct').value = d.minChangePct;
+  document.getElementById('mobMaxChangePct').value = d.maxChangePct;
   document.getElementById('mobSlType').value   = d.slType;
   document.getElementById('mobSlPct').value    = d.slPct;
   document.getElementById('mobTpType').value   = d.tpType;
@@ -7843,7 +7836,7 @@ function saveMobDefaults() {
     const saved = {
       minGap:        +document.getElementById('mobMinGap').value,
       maxGap:        +document.getElementById('mobMaxGap').value,
-      minChangePct:  +document.getElementById('mobMinChangePct').value || 0,
+      maxChangePct:  +document.getElementById('mobMaxChangePct').value || 0,
       slType:         document.getElementById('mobSlType').value,
       slPct:         +document.getElementById('mobSlPct').value,
       tpType:         document.getElementById('mobTpType').value,
@@ -7860,7 +7853,6 @@ function saveMobDefaults() {
       // but read the canonical ones directly to avoid any sync-timing gap.
       fromDate:      document.getElementById('fromDate')?.value || '',
       toDate:        document.getElementById('toDate')?.value || '',
-      closeFilter:   document.getElementById('closeFilter')?.value || 'strict',
       // Fail-safe default 'paper' — never sync as 'live' unless the toggle
       // was explicitly clicked to Live in this session.
       tradingMode:   _tradingMode || 'paper',
@@ -7921,7 +7913,7 @@ function resetMobDefaults() {
     const d = savedRaw ? { ...OVERNIGHT_DEFAULTS, ...JSON.parse(savedRaw) } : OVERNIGHT_DEFAULTS;
     document.getElementById('mobMinGap').value    = d.minGap;
     document.getElementById('mobMaxGap').value    = d.maxGap;
-    document.getElementById('mobMinChangePct').value = d.minChangePct;
+    document.getElementById('mobMaxChangePct').value = d.maxChangePct;
     document.getElementById('mobSlType').value    = d.slType;
     document.getElementById('mobSlPct').value     = d.slPct;
     document.getElementById('mobTpType').value    = d.tpType;
@@ -8134,15 +8126,12 @@ async function runScanner() {
     if (_direction === 'long'  && gapDir !== 'UP')   return;
     if (_direction === 'short' && gapDir !== 'DOWN')  return;
 
-    if (params.closeFilter === 'strict') {
-      const todayReturn = today.close - today.open;
-      if (gapDir === 'UP'   && todayReturn < 0) return;
-      if (gapDir === 'DOWN' && todayReturn > 0) return;
-    }
+    const changePct = ((today.close - prevRef) / prevRef) * 100;
+    if (gapDir === 'UP'   && changePct <  params.minGap) return;
+    if (gapDir === 'DOWN' && changePct > -params.minGap) return;
 
-    if (params.minChangePct > 0) {
-      const changePct = ((today.close - prevRef) / prevRef) * 100;
-      if (Math.abs(changePct) < params.minChangePct) return;
+    if (params.maxChangePct > 0) {
+      if (Math.abs(changePct) > params.maxChangePct) return;
     }
 
     let slLevel;
@@ -9119,7 +9108,7 @@ function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, 
           <div class="scanner-side-title" style="color:${isBull ? 'var(--bull)' : 'var(--bear)'};">
             ${isBull ? '▲ LONG' : '▼ SHORT'}
             <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:400;color:var(--text2);">
-              ${isBull ? 'gap up · green close · buy EOD' : 'gap down · red close · sell EOD'}
+              ${isBull ? 'gap up · close held · buy EOD' : 'gap down · close held · sell EOD'}
             </span>
           </div>
           <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;
@@ -10323,7 +10312,7 @@ function buildOvernightSweep() {
   const slValues   = [2, 3, 4, 5, 6, 7, 8, 9];
   const gapValues  = [1.5, 2, 2.5, 3, 3.5, 4, 5, 6];
 
-  // Base params from current overnight config — includes maxGap, closeFilter, tpType etc.
+  // Base params from current overnight config — includes maxGap, tpType etc.
   const from      = document.getElementById('fromDate')?.value || '';
   const to        = document.getElementById('toDate')?.value   || '';
   const curParams = readOvernightParams();
@@ -10348,7 +10337,7 @@ function buildOvernightSweep() {
   const minSignalsGate = _minSignalsGate();
 
   // Build result matrix — SL% rows x MinGap% cols
-  // Keep all other params (maxGap, closeFilter, tpType, holdDays) from current config
+  // Keep all other params (maxGap, tpType, holdDays) from current config
   const results = {};
   slValues.forEach(sl => {
     results[sl] = {};
@@ -12591,7 +12580,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2);
           line-height:1.65;" id="mobStratNoteText">
           Identifies stocks that gap in one direction and continue that momentum through the next trading day.
-          A gap-up with a green close signals long; a gap-down with a red close signals short.
+          A gap-up whose D1 close also holds beyond the gap threshold signals long; a gap-down that holds equally beyond it signals short.
           Enter at the prior day's close, exit at the following day's close.
         </div>
       </div>
@@ -12709,8 +12698,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="mob-settings-control"><input class="mob-settings-input" id="mobMaxGap" type="number" value="5" step="0.5" min="1"></div>
       </div>
       <div class="mob-settings-row">
-        <div><div class="mob-settings-label">Min Change %</div><div class="mob-settings-sub">Full-day move, 0=off</div></div>
-        <div class="mob-settings-control"><input class="mob-settings-input" id="mobMinChangePct" type="number" value="0" step="0.5" min="0" placeholder="0=off"></div>
+        <div><div class="mob-settings-label">Max Change %</div><div class="mob-settings-sub">Full-day move cap, 0=off</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobMaxChangePct" type="number" value="0" step="0.5" min="0" placeholder="0=off"></div>
       </div>
       <div class="mob-settings-row">
         <div><div class="mob-settings-label">SL Type</div><div class="mob-settings-sub">How stop loss is set</div></div>
@@ -13111,7 +13100,7 @@ function mobSetStrategy(s) {
     if (text)  text.textContent  = "Finds stocks pulling back against a weekly uptrend (or rallying against a weekly downtrend), using real swing-pivot HH/HL detection — not a moving-average proxy. Waits for the first day price turns back in the trend's favour before entering at the next session's open. Stop loss is structural (the trigger day's low for Long, high for Short); target is a fixed % from entry.";
   } else {
     if (title) title.textContent = '🌙 Overnight Gap';
-    if (text)  text.textContent  = "Identifies stocks that gap in one direction and continue that momentum through the next trading day. A gap-up with a green close signals long; a gap-down with a red close signals short. Enter at the prior day's close, exit at the following day's close.";
+    if (text)  text.textContent  = "Identifies stocks that gap in one direction and continue that momentum through the next trading day. A gap-up whose D1 close also holds beyond the gap threshold signals long; a gap-down that holds equally beyond it signals short. Enter at the prior day's close, exit at the following day's close.";
   }
   // Restore cached results for this strategy, or show empty state
   if (currentResults) {
@@ -13161,7 +13150,7 @@ function closeMobSettings() {
   if (_mobStrategy === 'overnight') {
     s('minGap',          g('mobMinGap'));
     s('maxGap',          g('mobMaxGap'));
-    s('minChangePct',    g('mobMinChangePct'));
+    s('maxChangePct',    g('mobMaxChangePct'));
     s('slType',          g('mobSlType'));
     s('slPct',           g('mobSlPct'));
     s('tpType',          g('mobTpType'));
@@ -13250,14 +13239,13 @@ async function runMobileScanner() {
   if (mobStrategy === 'overnight') {
     document.getElementById('minGap').value  = document.getElementById('mobMinGap').value;
     document.getElementById('maxGap').value  = document.getElementById('mobMaxGap').value;
-    document.getElementById('minChangePct').value = document.getElementById('mobMinChangePct').value;
+    document.getElementById('maxChangePct').value = document.getElementById('mobMaxChangePct').value;
     document.getElementById('slType').value  = document.getElementById('mobSlType').value;
     document.getElementById('slPct').value   = document.getElementById('mobSlPct').value;
   const mobCap = document.getElementById('mobCapital'); if (mobCap) document.getElementById('capitalPerTrade').value = mobCap.value;
     document.getElementById('tpType').value  = document.getElementById('mobTpType').value;
     document.getElementById('tpPct').value   = document.getElementById('mobTpPctVal').value;
     document.getElementById('holdDays').value = document.getElementById('mobHoldDays').value;
-    document.getElementById('closeFilter').value = 'strict';
     _strategy   = 'overnight';
     _maxDayEl().value = document.getElementById('mobMaxDay').value;
     document.getElementById('minSignalsGate').value = document.getElementById('mobMinSignalsGate').value;
@@ -13444,14 +13432,11 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
       const absGap = Math.abs(gapPct);
       if (absGap < params.minGap || absGap > params.maxGap) return;
       const gapDir = gapPct > 0 ? 'UP' : 'DOWN';
-      if (params.closeFilter === 'strict') {
-        const todayReturn = today.close - today.open;
-        if (gapDir==='UP' && todayReturn<0) return;
-        if (gapDir==='DOWN' && todayReturn>0) return;
-      }
-      if (params.minChangePct > 0) {
-        const changePct = ((today.close - prevRef) / prevRef) * 100;
-        if (Math.abs(changePct) < params.minChangePct) return;
+      const changePct = ((today.close - prevRef) / prevRef) * 100;
+      if (gapDir==='UP'   && changePct <  params.minGap) return;
+      if (gapDir==='DOWN' && changePct > -params.minGap) return;
+      if (params.maxChangePct > 0) {
+        if (Math.abs(changePct) > params.maxChangePct) return;
       }
       const side = gapDir === 'UP' ? 'LONG' : 'SHORT';
       if (_mobDir==='long' && side!=='LONG') return;
@@ -13837,7 +13822,7 @@ async function _runMobTradeBacktest(strat) {
   } else {
     const mobMin     = document.getElementById('mobMinGap');
     const mobMax     = document.getElementById('mobMaxGap');
-    const mobChange  = document.getElementById('mobMinChangePct');
+    const mobChange  = document.getElementById('mobMaxChangePct');
     const mobSlType  = document.getElementById('mobSlType');
     const mobSl      = document.getElementById('mobSlPct');
     const mobTpType  = document.getElementById('mobTpType');
@@ -13847,7 +13832,7 @@ async function _runMobTradeBacktest(strat) {
     const mobMinSig  = document.getElementById('mobMinSignalsGate');
     if (mobMin)    document.getElementById('minGap').value        = mobMin.value;
     if (mobMax)    document.getElementById('maxGap').value        = mobMax.value;
-    if (mobChange) document.getElementById('minChangePct').value  = mobChange.value;
+    if (mobChange) document.getElementById('maxChangePct').value  = mobChange.value;
     if (mobSlType) document.getElementById('slType').value        = mobSlType.value;
     if (mobSl)     document.getElementById('slPct').value          = mobSl.value;
     if (mobTpType) document.getElementById('tpType').value        = mobTpType.value;
@@ -15461,7 +15446,7 @@ function syncMobileDefaults() {
         const d = { ...OVERNIGHT_DEFAULTS, ...JSON.parse(onRaw) };
         if (el('mobMinGap'))    el('mobMinGap').value    = d.minGap;
         if (el('mobMaxGap'))    el('mobMaxGap').value    = d.maxGap;
-        if (el('mobMinChangePct')) el('mobMinChangePct').value = d.minChangePct;
+        if (el('mobMaxChangePct')) el('mobMaxChangePct').value = d.maxChangePct;
         if (el('mobSlType'))    el('mobSlType').value    = d.slType;
         if (el('mobSlPct'))     el('mobSlPct').value     = d.slPct;
         if (el('mobTpType'))    el('mobTpType').value    = d.tpType;

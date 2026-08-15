@@ -103,18 +103,21 @@ def backtest_overnight(ohlc: list[dict], sym_id: str, params: dict) -> list[dict
 
         gap_dir = "UP" if gap_pct > 0 else "DOWN"
 
-        if params.get("closeFilter") == "strict":
-            today_return = today["close"] - today["open"]
-            if gap_dir == "UP" and today_return < 0:
-                continue
-            if gap_dir == "DOWN" and today_return > 0:
-                continue
+        # Mandatory: D1 close vs prior close must ALSO be beyond minGap%, same
+        # direction as the gap — confirms the move held through the close, not
+        # just at the open. Mirrors backtest() in TradeEdge.html.
+        change_pct = ((today["close"] - prev_ref) / prev_ref) * 100
+        if gap_dir == "UP" and change_pct < params["minGap"]:
+            continue
+        if gap_dir == "DOWN" and change_pct > -params["minGap"]:
+            continue
 
-        min_change_pct = params.get("minChangePct", 0) or 0
-        if min_change_pct > 0:
-            change_pct = ((today["close"] - prev_ref) / prev_ref) * 100
-            if abs(change_pct) < min_change_pct:
-                continue
+        # 0 = off. Reject if |D1 close vs prior close| exceeds this — caps
+        # overextended gap-closes rather than requiring a minimum (that's the
+        # mandatory check above).
+        max_change_pct = params.get("maxChangePct", 0) or 0
+        if max_change_pct > 0 and abs(change_pct) > max_change_pct:
+            continue
 
         side = "LONG" if gap_dir == "UP" else "SHORT"
         entry = today["close"]
@@ -282,21 +285,15 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
     params = {
         "minGap":      settings["minGap"],
         "maxGap":      settings["maxGap"],
-        # closeFilter is a hidden, hardcoded 'strict' field in TradeEdge.html
-        # (<input type="hidden" id="closeFilter" value="strict">) — it's a
-        # fixed rule of the Overnight Gap strategy (gap up must close green,
-        # gap down must close red), not a user setting, so it's never part
-        # of the synced settings payload. Default to 'strict' to match.
-        "closeFilter": settings.get("closeFilter", "strict"),
         "slType":      settings.get("slType", "pct"),
         "slPct":       settings["slPct"],
         "tpType":      settings.get("tpType", "d2_close"),
         "tpPct":       settings.get("tpPct", 1.0),
         "holdDays":    settings.get("holdDays", 1),
-        # 0 = off. Minimum |D1 close vs prior close| move required to qualify —
-        # filters out weak-conviction gap-closes that only just cleared minGap
-        # but didn't show real follow-through during the day.
-        "minChangePct": settings.get("minChangePct", 0) or 0,
+        # 0 = off. Maximum |D1 close vs prior close| move allowed — caps
+        # overextended gap-closes. The minimum-side check is now mandatory
+        # (always minGap%, see backtest_overnight()/scan loop below).
+        "maxChangePct": settings.get("maxChangePct", 0) or 0,
     }
     direction = settings.get("direction", "both")
     wr_threshold = settings.get("wrThreshold", 0) or 0
@@ -335,16 +332,14 @@ def scan_gap_signals(data_dir: Path, all_symbols: list[str], scan_date: str,
         if direction == "short" and gap_dir != "DOWN":
             continue
 
-        if params.get("closeFilter") == "strict":
-            today_return = today["close"] - today["open"]
-            if gap_dir == "UP" and today_return < 0:
-                continue
-            if gap_dir == "DOWN" and today_return > 0:
-                continue
+        change_pct = ((today["close"] - prev_ref) / prev_ref) * 100
+        if gap_dir == "UP" and change_pct < params["minGap"]:
+            continue
+        if gap_dir == "DOWN" and change_pct > -params["minGap"]:
+            continue
 
-        if params["minChangePct"] > 0:
-            change_pct = ((today["close"] - prev_ref) / prev_ref) * 100
-            if abs(change_pct) < params["minChangePct"]:
+        if params["maxChangePct"] > 0:
+            if abs(change_pct) > params["maxChangePct"]:
                 continue
 
         side = "LONG" if gap_dir == "UP" else "SHORT"
