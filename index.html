@@ -2470,6 +2470,7 @@
     <button class="desk-icon-btn" id="cloudBarBtn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
     <button class="desk-icon-btn" id="localBarBtn" onclick="loadFromCSV()" title="Load daily CSVs from a local folder (tradeedge_data)">📂</button>
     <button class="desk-icon-btn" id="hourlyLocalBtn" onclick="loadHourlyFromCSV()" title="Load hourly CSVs from a local folder (tradeedge_data/hourly) — Position Setup scanner">🕐</button>
+    <button class="desk-icon-btn" id="hourlyCloudBtn" onclick="syncHourlyFromCloud()" title="Sync hourly data live from Kite via Render (no local script needed) — Position Setup scanner">🛰️</button>
     <button class="desk-icon-btn" onclick="showCacheStatus()" title="Cache status">🗄</button>
     <button class="desk-icon-btn" onclick="purgeAllCache()" title="Clear cache" style="color:var(--bear);">🗑</button>
     <button class="desk-icon-btn" id="kiteLoginBtn" onclick="openKiteLogin()" title="Kite Login — authorize today's Gap Strategy automation">🔐</button>
@@ -11637,6 +11638,100 @@ function _fallbackHourlyCsvLoad() {
     _hourlyFileInput.click();
   } else {
     try { _hourlyFolderInput.click(); } catch { _hourlyFileInput.click(); }
+  }
+}
+
+// Live hourly sync straight from Render's /kite/hourly route — no local Python
+// script, no local file picker. Paginates the same offset/limit contract
+// tradeedge_fetch.py --hourly-source kite uses server-side, writing straight
+// into _loadedHourly (already in the exact shape /kite/hourly returns — no
+// CSV parsing needed here, unlike the local-file loader above). Not persisted
+// to IndexedDB, same as the local loader (Step 1 design — re-sync each session).
+async function syncHourlyFromCloud() {
+  if (!TRADEEDGE_API_URL) {
+    alert('TradeEdge API not configured.\n\nSet TRADEEDGE_API_URL in the script.');
+    return;
+  }
+
+  const overlay  = document.getElementById('csvLoadOverlay');
+  const bar      = document.getElementById('csvLoadBar');
+  const label    = document.getElementById('csvLoadLabel');
+  const countEl  = document.getElementById('csvLoadCount');
+  overlay.style.display = 'flex';
+  bar.style.width = '0%';
+  label.textContent = 'Waking up server (cold start can take ~30s)…';
+  countEl.textContent = '';
+
+  const hourlyCloudBtn = document.getElementById('hourlyCloudBtn');
+  if (hourlyCloudBtn) hourlyCloudBtn.disabled = true;
+
+  let cancelled = false;
+  let cancelEl  = document.getElementById('cloudCancelBtn');
+  if (!cancelEl) {
+    cancelEl = document.createElement('button');
+    cancelEl.id = 'cloudCancelBtn';
+    cancelEl.textContent = '✕ Cancel';
+    cancelEl.style.cssText = 'margin-top:10px;padding:4px 14px;border-radius:6px;border:1px solid #e07070;'
+      + 'background:transparent;color:#e07070;font-family:\'DM Mono\',monospace;font-size:11px;cursor:pointer;';
+    cancelEl.onclick = () => { cancelled = true; };
+    overlay.appendChild(cancelEl);
+  } else {
+    cancelEl.style.display = '';
+    cancelled = false;
+  }
+
+  const DAYS  = 180; // matches the depth recommended for a meaningful backtest sample
+  const LIMIT = 30;  // matches tradeedge_fetch.py --hourly-source kite's batch size
+
+  try {
+    let offset = 0, done = false, grandTotal = null, fetched = 0, failed = 0;
+    const failedSyms = [];
+
+    while (!done && !cancelled) {
+      label.textContent = `Fetching hourly (offset ${offset}${grandTotal ? ` / ${grandTotal}` : ''})…`;
+      const res = await fetch(`${TRADEEDGE_API_URL}/kite/hourly?offset=${offset}&limit=${LIMIT}&days=${DAYS}`);
+      if (!res.ok) throw new Error('Request failed: ' + res.status);
+      const payload = await res.json();
+
+      if (payload.error) {
+        if (payload.error === 'not_logged_in_today') {
+          throw new Error('Kite not logged in today — click 🔐 Kite Login first, then retry.');
+        }
+        throw new Error(payload.error);
+      }
+
+      Object.entries(payload.data || {}).forEach(([sym, bars]) => {
+        if (bars && bars.length) { _loadedHourly[sym] = bars; fetched++; }
+      });
+      failed += (payload.failedSymbols || []).length;
+      failedSyms.push(...(payload.failedSymbols || []));
+      grandTotal = payload.grandTotal;
+      done = payload.done;
+      offset += LIMIT;
+
+      const pct = grandTotal ? Math.min(99, Math.round((offset / grandTotal) * 100)) : 0;
+      bar.style.width = pct + '%';
+      countEl.textContent = `${fetched} fetched, ${failed} failed — ${Math.min(offset, grandTotal || offset)}/${grandTotal || '?'}`;
+    }
+
+    bar.style.width = '100%';
+    _updateHourlyStatusAfterLoad(fetched, failed);
+    if (cancelled) {
+      label.textContent = `⏹ Cancelled — ${fetched} symbols loaded`;
+    } else {
+      label.textContent = `✅ Hourly sync complete${failed ? ` · ⚠ ${failed} failed (${failedSyms.slice(0,5).join(', ')}${failedSyms.length>5?'…':''})` : ''}`;
+      countEl.textContent = `${fetched} symbols · last ${DAYS} days`;
+    }
+    await new Promise(r => setTimeout(r, 1800));
+    overlay.style.display = 'none';
+    if (cancelEl) cancelEl.style.display = 'none';
+
+  } catch (err) {
+    overlay.style.display = 'none';
+    console.error('[syncHourlyFromCloud]', err);
+    alert('Hourly sync failed: ' + err.message);
+  } finally {
+    if (hourlyCloudBtn) hourlyCloudBtn.disabled = false;
   }
 }
 
