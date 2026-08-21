@@ -1827,6 +1827,53 @@ def get_kite_client():
     return _kite
 
 
+@app.route("/kite/daily-check", methods=["GET", "OPTIONS"])
+def kite_daily_check():
+    """
+    Diagnostic-only: returns Kite's NSE cash-market daily closes for the
+    given symbols, to compare against Yahoo-sourced daily CSVs. Not used
+    by any automation flow — safe to remove once the comparison is done.
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    kite = get_kite_client()
+    if kite is None:
+        return cors_response({"error": "not_logged_in_today"}, 400)
+
+    symbols = [s.strip().upper() for s in request.args.get("symbols", "").split(",") if s.strip()]
+    if not symbols:
+        return cors_response({"error": "missing_symbols_param"}, 400)
+    days = int(request.args.get("days", 10))
+
+    try:
+        instruments = kite.instruments("NSE")
+    except Exception as e:
+        return cors_response({"error": f"instruments_fetch_failed: {e}"}, 500)
+
+    by_symbol = {i["tradingsymbol"]: i["instrument_token"] for i in instruments}
+
+    from_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y-%m-%d")
+    to_date = datetime.now().strftime("%Y-%m-%d")
+
+    result = {}
+    for sym in symbols:
+        token = by_symbol.get(sym)
+        if not token:
+            result[sym] = {"error": "instrument_not_found"}
+            continue
+        try:
+            candles = kite.historical_data(token, from_date, to_date, "day")
+            result[sym] = [
+                {"date": c["date"].strftime("%Y-%m-%d"), "close": c["close"]}
+                for c in candles[-days:]
+            ]
+        except Exception as e:
+            result[sym] = {"error": str(e)}
+
+    return cors_response(result)
+
+
 def push_kite_token_to_github():
     """
     Pushes kite_token.json to the GitHub data branch — same PUT pattern as
