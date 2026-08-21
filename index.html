@@ -9402,6 +9402,12 @@ function runScannerPositionSetup(scanDate, syms) {
 
     const hourly = computeHourlyRetestState(hourlyBars, mtf);
     if (!hourly) return; // null = chop (W/D disagree) — sit out, per agreed logic
+    // Same gate the backtest engine applies (backtestPositionSetup only ever
+    // enters on hourly.triggered === true) — without this, the scanner also
+    // surfaced "still mid-push, hasn't flipped yet" symbols as if they were
+    // live signals, which never matched what the backtest actually traded on
+    // the same date. See project_positional_strategy memory, 2026-08-22.
+    if (!hourly.triggered) return;
 
     const side = hourly.side;
     if (_direction === 'long'  && side !== 'LONG')  return;
