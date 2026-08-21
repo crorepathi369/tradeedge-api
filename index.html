@@ -11701,7 +11701,14 @@ async function syncHourlyFromCloud() {
       }
 
       Object.entries(payload.data || {}).forEach(([sym, bars]) => {
-        if (bars && bars.length) { _loadedHourly[sym] = bars; fetched++; }
+        // /kite/hourly returns {datetime,open,high,low,close,volume} — no separate
+        // `date` field. computeHourlyRetestState/backtestPositionSetup/the scanner
+        // all filter on `.date` (matching the local-CSV loader's shape), so it must
+        // be derived here or every bar silently fails every date comparison.
+        if (bars && bars.length) {
+          _loadedHourly[sym] = bars.map(b => ({ ...b, date: b.datetime.slice(0, 10) }));
+          fetched++;
+        }
       });
       failed += (payload.failedSymbols || []).length;
       failedSyms.push(...(payload.failedSymbols || []));
