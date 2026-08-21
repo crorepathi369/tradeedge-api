@@ -13333,7 +13333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <button class="mob-strat-btn active" id="mobStOvernightBtn" onclick="mobSetStrategy('overnight')">🌙 Gap</button>
         <button class="mob-strat-btn" id="mobStIntradayBtn" onclick="mobSetStrategy('intraday')">⚡ Momentum</button>
         <button class="mob-strat-btn" id="mobStPullbackBtn" onclick="mobSetStrategy('pullback')">↩️ Pullback</button>
-        <button class="mob-strat-btn" id="mobStPositionSetupBtn" onclick="mobSetStrategy('positionSetup')">🧭 Setup</button>
+        <button class="mob-strat-btn" id="mobStPositionSetupBtn" onclick="mobSetStrategy('positionSetup')">🧭 Positional</button>
       </div>
       <div style="flex:1;"></div>
       <!-- Cache status pill — moved here to free up Row 2 for date picker -->
@@ -13872,12 +13872,16 @@ function updateMobDataBadge() {
     const toID   = document.getElementById('mobIdToDate');
     const fromRV = document.getElementById('mobPbFromDate');
     const toRV   = document.getElementById('mobPbToDate');
+    const fromPS = document.getElementById('mobPsFromDate');
+    const toPS   = document.getElementById('mobPsToDate');
     if (fromON) { fromON.value = document.getElementById('fromDate').value || fromVal; }
     if (toON)   { toON.value   = document.getElementById('toDate').value   || maxDate; }
     if (fromID) { fromID.value = document.getElementById('idFromDate').value || fromVal; }
     if (toID)   { toID.value   = document.getElementById('idToDate').value   || maxDate; }
     if (fromRV) { fromRV.value = document.getElementById('pbFromDate').value || fromVal; }
     if (toRV)   { toRV.value   = document.getElementById('pbToDate').value   || maxDate; }
+    if (fromPS) { fromPS.value = document.getElementById('psFromDate').value || fromVal; }
+    if (toPS)   { toPS.value   = document.getElementById('psToDate').value   || maxDate; }
   }
 }
 
@@ -14701,6 +14705,13 @@ async function _runMobTradeBacktest(strat) {
     if (mobPb) document.getElementById('pbPivotBars').value    = mobPb.value;
     if (mobMp) document.getElementById('pbMaxPositions').value = mobMp.value;
     if (mobMd) _maxDayEl().value  = mobMd.value;
+  } else if (strat === 'positionSetup') {
+    const mobSl2 = document.getElementById('mobPsSlLookbackDays');
+    const mobHd2 = document.getElementById('mobPsMaxHoldDays');
+    const mobMd2 = document.getElementById('mobPsMaxDay');
+    if (mobSl2) document.getElementById('psSlLookbackDays').value = mobSl2.value;
+    if (mobHd2) document.getElementById('psMaxHoldDays').value    = mobHd2.value;
+    if (mobMd2) _maxDayEl().value = mobMd2.value;
   } else {
     const mobMin     = document.getElementById('mobMinGap');
     const mobMax     = document.getElementById('mobMaxGap');
@@ -14727,6 +14738,7 @@ async function _runMobTradeBacktest(strat) {
   // Date range: use user's selected dates from mobile settings
   const mobDateIds = strat === 'intraday' ? ['mobIdFromDate','mobIdToDate','idFromDate','idToDate']
     : strat === 'pullback' ? ['mobPbFromDate','mobPbToDate','pbFromDate','pbToDate']
+    : strat === 'positionSetup' ? ['mobPsFromDate','mobPsToDate','psFromDate','psToDate']
     : ['mobFromDate','mobToDate','fromDate','toDate'];
   const mobFrom = document.getElementById(mobDateIds[0])?.value
                 || document.getElementById(mobDateIds[2])?.value
@@ -14741,6 +14753,8 @@ async function _runMobTradeBacktest(strat) {
   document.getElementById('idToDate').value   = mobTo;
   document.getElementById('pbFromDate').value = mobFrom;
   document.getElementById('pbToDate').value   = mobTo;
+  document.getElementById('psFromDate').value = mobFrom;
+  document.getElementById('psToDate').value   = mobTo;
 
   await runBacktestSilent();
   _mobTradeCache[strat]     = [...allTrades];          // capped — for all other tabs
