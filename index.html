@@ -2469,6 +2469,7 @@
     <button class="desk-icon-btn" id="breezeFetchBtn" onclick="runBreezeFetch()" title="Fetch today's data from Breeze API">📡</button>
     <button class="desk-icon-btn" id="cloudBarBtn" onclick="loadFromCloud()" title="Load all CSVs from cloud server">☁️</button>
     <button class="desk-icon-btn" id="localBarBtn" onclick="loadFromCSV()" title="Load daily CSVs from a local folder (tradeedge_data)">📂</button>
+    <button class="desk-icon-btn" id="hourlyLocalBtn" onclick="loadHourlyFromCSV()" title="Load hourly CSVs from a local folder (tradeedge_data/hourly) — Position Setup scanner">🕐</button>
     <button class="desk-icon-btn" onclick="showCacheStatus()" title="Cache status">🗄</button>
     <button class="desk-icon-btn" onclick="purgeAllCache()" title="Clear cache" style="color:var(--bear);">🗑</button>
     <button class="desk-icon-btn" id="kiteLoginBtn" onclick="openKiteLogin()" title="Kite Login — authorize today's Gap Strategy automation">🔐</button>
@@ -2804,6 +2805,35 @@
       <div id="scannerBody" style="border-top:1px solid var(--border);padding:16px 20px;">
         <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);text-align:center;padding:16px 0;">
           Click ▶ Scan to find gap signals across all loaded symbols
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POSITION SETUP SCANNER — Weekly+Daily+Hourly MTF alignment/retest (4th
+       strategy, Step 1). Standalone: not wired into setStrategy()/_strategy,
+       not part of the STRATEGY_ENGINES dispatch. Hidden until hourly data is
+       loaded via the 🕐 toolbar button. See runScannerPositionSetup(). -->
+  <div id="posSetupPanel" class="mobile-section" style="display:none;margin-bottom:16px;">
+    <div class="control-panel" style="padding:0;overflow:hidden;border-left:4px solid var(--gold);">
+      <div class="section-header" onclick="toggleSection('posSetupBody','posSetupChevron')"
+           style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:14px;" id="posSetupChevron">▼</span>
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase;">🧭 Position Setup Scanner <span style="font-size:9px;font-weight:600;color:var(--gold);background:#e0a80022;padding:1px 6px;border-radius:4px;margin-left:4px;">BETA — hourly snapshot</span></div>
+            <div id="posSetupFreshness" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-top:1px;">Load hourly CSVs via 🕐 to enable</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;" onclick="event.stopPropagation()">
+          <button class="btn btn-primary" onclick="runScannerPositionSetup(document.getElementById('scanDate').value || document.getElementById('toDate').value)" style="padding:8px 18px;font-size:13px;">
+            <span>▶ Scan</span>
+          </button>
+        </div>
+      </div>
+      <div id="posSetupBody" style="border-top:1px solid var(--border);padding:16px 20px;">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);text-align:center;padding:16px 0;">
+          Click ▶ Scan to find current Weekly+Daily+Hourly aligned setups
         </div>
       </div>
     </div>
@@ -4839,6 +4869,10 @@ async function _idbGetMeta() {
 
 const _loadedOHLC = {};   // sym → ohlc array (in-memory, fast)
 
+// sym → hourly candle array, ascending by datetime: {datetime,date,open,high,low,close,volume}.
+// In-memory only (not IndexedDB-persisted) — feeds the Position Setup scanner. See loadHourlyFromCSV().
+const _loadedHourly = {};
+
 function getAllLoadedSymbols() {
   // Filter to active universe — nifty50 (54) or fo (152 F&O stocks)
   const universe = new Set(getActiveUniverse());
@@ -5893,6 +5927,54 @@ function mtfBadgeHTML(mtf) {
   const detailJs = detail.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
   return `<span class="mtf-badge ${mtf.cls}" title="${titleAttr}"
     onclick="event.stopPropagation(); showToast('${detailJs}', 4500);">${label}</span>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POSITION SETUP — Weekly+Daily+Hourly MTF alignment/retest (4th strategy, Step 1).
+// Not wired into STRATEGY_ENGINES/setStrategy yet — see runScannerPositionSetup()
+// and the standalone panel it feeds, further down in the file.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Classifies the hourly retest state as of the latest bar in `hourlyBars`, given
+// the Weekly+Daily alignment (`mtf`, from computeMTFAlignment) already computed
+// from daily data. Returns null when there's no hourly data, or when W+D disagree
+// (chop — sit out, per the agreed strategy logic). Deliberately minimal: no RSI,
+// no support/resistance proximity check — just "did the hourly candle flip back
+// in the aligned direction", plus a volume sanity check.
+function computeHourlyRetestState(hourlyBars, mtf) {
+  if (!hourlyBars || hourlyBars.length < 2 || !mtf) return null;
+  if (mtf.combined !== 'Aligned Bullish' && mtf.combined !== 'Aligned Bearish') return null;
+
+  const last = hourlyBars[hourlyBars.length - 1];
+  const prev = hourlyBars[hourlyBars.length - 2];
+  const lastGreen = last.close >= last.open;
+
+  const lookback = hourlyBars.slice(Math.max(0, hourlyBars.length - 11), hourlyBars.length - 1);
+  const avgVol = lookback.length ? lookback.reduce((s,b) => s + (b.volume||0), 0) / lookback.length : 0;
+  const volConfirmed = avgVol > 0 && last.volume >= avgVol;
+
+  if (mtf.combined === 'Aligned Bullish') {
+    const wasRed = prev.close < prev.open;
+    const triggered = lastGreen && wasRed;
+    return { side: 'LONG', state: lastGreen ? 'retest-flip-green' : 'in-pullback-red', triggered, volConfirmed, lastBarDatetime: last.datetime };
+  } else {
+    const wasGreen = prev.close > prev.open;
+    const triggered = !lastGreen && wasGreen;
+    return { side: 'SHORT', state: !lastGreen ? 'retest-flip-red' : 'in-bounce-green', triggered, volConfirmed, lastBarDatetime: last.datetime };
+  }
+}
+
+// Renders the hourly-state badge, parallel to mtfBadgeHTML() above — reuses the
+// same .mtf-badge CSS classes so it matches visually with no new CSS.
+function hourlyBadgeHTML(hourly) {
+  if (!hourly) return '';
+  const label = hourly.triggered
+    ? (hourly.side === 'LONG' ? 'H ▲ TRIGGER' : 'H ▼ TRIGGER')
+    : (hourly.side === 'LONG' ? 'H retest (red)' : 'H retest (green)');
+  const cls = hourly.triggered ? (hourly.side === 'LONG' ? 'aligned-bull' : 'aligned-bear') : 'neutral';
+  const detail = `${hourly.state}\nVolume confirmed: ${hourly.volConfirmed ? 'yes' : 'no'}\nLast hourly bar: ${hourly.lastBarDatetime}`;
+  const titleAttr = detail.replace(/"/g, '&quot;');
+  return `<span class="mtf-badge ${cls}" title="${titleAttr}">${label}</span>`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8958,6 +9040,120 @@ function renderScannerPullback(scanDate, longs, shorts, params) {
     </div>`;
 }
 
+// Standalone "current setups" scan for the Position Setup panel (4th-strategy
+// Step 1) — NOT wired into runScanner()'s _strategy dispatch or STRATEGY_ENGINES.
+// Pure "is the W+D+Hourly pattern present today" filter, no WR/backtest ranking
+// (there's no backtest engine for this yet). Requires both _loadedOHLC[sym] and
+// _loadedHourly[sym] to be populated for a symbol to be considered.
+function runScannerPositionSetup(scanDate) {
+  const hourlySyms = Object.keys(_loadedHourly);
+  const longs = [], shorts = [];
+
+  hourlySyms.forEach(sym => {
+    const ohlc = _loadedOHLC[sym];
+    if (!ohlc || ohlc.length < 20) return;
+
+    const idx = ohlc.findIndex(c => c.date === scanDate);
+    if (idx < 1) return;
+
+    const mtf = computeMTFAlignment(ohlc, idx);
+    if (!mtf) return;
+
+    const hourlyBars = (_loadedHourly[sym] || []).filter(b => b.date <= scanDate);
+    if (hourlyBars.length < 2) return;
+
+    const hourly = computeHourlyRetestState(hourlyBars, mtf);
+    if (!hourly) return; // null = chop (W/D disagree) — sit out, per agreed logic
+
+    const entry = { sym, mtf, hourly };
+    if (hourly.side === 'LONG') longs.push(entry); else shorts.push(entry);
+  });
+
+  // Triggered setups first within each side — most actionable at a glance.
+  const bySignal = (a, b) => (b.hourly.triggered - a.hourly.triggered);
+  longs.sort(bySignal);
+  shorts.sort(bySignal);
+
+  renderScannerPositionSetup(scanDate, longs, shorts);
+}
+
+function renderScannerPositionSetup(scanDate, longs, shorts) {
+  const body = document.getElementById('posSetupBody');
+  if (!body) return;
+  const dt      = new Date(scanDate + 'T00:00:00');
+  const fmtDate = dt.toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'short', year:'numeric' });
+  const total   = longs.length + shorts.length;
+
+  if (total === 0) {
+    body.innerHTML = `
+      <div class="scanner-empty">
+        <div style="font-size:28px;margin-bottom:8px;">🧭</div>
+        No Weekly+Daily aligned setups on ${fmtDate}.<br>
+        <span style="font-size:11px;margin-top:4px;display:inline-block;">
+          Either nothing's aligned, or hourly data isn't loaded for that date — check the freshness note above.
+        </span>
+      </div>`;
+    return;
+  }
+
+  const makeCard = (s) => `
+    <div class="signal-card" title="${s.sym} — ${s.mtf.combined}, hourly ${s.hourly.state}">
+      <div class="sc-main-row">
+        <div>
+          <div class="sc-sym">${s.sym}</div>
+          <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">
+            ${mtfBadgeHTML(s.mtf)}
+            ${hourlyBadgeHTML(s.hourly)}
+          </div>
+        </div>
+        <div class="sc-field">
+          <span class="sc-label">Vol confirm</span>
+          <span class="sc-val">${s.hourly.volConfirmed ? 'yes' : 'no'}</span>
+        </div>
+        <div class="sc-field">
+          <span class="sc-label">Last hourly bar</span>
+          <span class="sc-val" style="font-size:11px;">${s.hourly.lastBarDatetime}</span>
+        </div>
+      </div>
+    </div>`;
+
+  const makePanel = (signals, side) => {
+    const isBull = side === 'LONG';
+    if (!signals.length) return '';
+    return `
+      <div class="scanner-side">
+        <div class="scanner-side-header">
+          <div class="scanner-side-title" style="color:${isBull ? 'var(--bull)' : 'var(--bear)'};">
+            ${isBull ? '▲ LONG' : '▼ SHORT'}
+            <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:400;color:var(--text2);">
+              W+D aligned ${isBull ? 'bullish' : 'bearish'} · hourly retest
+            </span>
+          </div>
+          <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;
+            background:${isBull ? 'var(--bull-bg)' : 'var(--bear-bg)'};
+            color:${isBull ? 'var(--bull)' : 'var(--bear)'};
+            padding:3px 10px;border-radius:12px;">${signals.length} signals</span>
+        </div>
+        <div class="signal-cards">
+          ${signals.map(makeCard).join('')}
+        </div>
+      </div>`;
+  };
+
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">${fmtDate}</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <span class="mini-badge gap-up">▲ ${longs.length} Long</span>
+        <span class="mini-badge gap-down">▼ ${shorts.length} Short</span>
+      </div>
+    </div>
+    <div class="scanner-grid">
+      ${makePanel(longs, 'LONG')}
+      ${makePanel(shorts, 'SHORT')}
+    </div>`;
+}
+
 function renderScannerResults(scanDate, longs, shorts, params, wrThreshold = 0, pnlThreshold = 0, gateNote = null) {
   const dt      = new Date(scanDate + 'T00:00:00');
   const fmtDate = dt.toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'short', year:'numeric' });
@@ -10937,6 +11133,188 @@ function _fallbackCsvLoad() {
     }
   }
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// HOURLY DATA LOADING — local folder/files only (Position Setup scanner, Step 1).
+// Mirrors the daily loader above, but writes into _loadedHourly and is not
+// IndexedDB-persisted (re-pick the folder each session). CSV header is
+// datetime,open,high,low,close,volume — produced by tradeedge_fetch.py --hourly.
+// ─────────────────────────────────────────────────────────────────────────────
+let _hourlyFolderInput = null;
+let _hourlyFileInput = null;
+
+function _parseHourlyCsvText(text) {
+  const lines = text.trim().split('\n');
+  const header = lines[0].toLowerCase().replace(/\r/g,'').split(',');
+  const dti = header.indexOf('datetime'), oi = header.indexOf('open'),
+        hi = header.indexOf('high'), li = header.indexOf('low'), ci = header.indexOf('close'),
+        vi = header.indexOf('volume');
+  if ([dti,oi,hi,li,ci].some(x => x === -1)) return null;
+  const bars = lines.slice(1).map(l => {
+    const c = l.replace(/\r/g,'').split(',');
+    return {
+      datetime: c[dti],
+      date: c[dti].slice(0,10),
+      open: +c[oi], high: +c[hi], low: +c[li], close: +c[ci],
+      volume: vi !== -1 ? +c[vi] : 0
+    };
+  }).filter(r => r.datetime && r.open && r.close);
+  bars.sort((a,b) => a.datetime.localeCompare(b.datetime));
+  return bars;
+}
+
+function _updateHourlyStatusAfterLoad(loaded, failed) {
+  const syms = Object.keys(_loadedHourly);
+  let maxDt = '0000-00-00 00:00';
+  syms.forEach(s => {
+    const bars = _loadedHourly[s];
+    if (bars && bars.length && bars[bars.length-1].datetime > maxDt) maxDt = bars[bars.length-1].datetime;
+  });
+  const panel = document.getElementById('posSetupFreshness');
+  if (panel) {
+    const maxDailyDate = (() => {
+      let m = '0000';
+      getAllLoadedSymbols().forEach(s => {
+        const d = _loadedOHLC[s];
+        if (d && d.length && d[d.length-1].date > m) m = d[d.length-1].date;
+      });
+      return m;
+    })();
+    const hourlyDay = maxDt.slice(0,10);
+    const stale = maxDailyDate !== '0000' && hourlyDay < maxDailyDate;
+    panel.innerHTML = `<strong>${syms.length}</strong> symbols · hourly data through <strong>${hourlyDay}</strong>` +
+      (stale ? ` &nbsp;<span style="color:var(--bear)">⚠ stale vs daily data (${maxDailyDate}) — signals reflect the loaded snapshot, not today</span>` : '');
+  }
+  const posPanelWrap = document.getElementById('posSetupPanel');
+  if (posPanelWrap) posPanelWrap.style.display = syms.length ? '' : 'none';
+}
+
+async function _loadHourlyFromDirectoryHandle(handle) {
+  const overlay  = document.getElementById('csvLoadOverlay');
+  const bar      = document.getElementById('csvLoadBar');
+  const label    = document.getElementById('csvLoadLabel');
+  const countEl  = document.getElementById('csvLoadCount');
+  overlay.style.display = 'flex';
+  bar.style.width = '0%';
+  label.textContent = 'Reading hourly folder…';
+  countEl.textContent = 'Scanning…';
+
+  const files = [];
+  for await (const [name, entry] of handle.entries()) {
+    if (entry.kind === 'file' && name.toLowerCase().endsWith('.csv')) files.push({ name, entry });
+  }
+
+  const _universe = new Set(getActiveUniverse());
+  let loaded = 0, failed = 0;
+  for (let fi = 0; fi < files.length; fi++) {
+    const { name, entry } = files[fi];
+    const sym = name.replace(/\.csv$/i,'').toUpperCase();
+    if (!_universe.has(sym)) continue;
+    bar.style.width = Math.round((fi / files.length) * 100) + '%';
+    countEl.textContent = `${fi} / ${files.length} files`;
+    label.textContent = sym;
+    if (fi % 5 === 0) await new Promise(r => setTimeout(r, 0));
+    try {
+      const file = await entry.getFile();
+      const bars = _parseHourlyCsvText(await file.text());
+      if (!bars || !bars.length) { failed++; continue; }
+      _loadedHourly[sym] = bars;
+      loaded++;
+    } catch { failed++; }
+  }
+
+  bar.style.width = '100%';
+  _updateHourlyStatusAfterLoad(loaded, failed);
+  await new Promise(r => setTimeout(r, 600));
+  overlay.style.display = 'none';
+  if (failed) alert(`${failed} hourly file(s) could not be parsed.`);
+}
+
+function _ensureHourlyCsvInputs() {
+  if (_hourlyFolderInput) return;
+  _hourlyFolderInput = document.createElement('input');
+  _hourlyFolderInput.type = 'file';
+  _hourlyFolderInput.accept = '.csv';
+  _hourlyFolderInput.multiple = true;
+  _hourlyFolderInput.setAttribute('webkitdirectory', '');
+  _hourlyFolderInput.setAttribute('directory', '');
+  _hourlyFolderInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+  document.body.appendChild(_hourlyFolderInput);
+  _hourlyFolderInput.addEventListener('change', _handleHourlyCsvFiles);
+
+  _hourlyFileInput = document.createElement('input');
+  _hourlyFileInput.type = 'file';
+  _hourlyFileInput.accept = '.csv';
+  _hourlyFileInput.multiple = true;
+  _hourlyFileInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+  document.body.appendChild(_hourlyFileInput);
+  _hourlyFileInput.addEventListener('change', _handleHourlyCsvFiles);
+}
+
+async function _handleHourlyCsvFiles(e) {
+  const files = [...(e.target.files || [])].filter(f => f.name.endsWith('.csv'));
+  e.target.value = '';
+  if (!files.length) return;
+
+  const overlay  = document.getElementById('csvLoadOverlay');
+  const bar      = document.getElementById('csvLoadBar');
+  const label    = document.getElementById('csvLoadLabel');
+  const countEl  = document.getElementById('csvLoadCount');
+  overlay.style.display = 'flex';
+  bar.style.width = '0%';
+  label.textContent = 'Reading hourly files…';
+  countEl.textContent = `0 / ${files.length} files`;
+
+  const _universe = new Set(getActiveUniverse());
+  let loaded = 0, failed = 0;
+  for (let fi = 0; fi < files.length; fi++) {
+    const file = files[fi];
+    const sym = file.name.replace(/\.csv$/i,'').toUpperCase();
+    if (!_universe.has(sym)) continue;
+    bar.style.width = Math.round((fi / files.length) * 100) + '%';
+    countEl.textContent = `${fi} / ${files.length} files`;
+    label.textContent = sym;
+    if (fi % 5 === 0) await new Promise(r => setTimeout(r, 0));
+    try {
+      const bars = _parseHourlyCsvText(await file.text());
+      if (!bars || !bars.length) { failed++; continue; }
+      _loadedHourly[sym] = bars;
+      loaded++;
+    } catch { failed++; }
+  }
+
+  bar.style.width = '100%';
+  _updateHourlyStatusAfterLoad(loaded, failed);
+  await new Promise(r => setTimeout(r, 600));
+  overlay.style.display = 'none';
+  if (failed) alert(`${failed} hourly file(s) could not be parsed.`);
+}
+
+function loadHourlyFromCSV() {
+  _ensureHourlyCsvInputs();
+  if (window.showDirectoryPicker) {
+    window.showDirectoryPicker({ mode: 'read' })
+      .then(handle => _loadHourlyFromDirectoryHandle(handle))
+      .catch(e => {
+        if (e.name === 'AbortError') return;
+        console.warn('[loadHourlyFromCSV] showDirectoryPicker failed:', e.message, '— using fallback');
+        _fallbackHourlyCsvLoad();
+      });
+    return;
+  }
+  _fallbackHourlyCsvLoad();
+}
+
+function _fallbackHourlyCsvLoad() {
+  try { _hourlyFolderInput.value = ''; } catch {}
+  try { _hourlyFileInput.value = ''; } catch {}
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS) {
+    _hourlyFileInput.click();
+  } else {
+    try { _hourlyFolderInput.click(); } catch { _hourlyFileInput.click(); }
+  }
+}
+
 function toggleSection(bodyId, chevronId) {
   const body    = document.getElementById(bodyId);
   const chevron = document.getElementById(chevronId);
