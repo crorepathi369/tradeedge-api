@@ -2618,11 +2618,12 @@
     </div>
 
     <div id="positionSetupParams" style="display:none;">
-      <div class="controls-grid" style="grid-template-columns: 130px 130px 120px 120px;">
+      <div class="controls-grid" style="grid-template-columns: 130px 130px 120px 120px 130px;">
         <div class="control-group"><label>From Date</label><input type="date" id="psFromDate"></div>
         <div class="control-group"><label>To Date</label><input type="date" id="psToDate"></div>
         <div class="control-group"><label title="Trailing structural stop = lowest daily low (Long) / highest daily high (Short) over this many trailing days, ratcheted forward as the trade develops.">SL Lookback Days</label><input type="number" id="psSlLookbackDays" value="5" step="1" min="2" max="30" title="Rolling window (days) used for the trailing structural stop"></div>
         <div class="control-group"><label title="No fixed target — the trade runs until the trailing stop is hit or this many days pass, whichever comes first.">Max Hold Days</label><input type="number" id="psMaxHoldDays" value="40" step="1" min="1" max="120" title="Timeout if neither the trailing stop nor an earlier exit has closed the trade"></div>
+        <div class="control-group"><label title="Only act on Weekly+Daily alignment once it has held for this many consecutive days. 0 = off (act as soon as it flips). Backtested to meaningfully improve results, but not proven profitable on its own — tune against your own data.">Min Persist Days</label><input type="number" id="psMinPersistDays" value="0" step="1" min="0" max="60" placeholder="0=off" title="Days the Weekly+Daily alignment must have already held before a signal is acted on (0 = off)"></div>
       </div>
       <div style="margin-top:8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">
         Entry: hourly candle flips back in the Weekly+Daily aligned direction, with volume confirmation shown per-signal. SL is structural — rolling N-day low (Long) / high (Short), trailed as new lows/highs form; no fixed TP, exit only on stop break or timeout.
@@ -6073,6 +6074,24 @@ function _simulatePositionSetupExit(ohlc, entryIdx, entry, initialSl, side, para
 // implicitly elsewhere). Reuses computeMTFAlignment()/computeHourlyRetestState()
 // UNCHANGED from the live scanner, so backtest and live-scan signal detection
 // can never diverge.
+// How many consecutive days (ending at `idx`, inclusive) the combined MTF
+// alignment has matched `combined`. Used to gate entries on psMinPersistDays —
+// backtested to meaningfully improve results (avg PnL -0.586% -> -0.127% at
+// 5 days, on a 180-day/198-symbol sample) versus acting on alignment the
+// moment it flips. `mtfCache` avoids recomputing computeMTFAlignment() for
+// days already scored earlier in the same backtest pass.
+function _positionSetupTrendStreak(ohlc, idx, combined, mtfCache) {
+  let streak = 0;
+  for (let k = idx; k >= 0; k--) {
+    if (mtfCache[k] === undefined) {
+      const m = computeMTFAlignment(ohlc, k);
+      mtfCache[k] = m ? m.combined : null;
+    }
+    if (mtfCache[k] === combined) streak++; else break;
+  }
+  return streak;
+}
+
 function backtestPositionSetup(ohlc, symId, params, debug = false) {
   const trades = [];
   const hourlyBars = _loadedHourly[symId];
@@ -6081,6 +6100,7 @@ function backtestPositionSetup(ohlc, symId, params, debug = false) {
 
   let busyUntilIdx = -1;
   let hourlyEndPtr = 0; // hourlyBars[0..hourlyEndPtr) = all bars with date <= current day (monotonic advance)
+  const mtfCache = {}; // day idx -> mtf.combined, shared across the whole pass (see _positionSetupTrendStreak)
 
   for (let i = params.psSlLookbackDays; i < ohlc.length - 1; i++) {
     const today = ohlc[i].date;
@@ -6091,6 +6111,13 @@ function backtestPositionSetup(ohlc, symId, params, debug = false) {
 
     const mtf = computeMTFAlignment(ohlc, i);
     if (!mtf) continue;
+    mtfCache[i] = mtf.combined;
+
+    if (params.psMinPersistDays > 0) {
+      if (mtf.combined !== 'Aligned Bullish' && mtf.combined !== 'Aligned Bearish') continue;
+      const streak = _positionSetupTrendStreak(ohlc, i, mtf.combined, mtfCache);
+      if (streak < params.psMinPersistDays) continue;
+    }
 
     const hourly = computeHourlyRetestState(hourlyBars.slice(0, hourlyEndPtr), mtf);
     if (!hourly || !hourly.triggered) continue;
@@ -7477,7 +7504,7 @@ const PULLBACK_DEFAULTS = {
 };
 
 const POSITIONSETUP_DEFAULTS = {
-  psSlLookbackDays: 5, psMaxHoldDays: 40,
+  psSlLookbackDays: 5, psMaxHoldDays: 40, psMinPersistDays: 0,
   maxSignalsDay: 2, wrThreshold: 50, pnlThreshold: 2.4, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
 };
@@ -7814,6 +7841,10 @@ function readPositionSetupParams() {
   return {
     psSlLookbackDays: +document.getElementById('psSlLookbackDays').value || 5,
     psMaxHoldDays:    +document.getElementById('psMaxHoldDays').value    || 40,
+    // 0 = off (default). Requires Weekly+Daily alignment to have held this many
+    // consecutive days before acting on it — backtested improvement, not proven
+    // profitable on its own; exposed as a tunable filter rather than hardcoded.
+    psMinPersistDays: +document.getElementById('psMinPersistDays').value || 0,
     direction:         _direction,
   };
 }
@@ -7906,6 +7937,7 @@ function loadSavedDefaults() {
       const d = { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(psRaw) };
       document.getElementById('psSlLookbackDays').value = d.psSlLookbackDays;
       document.getElementById('psMaxHoldDays').value    = d.psMaxHoldDays;
+      document.getElementById('psMinPersistDays').value = d.psMinPersistDays || 0;
       document.getElementById('maxSignalsDay').value    = d.maxSignalsDay;
       if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
       if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
@@ -7981,6 +8013,7 @@ function saveStrategyDefaults() {
     const saved = {
       psSlLookbackDays: +document.getElementById('psSlLookbackDays').value,
       psMaxHoldDays:    +document.getElementById('psMaxHoldDays').value,
+      psMinPersistDays: +document.getElementById('psMinPersistDays').value || 0,
       maxSignalsDay:    +document.getElementById('maxSignalsDay').value,
       wrThreshold:      +document.getElementById('scanWrThreshold').value,
       pnlThreshold:     +document.getElementById('scanPnlThreshold').value,
@@ -8084,6 +8117,7 @@ function resetStrategyDefaults() {
     const d = savedRaw ? { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(savedRaw) } : POSITIONSETUP_DEFAULTS;
     document.getElementById('psSlLookbackDays').value = d.psSlLookbackDays;
     document.getElementById('psMaxHoldDays').value    = d.psMaxHoldDays;
+    document.getElementById('psMinPersistDays').value = d.psMinPersistDays || 0;
     document.getElementById('maxSignalsDay').value    = d.maxSignalsDay;
     _syncMaxDayHidden('positionSetup', d.maxSignalsDay);
     if (d.wrThreshold)    { document.getElementById('scanWrThreshold').value  = d.wrThreshold;  _syncWrThresholdHidden('positionSetup', d.wrThreshold); }
@@ -8192,6 +8226,7 @@ function saveMobDefaults() {
     const saved = {
       psSlLookbackDays: +document.getElementById('mobPsSlLookbackDays').value,
       psMaxHoldDays:    +document.getElementById('mobPsMaxHoldDays').value,
+      psMinPersistDays: +document.getElementById('mobPsMinPersistDays').value || 0,
       maxSignalsDay:    +document.getElementById('mobPsMaxDay').value,
       wrThreshold:      +document.getElementById('mobWrInput')?.value  || 50,
       pnlThreshold:     +document.getElementById('mobPnlInput')?.value || 2.4,
@@ -8267,6 +8302,7 @@ function resetMobDefaults() {
     const d = savedRaw ? { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(savedRaw) } : POSITIONSETUP_DEFAULTS;
     document.getElementById('mobPsSlLookbackDays').value = d.psSlLookbackDays;
     document.getElementById('mobPsMaxHoldDays').value    = d.psMaxHoldDays;
+    document.getElementById('mobPsMinPersistDays').value = d.psMinPersistDays || 0;
     document.getElementById('mobPsMaxDay').value         = d.maxSignalsDay;
     if (wrEl)  wrEl.value  = d.wrThreshold  || 50;
     if (pnlEl) pnlEl.value = d.pnlThreshold || 2.4;
@@ -9300,6 +9336,14 @@ function runScannerPositionSetup(scanDate, syms) {
     const mtf = computeMTFAlignment(ohlc, idx);
     if (!mtf) return;
 
+    // Same persistence gate the backtest engine applies — keeps live-scan and
+    // backtest signal detection identical (see _positionSetupTrendStreak).
+    if (params.psMinPersistDays > 0) {
+      if (mtf.combined !== 'Aligned Bullish' && mtf.combined !== 'Aligned Bearish') return;
+      const streak = _positionSetupTrendStreak(ohlc, idx, mtf.combined, {});
+      if (streak < params.psMinPersistDays) return;
+    }
+
     const hourlyBars = (_loadedHourly[sym] || []).filter(b => b.date <= scanDate);
     if (hourlyBars.length < 2) return;
 
@@ -9467,7 +9511,7 @@ function renderScannerPositionSetup(scanDate, longs, shorts, params) {
         <span class="mini-badge gap-down">▼ ${shorts.length} Short</span>
         <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
           background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--border);">
-          SL Lookback ${params.psSlLookbackDays}d · Max Hold ${params.psMaxHoldDays}d
+          SL Lookback ${params.psSlLookbackDays}d · Max Hold ${params.psMaxHoldDays}d${params.psMinPersistDays > 0 ? ` · Persist ≥${params.psMinPersistDays}d` : ''}
         </span>
       </div>
     </div>
@@ -13685,6 +13729,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div><div class="mob-settings-label">Max/day</div><div class="mob-settings-sub">Signals per day (0=∞)</div></div>
         <div class="mob-settings-control"><input class="mob-settings-input" id="mobPsMaxDay" type="number" value="2" step="1" min="0" placeholder="0=∞"></div>
       </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Min Persist Days</div><div class="mob-settings-sub">W+D must hold this long before entry (0=off)</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPsMinPersistDays" type="number" value="0" step="1" min="0" max="60" placeholder="0=off"></div>
+      </div>
       <div style="padding:6px 2px 2px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">
         Entry: hourly candle flips back in the Weekly+Daily aligned direction. SL is a trailing rolling low/high, ratcheted forward; no fixed TP.
       </div>
@@ -14037,6 +14085,7 @@ function closeMobSettings() {
   } else if (_mobStrategy === 'positionSetup') {
     s('psSlLookbackDays', g('mobPsSlLookbackDays'));
     s('psMaxHoldDays',    g('mobPsMaxHoldDays'));
+    s('psMinPersistDays', g('mobPsMinPersistDays'));
     s('maxSignalsDay',    g('mobPsMaxDay'));
     s('capitalPerTrade',  g('mobCapital'));
     s('scanWrThreshold',  g('mobWrInput'));
@@ -14708,9 +14757,11 @@ async function _runMobTradeBacktest(strat) {
   } else if (strat === 'positionSetup') {
     const mobSl2 = document.getElementById('mobPsSlLookbackDays');
     const mobHd2 = document.getElementById('mobPsMaxHoldDays');
+    const mobPd2 = document.getElementById('mobPsMinPersistDays');
     const mobMd2 = document.getElementById('mobPsMaxDay');
     if (mobSl2) document.getElementById('psSlLookbackDays').value = mobSl2.value;
     if (mobHd2) document.getElementById('psMaxHoldDays').value    = mobHd2.value;
+    if (mobPd2) document.getElementById('psMinPersistDays').value = mobPd2.value;
     if (mobMd2) _maxDayEl().value = mobMd2.value;
   } else {
     const mobMin     = document.getElementById('mobMinGap');
@@ -16394,6 +16445,7 @@ function syncMobileDefaults() {
       const d = { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(psRaw) };
       if (el('mobPsSlLookbackDays')) el('mobPsSlLookbackDays').value = d.psSlLookbackDays;
       if (el('mobPsMaxHoldDays'))    el('mobPsMaxHoldDays').value    = d.psMaxHoldDays;
+      if (el('mobPsMinPersistDays')) el('mobPsMinPersistDays').value = d.psMinPersistDays || 0;
       if (el('mobPsMaxDay'))         el('mobPsMaxDay').value         = d.maxSignalsDay;
     } catch(e) { console.warn('[syncMobileDefaults] positionSetup error', e); }
   }
