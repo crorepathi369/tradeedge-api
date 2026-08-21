@@ -2496,6 +2496,8 @@
             style="padding:5px 16px;font-size:12px;">⚡ Intraday Momentum</button>
           <button id="stPullbackBtn" onclick="setStrategy('pullback')" class="dir-btn"
             style="padding:5px 16px;font-size:12px;">↩️ Pullback</button>
+          <button id="stPositionSetupBtn" onclick="setStrategy('positionSetup')" class="dir-btn"
+            style="padding:5px 16px;font-size:12px;">🧭 Position Setup</button>
         </div>
         <span id="stDesc" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);white-space:nowrap;">
           Gap continuation · Enter D1 close · Exit D2 open/close</span>
@@ -2614,6 +2616,19 @@
       </div>
     </div>
 
+    <div id="positionSetupParams" style="display:none;">
+      <div class="controls-grid" style="grid-template-columns: 130px 130px 120px 120px;">
+        <div class="control-group"><label>From Date</label><input type="date" id="psFromDate"></div>
+        <div class="control-group"><label>To Date</label><input type="date" id="psToDate"></div>
+        <div class="control-group"><label title="Trailing structural stop = lowest daily low (Long) / highest daily high (Short) over this many trailing days, ratcheted forward as the trade develops.">SL Lookback Days</label><input type="number" id="psSlLookbackDays" value="5" step="1" min="2" max="30" title="Rolling window (days) used for the trailing structural stop"></div>
+        <div class="control-group"><label title="No fixed target — the trade runs until the trailing stop is hit or this many days pass, whichever comes first.">Max Hold Days</label><input type="number" id="psMaxHoldDays" value="40" step="1" min="1" max="120" title="Timeout if neither the trailing stop nor an earlier exit has closed the trade"></div>
+      </div>
+      <div style="margin-top:8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">
+        Entry: hourly candle flips back in the Weekly+Daily aligned direction, with volume confirmation shown per-signal. SL is structural — rolling N-day low (Long) / high (Short), trailed as new lows/highs form; no fixed TP, exit only on stop break or timeout.
+      </div>
+      <div id="posSetupFreshness" style="margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">Load hourly CSVs via 🕐 to enable</div>
+    </div>
+
     <!-- Row 2: Direction + Cap + Capital -->
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
       <!-- Direction -->
@@ -2639,6 +2654,7 @@
              reads the visible input directly. -->
         <input type="hidden" id="idMaxSignalsDay" value="1">
         <input type="hidden" id="pbMaxSignalsDay" value="3">
+        <input type="hidden" id="psMaxSignalsDay" value="2">
         <span style="width:1px;height:16px;background:var(--border);"></span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;" title="Only trade a day if MORE than this many candidates qualified that day (0 = off, always trade). A day-level 'broad market momentum' gate — Overnight Gap only.">Min Signals &gt;</span>
         <input type="number" id="minSignalsGate" value="0" min="0" max="200" step="1"
@@ -2673,6 +2689,7 @@
           oninput="_syncWrThresholdHidden(_strategy, this.value)">
         <input type="hidden" id="idScanWrThreshold" value="40">
         <input type="hidden" id="pbScanWrThreshold" value="60">
+        <input type="hidden" id="psScanWrThreshold" value="50">
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
         <span style="width:1px;height:16px;background:var(--border);"></span>
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;" title="Avg net PnL% per trade from backtest history">Net PnL ≥</span>
@@ -2682,6 +2699,7 @@
           oninput="_syncPnlThresholdHidden(_strategy, this.value)">
         <input type="hidden" id="idScanPnlThreshold" value="0.3">
         <input type="hidden" id="pbScanPnlThreshold" value="2">
+        <input type="hidden" id="psScanPnlThreshold" value="2.4">
         <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;">%</span>
       </div>
 
@@ -2805,35 +2823,6 @@
       <div id="scannerBody" style="border-top:1px solid var(--border);padding:16px 20px;">
         <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);text-align:center;padding:16px 0;">
           Click ▶ Scan to find gap signals across all loaded symbols
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- POSITION SETUP SCANNER — Weekly+Daily+Hourly MTF alignment/retest (4th
-       strategy, Step 1). Standalone: not wired into setStrategy()/_strategy,
-       not part of the STRATEGY_ENGINES dispatch. Hidden until hourly data is
-       loaded via the 🕐 toolbar button. See runScannerPositionSetup(). -->
-  <div id="posSetupPanel" class="mobile-section" style="display:none;margin-bottom:16px;">
-    <div class="control-panel" style="padding:0;overflow:hidden;border-left:4px solid var(--gold);">
-      <div class="section-header" onclick="toggleSection('posSetupBody','posSetupChevron')"
-           style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="font-size:14px;" id="posSetupChevron">▼</span>
-          <div>
-            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase;">🧭 Position Setup Scanner <span style="font-size:9px;font-weight:600;color:var(--gold);background:#e0a80022;padding:1px 6px;border-radius:4px;margin-left:4px;">BETA — hourly snapshot</span></div>
-            <div id="posSetupFreshness" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-top:1px;">Load hourly CSVs via 🕐 to enable</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;" onclick="event.stopPropagation()">
-          <button class="btn btn-primary" onclick="runScannerPositionSetup(document.getElementById('scanDate').value || document.getElementById('toDate').value)" style="padding:8px 18px;font-size:13px;">
-            <span>▶ Scan</span>
-          </button>
-        </div>
-      </div>
-      <div id="posSetupBody" style="border-top:1px solid var(--border);padding:16px 20px;">
-        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);text-align:center;padding:16px 0;">
-          Click ▶ Scan to find current Weekly+Daily+Hourly aligned setups
         </div>
       </div>
     </div>
@@ -5956,11 +5945,11 @@ function computeHourlyRetestState(hourlyBars, mtf) {
   if (mtf.combined === 'Aligned Bullish') {
     const wasRed = prev.close < prev.open;
     const triggered = lastGreen && wasRed;
-    return { side: 'LONG', state: lastGreen ? 'retest-flip-green' : 'in-pullback-red', triggered, volConfirmed, lastBarDatetime: last.datetime };
+    return { side: 'LONG', state: lastGreen ? 'retest-flip-green' : 'in-pullback-red', triggered, volConfirmed, lastBarDatetime: last.datetime, entryPrice: last.close };
   } else {
     const wasGreen = prev.close > prev.open;
     const triggered = !lastGreen && wasGreen;
-    return { side: 'SHORT', state: !lastGreen ? 'retest-flip-red' : 'in-bounce-green', triggered, volConfirmed, lastBarDatetime: last.datetime };
+    return { side: 'SHORT', state: !lastGreen ? 'retest-flip-red' : 'in-bounce-green', triggered, volConfirmed, lastBarDatetime: last.datetime, entryPrice: last.close };
   }
 }
 
@@ -5975,6 +5964,153 @@ function hourlyBadgeHTML(hourly) {
   const detail = `${hourly.state}\nVolume confirmed: ${hourly.volConfirmed ? 'yes' : 'no'}\nLast hourly bar: ${hourly.lastBarDatetime}`;
   const titleAttr = detail.replace(/"/g, '&quot;');
   return `<span class="mtf-badge ${cls}" title="${titleAttr}">${label}</span>`;
+}
+
+// Rolling structural stop: lowest daily low (LONG) / highest daily high (SHORT)
+// over the `lookback` days ending at `idx` inclusive. Causal by construction —
+// only ever looks backward from `idx`. Recomputed fresh each simulated day by
+// _simulatePositionSetupExit() to ratchet the trailing stop toward new structure.
+function _positionSetupTrailStop(ohlc, idx, side, lookback) {
+  const start = Math.max(0, idx - lookback + 1);
+  let level = side === 'LONG' ? Infinity : -Infinity;
+  for (let k = start; k <= idx; k++) {
+    if (!ohlc[k]) continue;
+    if (side === 'LONG') level = Math.min(level, ohlc[k].low);
+    else level = Math.max(level, ohlc[k].high);
+  }
+  return level;
+}
+
+// Day-by-day walk-forward with a MUTABLE stop — unlike every other strategy's
+// engine, `sl` is not fixed at entry. Each day (after entry day) the stop is
+// ratcheted toward _positionSetupTrailStop() computed through YESTERDAY only
+// (idx-1) — never today's own bar, which would let today's low/high set and
+// then immediately trip its own stop on the same bar. No fixed TP: exit only
+// via a stop hit, hold-days timeout, or running out of loaded history.
+function _simulatePositionSetupExit(ohlc, entryIdx, entry, initialSl, side, params, symId, triggerDate) {
+  const maxHold = Math.max(1, params.psMaxHoldDays || 1);
+  const entryDate = ohlc[entryIdx].date;
+
+  let sl = initialSl;
+  let everRatcheted = false;
+  let exitPrice, outcome, exitNote, exitReason, slHit = false, exitIdx = entryIdx, daysHeld = 0;
+
+  for (let h = 0; h < maxHold && (entryIdx + h) < ohlc.length; h++) {
+    const idx = entryIdx + h;
+    const c   = ohlc[idx];
+
+    if (h > 0) {
+      const candidate = _positionSetupTrailStop(ohlc, idx - 1, side, params.psSlLookbackDays);
+      const better = side === 'LONG' ? candidate > sl : candidate < sl;
+      if (better) { sl = candidate; everRatcheted = true; }
+    }
+
+    const holdExpired   = (h === maxHold - 1);
+    const dataExhausted = !holdExpired && (idx + 1 >= ohlc.length);
+    const isLastDay     = holdExpired || dataExhausted;
+
+    const slHitIntra = side === 'LONG' ? c.low <= sl : c.high >= sl;
+
+    if (slHitIntra) {
+      exitPrice  = sl;
+      exitReason = everRatcheted ? 'TRAIL' : 'SL';
+      exitNote   = everRatcheted
+        ? (h === 0 ? 'Trailing stop hit on entry day' : `Trailing stop hit, held ${h+1} days`)
+        : (h === 0 ? 'SL hit on entry day' : `SL hit, held ${h+1} days`);
+      slHit = true; exitIdx = idx; daysHeld = h + 1; break;
+    } else if (dataExhausted) {
+      // Still open — data just ends here. Kept out of WIN/LOSS stats.
+      exitPrice = c.close;
+      exitNote  = `Still open — held ${h+1} day${h===0?'':'s'} so far (data ends here)`;
+      outcome = 'OPEN'; exitReason = 'OPEN'; exitIdx = idx; daysHeld = h + 1;
+    } else if (isLastDay) { // holdExpired
+      exitPrice = c.close;
+      exitNote  = h === 0 ? 'Entry day close (hold expired)' : `Close after ${h+1} days (hold expired)`;
+      exitReason = 'TIMEOUT'; exitIdx = idx; daysHeld = h + 1;
+    }
+  }
+  if (exitPrice === undefined) return null; // no bars at all from entry — shouldn't normally happen
+
+  if (outcome !== 'OPEN') {
+    const diff = (exitPrice - entry) / entry;
+    outcome = Math.abs(diff) < 0.00001 ? 'FLAT'
+      : side === 'LONG' ? (exitPrice > entry ? 'WIN' : 'LOSS')
+      : (exitPrice < entry ? 'WIN' : 'LOSS');
+  }
+
+  const pnlPct = side === 'LONG'
+    ? ((exitPrice - entry) / entry) * 100
+    : ((entry - exitPrice) / entry) * 100;
+
+  return {
+    sym: symId,
+    signalDate:  triggerDate,
+    confirmDate: entryDate, // no separate confirm day — trigger and entry are the same bar
+    tradeDate:   entryDate,
+    exitDate:    ohlc[exitIdx].date,
+    side,
+    gapPct:   0,     // N/A — Position Setup has no gap/move% trigger to repurpose this field for
+    entry:    +entry.toFixed(2),
+    sl:       +sl.toFixed(2), // final/last-active trailing stop level
+    tp:       null,           // no fixed TP — trailing stop only
+    nextOpen: null,           // entry is same-day at the hourly trigger, not a next-session open
+    exit:     +exitPrice.toFixed(2),
+    exitNote,
+    exitReason,      // 'SL' | 'TRAIL' | 'TIMEOUT' | 'OPEN'
+    stillOpen: outcome === 'OPEN',
+    daysHeld,
+    slHit,
+    outcome,         // 'WIN' | 'LOSS' | 'FLAT' | 'OPEN'
+    pnlPct:   +pnlPct.toFixed(2),
+    _exitIdx: exitIdx,
+  };
+}
+
+// Single symbol, day-by-day pass — same shape as backtestPullback(). Reads
+// _loadedHourly[symId] directly as a global (not threaded through the
+// STRATEGY_ENGINES call signature, matching how _direction is already read
+// implicitly elsewhere). Reuses computeMTFAlignment()/computeHourlyRetestState()
+// UNCHANGED from the live scanner, so backtest and live-scan signal detection
+// can never diverge.
+function backtestPositionSetup(ohlc, symId, params, debug = false) {
+  const trades = [];
+  const hourlyBars = _loadedHourly[symId];
+  if (!hourlyBars || !hourlyBars.length) return trades;
+  if (ohlc.length < params.psSlLookbackDays + 20) return trades;
+
+  let busyUntilIdx = -1;
+  let hourlyEndPtr = 0; // hourlyBars[0..hourlyEndPtr) = all bars with date <= current day (monotonic advance)
+
+  for (let i = params.psSlLookbackDays; i < ohlc.length - 1; i++) {
+    const today = ohlc[i].date;
+    while (hourlyEndPtr < hourlyBars.length && hourlyBars[hourlyEndPtr].date <= today) hourlyEndPtr++;
+
+    if (i <= busyUntilIdx) continue;
+    if (hourlyEndPtr < 2) continue;
+
+    const mtf = computeMTFAlignment(ohlc, i);
+    if (!mtf) continue;
+
+    const hourly = computeHourlyRetestState(hourlyBars.slice(0, hourlyEndPtr), mtf);
+    if (!hourly || !hourly.triggered) continue;
+
+    const side  = hourly.side;
+    const entry = hourly.entryPrice;
+    // SL is drawn from the pullback/bounce structure BEFORE today's reversal
+    // bar (idx i-1), not including it — including today would let today's own
+    // low/high define the stop and then immediately trip it on the same bar.
+    const sl = _positionSetupTrailStop(ohlc, i - 1, side, params.psSlLookbackDays);
+    const validDirection = side === 'LONG' ? entry > sl : entry < sl;
+    if (!validDirection) continue;
+
+    const trade = _simulatePositionSetupExit(ohlc, i, entry, sl, side, params, symId, today);
+    if (trade) {
+      trades.push(trade);
+      busyUntilIdx = trade._exitIdx;
+      if (debug) console.log(symId, today, `${side} position setup: mtf=${mtf.combined} entry=${entry} sl=${sl}`);
+    }
+  }
+  return trades;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6569,7 +6705,10 @@ async function runBacktestSilent() {
   // all available prior history instead, so trend classification is already
   // valid right at `from`.
   const sliceForBacktest = (ohlcFull) => {
-    if (_strategy === 'pullback') return ohlcFull.filter(c => c.date <= to);
+    // Position Setup needs the same full-history warm-up as Pullback —
+    // computeMTFAlignment()'s weekly leg needs real weekly-close history, not
+    // just a 1-day buffer before `from`.
+    if (_strategy === 'pullback' || _strategy === 'positionSetup') return ohlcFull.filter(c => c.date <= to);
     const firstIdx = ohlcFull.findIndex(c => c.date >= from);
     const startIdx = Math.max(0, firstIdx - 1);
     return ohlcFull.slice(startIdx).filter(c => c.date <= to);
@@ -6721,7 +6860,7 @@ async function runBacktest() {
   // detected → different signals → different WR scores → maxPerDay picks
   // different top-N trades than the mobile path, causing day-wise mismatch.
   const sliceOHLC = (ohlcFull) => {
-    if (_strategy === 'pullback') return ohlcFull.filter(c => c.date <= to);
+    if (_strategy === 'pullback' || _strategy === 'positionSetup') return ohlcFull.filter(c => c.date <= to);
     const firstIdx = ohlcFull.findIndex(c => c.date >= from);
     const startIdx = Math.max(0, firstIdx - 1);
     return ohlcFull.slice(startIdx).filter(c => c.date <= to);
@@ -6926,7 +7065,8 @@ function mobEntryTypeChanged(val) {
 // field's value changes for any reason (user typing, defaults loading, or a
 // strategy switch), passing the strategy the value should apply to.
 function _syncMaxDayHidden(strategy, value) {
-  const id = strategy === 'intraday' ? 'idMaxSignalsDay' : strategy === 'pullback' ? 'pbMaxSignalsDay' : null;
+  const id = strategy === 'intraday' ? 'idMaxSignalsDay' : strategy === 'pullback' ? 'pbMaxSignalsDay'
+    : strategy === 'positionSetup' ? 'psMaxSignalsDay' : null;
   if (!id) return; // 'overnight' has no separate hidden field — _maxDayEl() reads the visible input directly
   const el = document.getElementById(id);
   if (el) el.value = value;
@@ -6941,13 +7081,15 @@ function _syncMaxDayHidden(strategy, value) {
 // stale hidden fields instead. Call these any time the visible field's value
 // changes (typing, defaults loading, strategy switch), same as Max/day.
 function _syncWrThresholdHidden(strategy, value) {
-  const id = strategy === 'intraday' ? 'idScanWrThreshold' : strategy === 'pullback' ? 'pbScanWrThreshold' : null;
+  const id = strategy === 'intraday' ? 'idScanWrThreshold' : strategy === 'pullback' ? 'pbScanWrThreshold'
+    : strategy === 'positionSetup' ? 'psScanWrThreshold' : null;
   if (!id) return;
   const el = document.getElementById(id);
   if (el) el.value = value;
 }
 function _syncPnlThresholdHidden(strategy, value) {
-  const id = strategy === 'intraday' ? 'idScanPnlThreshold' : strategy === 'pullback' ? 'pbScanPnlThreshold' : null;
+  const id = strategy === 'intraday' ? 'idScanPnlThreshold' : strategy === 'pullback' ? 'pbScanPnlThreshold'
+    : strategy === 'positionSetup' ? 'psScanPnlThreshold' : null;
   if (!id) return;
   const el = document.getElementById(id);
   if (el) el.value = value;
@@ -6979,6 +7121,11 @@ function _wrPnlDefaultsFor(s) {
       const d    = raw ? { ...base, ...JSON.parse(raw) } : base;
       return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
     }
+    if (s === 'positionSetup') {
+      const raw = localStorage.getItem('TE_POSITIONSETUP_DEFAULTS');
+      const d = raw ? { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(raw) } : POSITIONSETUP_DEFAULTS;
+      return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
+    }
     const raw = localStorage.getItem('TE_PULLBACK_DEFAULTS');
     const d = raw ? { ...PULLBACK_DEFAULTS, ...JSON.parse(raw) } : PULLBACK_DEFAULTS;
     return { wr: d.wrThreshold, pnl: d.pnlThreshold, maxDay: d.maxSignalsDay };
@@ -6992,6 +7139,7 @@ function setStrategy(s) {
   document.getElementById('stOvernightBtn').classList.toggle('active', s === 'overnight');
   document.getElementById('stIntradayBtn').classList.toggle('active', s === 'intraday');
   document.getElementById('stPullbackBtn').classList.toggle('active', s === 'pullback');
+  document.getElementById('stPositionSetupBtn')?.classList.toggle('active', s === 'positionSetup');
   if (s === _strategy) return; // no change, no need to clear
   _strategy = s;
   const { wr: wrDefault, pnl: pnlDefault, maxDay: maxDayDefault } = _wrPnlDefaultsFor(s);
@@ -7001,6 +7149,8 @@ function setStrategy(s) {
   document.getElementById('overnightParams').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('intradayParams').style.display  = s === 'intraday'  ? '' : 'none';
   document.getElementById('pullbackParams').style.display  = s === 'pullback'  ? '' : 'none';
+  const psParamsEl = document.getElementById('positionSetupParams');
+  if (psParamsEl) psParamsEl.style.display = s === 'positionSetup' ? '' : 'none';
   // Named presets only exist for Overnight Gap
   const presetBar = document.getElementById('overnightPresetBar');
   if (presetBar) presetBar.style.display = s === 'overnight' ? 'flex' : 'none';
@@ -7016,6 +7166,8 @@ function setStrategy(s) {
     document.getElementById('stDesc').textContent = 'Gap continuation · Enter D1 close · Exit D2 open/close';
   } else if (s === 'intraday') {
     document.getElementById('stDesc').textContent = 'D1 momentum · Enter D2 open · SL/TP intraday · Exit D2 close';
+  } else if (s === 'positionSetup') {
+    document.getElementById('stDesc').textContent = 'Weekly+Daily aligned · Enter on hourly retest flip · Trailing structural SL, no fixed TP';
   } else {
     document.getElementById('stDesc').textContent = 'Weekly HH/HL pullback (Long) / LH/LL rally (Short) · Enter next open · Structural SL';
   }
@@ -7023,6 +7175,7 @@ function setStrategy(s) {
   if (sd) {
     sd.textContent = s === 'overnight' ? 'Scan any date for signals · Uses current backtest parameters'
       : s === 'intraday' ? 'Scan any date for signals · Uses current intraday parameters'
+      : s === 'positionSetup' ? 'Scan any date for Weekly+Daily+Hourly aligned setups · Uses current position setup parameters'
       : 'Scan any date for confirmed pullbacks · Uses current pullback parameters';
   }
   // Sync date pickers from Overnight's — same convention already used for Intraday
@@ -7051,8 +7204,8 @@ function setStrategy(s) {
   // Update config header badge
   const badge = document.getElementById('activeStratBadge');
   if (badge) {
-    badge.textContent = s === 'overnight' ? '🌙 Overnight Gap' : s === 'intraday' ? '⚡ Intraday Momentum' : '↩️ Pullback';
-    badge.style.background = s === 'overnight' ? 'var(--accent)' : s === 'intraday' ? '#7c5cfc' : '#2b8a6e';
+    badge.textContent = s === 'overnight' ? '🌙 Overnight Gap' : s === 'intraday' ? '⚡ Intraday Momentum' : s === 'positionSetup' ? '🧭 Position Setup' : '↩️ Pullback';
+    badge.style.background = s === 'overnight' ? 'var(--accent)' : s === 'intraday' ? '#7c5cfc' : s === 'positionSetup' ? '#c98a1f' : '#2b8a6e';
   }
   allTrades = [];
   _allTradesForWR = [];
@@ -7150,7 +7303,7 @@ function _histTradesAsOf(wrSource, sym, side, scanDate) {
 function _applyMaxPerDayCap(localTrades, wrTrades, maxPerDay, wrThresh, pnlThresh, minSignalsGate) {
   if (!maxPerDay && !minSignalsGate) return localTrades;
 
-  const entryDayKey = _strategy === 'pullback' ? 'tradeDate' : 'signalDate';
+  const entryDayKey = (_strategy === 'pullback' || _strategy === 'positionSetup') ? 'tradeDate' : 'signalDate';
   const sortedWr = [...wrTrades].sort((a, b) => a.exitDate.localeCompare(b.exitDate));
   let wrPtr = 0;
   const statMap = {};
@@ -7252,15 +7405,18 @@ function _scoreFromTrades(histTrades) {
 // is active by setStrategy()/mobSetStrategy(), but nothing else reads them
 // directly anymore.
 function _maxDayEl() {
-  const id = _strategy === 'intraday' ? 'idMaxSignalsDay' : _strategy === 'pullback' ? 'pbMaxSignalsDay' : 'maxSignalsDay';
+  const id = _strategy === 'intraday' ? 'idMaxSignalsDay' : _strategy === 'pullback' ? 'pbMaxSignalsDay'
+    : _strategy === 'positionSetup' ? 'psMaxSignalsDay' : 'maxSignalsDay';
   return document.getElementById(id);
 }
 function _wrThreshEl() {
-  const id = _strategy === 'intraday' ? 'idScanWrThreshold' : _strategy === 'pullback' ? 'pbScanWrThreshold' : 'scanWrThreshold';
+  const id = _strategy === 'intraday' ? 'idScanWrThreshold' : _strategy === 'pullback' ? 'pbScanWrThreshold'
+    : _strategy === 'positionSetup' ? 'psScanWrThreshold' : 'scanWrThreshold';
   return document.getElementById(id);
 }
 function _pnlThreshEl() {
-  const id = _strategy === 'intraday' ? 'idScanPnlThreshold' : _strategy === 'pullback' ? 'pbScanPnlThreshold' : 'scanPnlThreshold';
+  const id = _strategy === 'intraday' ? 'idScanPnlThreshold' : _strategy === 'pullback' ? 'pbScanPnlThreshold'
+    : _strategy === 'positionSetup' ? 'psScanPnlThreshold' : 'scanPnlThreshold';
   return document.getElementById(id);
 }
 // Overnight Gap only — a day-level "broad market momentum" gate: only trade a
@@ -7316,6 +7472,12 @@ const INTRADAY_DEFAULTS = INTRADAY_DEFAULTS_D2_OPEN;
 const PULLBACK_DEFAULTS = {
   pbLookbackDays: 15, pbDropPct: 6, pbConfirmDays: 1, pbTpPct: 7, pbHoldDays: 8, pbPivotBars: 2,
   maxSignalsDay: 2, pbMaxPositions: 4, wrThreshold: 50, pnlThreshold: 2.4, capitalPerTrade: 1000000,
+  rankingMode: 'expectancy', direction: 'both',
+};
+
+const POSITIONSETUP_DEFAULTS = {
+  psSlLookbackDays: 5, psMaxHoldDays: 40,
+  maxSignalsDay: 2, wrThreshold: 50, pnlThreshold: 2.4, capitalPerTrade: 1000000,
   rankingMode: 'expectancy', direction: 'both',
 };
 
@@ -7647,14 +7809,22 @@ function readPullbackParams() {
   };
 }
 
+function readPositionSetupParams() {
+  return {
+    psSlLookbackDays: +document.getElementById('psSlLookbackDays').value || 5,
+    psMaxHoldDays:    +document.getElementById('psMaxHoldDays').value    || 40,
+    direction:         _direction,
+  };
+}
+
 // Strategy-keyed lookup — single source of truth for "which engine/date-ids/
 // param-reader does the active strategy use". Generalizing these into a map
 // (instead of a binary ternary) is what keeps a 3rd strategy from silently
 // falling through to the wrong branch, the same bug class we hit once already
 // with the tab-button active-class logic.
-const STRATEGY_ENGINES = { overnight: (...a) => backtest(...a), intraday: (...a) => backtestIntraday(...a), pullback: (...a) => backtestPullback(...a) };
-const STRATEGY_DATE_IDS = { overnight: { from: 'fromDate', to: 'toDate' }, intraday: { from: 'idFromDate', to: 'idToDate' }, pullback: { from: 'pbFromDate', to: 'pbToDate' } };
-const STRATEGY_PARAM_READERS = { overnight: readOvernightParams, intraday: readIntradayParams, pullback: readPullbackParams };
+const STRATEGY_ENGINES = { overnight: (...a) => backtest(...a), intraday: (...a) => backtestIntraday(...a), pullback: (...a) => backtestPullback(...a), positionSetup: (...a) => backtestPositionSetup(...a) };
+const STRATEGY_DATE_IDS = { overnight: { from: 'fromDate', to: 'toDate' }, intraday: { from: 'idFromDate', to: 'idToDate' }, pullback: { from: 'pbFromDate', to: 'pbToDate' }, positionSetup: { from: 'psFromDate', to: 'psToDate' } };
+const STRATEGY_PARAM_READERS = { overnight: readOvernightParams, intraday: readIntradayParams, pullback: readPullbackParams, positionSetup: readPositionSetupParams };
 
 function readBacktestDates() {
   const ids = STRATEGY_DATE_IDS[_strategy] || STRATEGY_DATE_IDS.overnight;
@@ -7728,7 +7898,22 @@ function loadSavedDefaults() {
     } catch(e) { console.warn('[loadSavedDefaults] pullback parse error', e); }
   }
 
-  // The three blocks above all write to the same shared scanWrThreshold/
+  // Position Setup — apply saved if exists
+  const psRaw = localStorage.getItem('TE_POSITIONSETUP_DEFAULTS');
+  if (psRaw) {
+    try {
+      const d = { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(psRaw) };
+      document.getElementById('psSlLookbackDays').value = d.psSlLookbackDays;
+      document.getElementById('psMaxHoldDays').value    = d.psMaxHoldDays;
+      document.getElementById('maxSignalsDay').value    = d.maxSignalsDay;
+      if (d.wrThreshold)    document.getElementById('scanWrThreshold').value  = d.wrThreshold;
+      if (d.pnlThreshold)   document.getElementById('scanPnlThreshold').value = d.pnlThreshold;
+      if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
+      if (d.rankingMode)    document.getElementById('rankingMode').value      = d.rankingMode;
+    } catch(e) { console.warn('[loadSavedDefaults] positionSetup parse error', e); }
+  }
+
+  // The blocks above all write to the same shared scanWrThreshold/
   // scanPnlThreshold/maxSignalsDay inputs, so whichever ran last would otherwise
   // win regardless of which strategy is actually active on load — re-sync to
   // the real active strategy (_strategy defaults to 'overnight').
@@ -7791,6 +7976,19 @@ function saveStrategyDefaults() {
     };
     localStorage.setItem('TE_PULLBACK_DEFAULTS', JSON.stringify(saved));
     _showSaveToast('Pullback defaults saved ✓');
+  } else if (_strategy === 'positionSetup') {
+    const saved = {
+      psSlLookbackDays: +document.getElementById('psSlLookbackDays').value,
+      psMaxHoldDays:    +document.getElementById('psMaxHoldDays').value,
+      maxSignalsDay:    +document.getElementById('maxSignalsDay').value,
+      wrThreshold:      +document.getElementById('scanWrThreshold').value,
+      pnlThreshold:     +document.getElementById('scanPnlThreshold').value,
+      capitalPerTrade:  +document.getElementById('capitalPerTrade').value,
+      rankingMode:       document.getElementById('rankingMode').value,
+      direction:         _direction,
+    };
+    localStorage.setItem('TE_POSITIONSETUP_DEFAULTS', JSON.stringify(saved));
+    _showSaveToast('Position Setup defaults saved ✓');
   }
 
   // Re-run the backtest for the current strategy so displayed results
@@ -7876,6 +8074,19 @@ function resetStrategyDefaults() {
     _syncMaxDayHidden('pullback', d.maxSignalsDay);
     if (d.wrThreshold)    { document.getElementById('scanWrThreshold').value  = d.wrThreshold;  _syncWrThresholdHidden('pullback', d.wrThreshold); }
     if (d.pnlThreshold)   { document.getElementById('scanPnlThreshold').value = d.pnlThreshold; _syncPnlThresholdHidden('pullback', d.pnlThreshold); }
+    if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
+    document.getElementById('rankingMode').value = d.rankingMode || 'expectancy';
+    _lockDirection(false);
+    setDirection(d.direction || 'both');
+  } else if (_strategy === 'positionSetup') {
+    const savedRaw = localStorage.getItem('TE_POSITIONSETUP_DEFAULTS');
+    const d = savedRaw ? { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(savedRaw) } : POSITIONSETUP_DEFAULTS;
+    document.getElementById('psSlLookbackDays').value = d.psSlLookbackDays;
+    document.getElementById('psMaxHoldDays').value    = d.psMaxHoldDays;
+    document.getElementById('maxSignalsDay').value    = d.maxSignalsDay;
+    _syncMaxDayHidden('positionSetup', d.maxSignalsDay);
+    if (d.wrThreshold)    { document.getElementById('scanWrThreshold').value  = d.wrThreshold;  _syncWrThresholdHidden('positionSetup', d.wrThreshold); }
+    if (d.pnlThreshold)   { document.getElementById('scanPnlThreshold').value = d.pnlThreshold; _syncPnlThresholdHidden('positionSetup', d.pnlThreshold); }
     if (d.capitalPerTrade) document.getElementById('capitalPerTrade').value = d.capitalPerTrade;
     document.getElementById('rankingMode').value = d.rankingMode || 'expectancy';
     _lockDirection(false);
@@ -7976,6 +8187,19 @@ function saveMobDefaults() {
     };
     localStorage.setItem('TE_PULLBACK_DEFAULTS', JSON.stringify(saved));
     _showSaveToast('Pullback defaults saved ✓');
+  } else if (_mobStrategy === 'positionSetup') {
+    const saved = {
+      psSlLookbackDays: +document.getElementById('mobPsSlLookbackDays').value,
+      psMaxHoldDays:    +document.getElementById('mobPsMaxHoldDays').value,
+      maxSignalsDay:    +document.getElementById('mobPsMaxDay').value,
+      wrThreshold:      +document.getElementById('mobWrInput')?.value  || 50,
+      pnlThreshold:     +document.getElementById('mobPnlInput')?.value || 2.4,
+      capitalPerTrade: capital,
+      rankingMode:      document.getElementById('rankingMode')?.value || 'expectancy',
+      direction:        _mobDir || 'both',
+    };
+    localStorage.setItem('TE_POSITIONSETUP_DEFAULTS', JSON.stringify(saved));
+    _showSaveToast('Position Setup defaults saved ✓');
   }
 
   // Re-run the backtest for the current strategy so Stats/Summary numbers
@@ -8037,6 +8261,14 @@ function resetMobDefaults() {
     document.getElementById('mobPbMaxDay').value       = d.maxSignalsDay;
     if (wrEl)  wrEl.value  = d.wrThreshold  || 60;
     if (pnlEl) pnlEl.value = d.pnlThreshold || 2;
+  } else if (_mobStrategy === 'positionSetup') {
+    const savedRaw = localStorage.getItem('TE_POSITIONSETUP_DEFAULTS');
+    const d = savedRaw ? { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(savedRaw) } : POSITIONSETUP_DEFAULTS;
+    document.getElementById('mobPsSlLookbackDays').value = d.psSlLookbackDays;
+    document.getElementById('mobPsMaxHoldDays').value    = d.psMaxHoldDays;
+    document.getElementById('mobPsMaxDay').value         = d.maxSignalsDay;
+    if (wrEl)  wrEl.value  = d.wrThreshold  || 50;
+    if (pnlEl) pnlEl.value = d.pnlThreshold || 2.4;
   }
 }
 
@@ -8178,6 +8410,10 @@ async function runScanner() {
   }
   if (_strategy === 'pullback') {
     runScannerPullback(scanDate, syms);
+    return;
+  }
+  if (_strategy === 'positionSetup') {
+    runScannerPositionSetup(scanDate, syms);
     return;
   }
 
@@ -9040,16 +9276,20 @@ function renderScannerPullback(scanDate, longs, shorts, params) {
     </div>`;
 }
 
-// Standalone "current setups" scan for the Position Setup panel (4th-strategy
-// Step 1) — NOT wired into runScanner()'s _strategy dispatch or STRATEGY_ENGINES.
-// Pure "is the W+D+Hourly pattern present today" filter, no WR/backtest ranking
-// (there's no backtest engine for this yet). Requires both _loadedOHLC[sym] and
+// Dispatch-integrated Position Setup scanner — mirrors runScannerPullback()'s
+// shape exactly (WR/Wilson lookup against backtest history, max/day cap,
+// filter thresholds), reusing computeMTFAlignment()/computeHourlyRetestState()
+// UNCHANGED from the backtest engine so live-scan and backtest signal
+// detection can never diverge. Requires both _loadedOHLC[sym] and
 // _loadedHourly[sym] to be populated for a symbol to be considered.
-function runScannerPositionSetup(scanDate) {
-  const hourlySyms = Object.keys(_loadedHourly);
+function runScannerPositionSetup(scanDate, syms) {
+  const params = readPositionSetupParams();
+  const wrThreshold  = +_wrThreshEl().value || 0;
+  const pnlThreshold = +_pnlThreshEl().value || 0;
+
   const longs = [], shorts = [];
 
-  hourlySyms.forEach(sym => {
+  syms.forEach(sym => {
     const ohlc = _loadedOHLC[sym];
     if (!ohlc || ohlc.length < 20) return;
 
@@ -9065,57 +9305,126 @@ function runScannerPositionSetup(scanDate) {
     const hourly = computeHourlyRetestState(hourlyBars, mtf);
     if (!hourly) return; // null = chop (W/D disagree) — sit out, per agreed logic
 
-    const entry = { sym, mtf, hourly };
-    if (hourly.side === 'LONG') longs.push(entry); else shorts.push(entry);
+    const side = hourly.side;
+    if (_direction === 'long'  && side !== 'LONG')  return;
+    if (_direction === 'short' && side !== 'SHORT') return;
+
+    // Same pre-trigger-day window the backtest engine uses for the entry SL.
+    const slLevel = _positionSetupTrailStop(ohlc, idx - 1, side, params.psSlLookbackDays);
+
+    const wrSource   = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
+    const histTrades = _histTradesAsOf(wrSource, sym, side, scanDate);
+    const histWins   = histTrades.filter(t => t.outcome === 'WIN').length;
+    const histTotal  = histTrades.length;
+    const histWR     = histTotal >= 5 ? Math.round(histWins / histTotal * 100) : null;
+    const wilsonPct  = histTotal > 0 ? Math.round((histWins + 1) / (histTotal + 2) * 100) : 50;
+    const { expectancy: histExpectancy } = _scoreFromTrades(histTrades);
+    const histAvgPnl = histTotal > 0 ? histTrades.reduce((s,t) => s + t.pnlPct, 0) / histTotal : 0;
+    const hasHist    = wrSource.length > 0;
+
+    const signal = {
+      sym, mtf, hourly,
+      gapPct:   0, // N/A — kept only for _signalSortFn's tie-break fallback
+      entry:    +hourly.entryPrice.toFixed(2),
+      slLevel:  +slLevel.toFixed(2),
+      histWR, wilsonPct, histWins, histExpectancy, histAvgPnl, histCount: histTotal,
+      _passesFilter: !(hasHist && (
+        (wrThreshold > 0 && wilsonPct < wrThreshold) ||
+        (pnlThreshold !== 0 && histAvgPnl < pnlThreshold)
+      )),
+    };
+
+    if (side === 'LONG') longs.push(signal); else shorts.push(signal);
   });
 
-  // Triggered setups first within each side — most actionable at a glance.
-  const bySignal = (a, b) => (b.hourly.triggered - a.hourly.triggered);
-  longs.sort(bySignal);
-  shorts.sort(bySignal);
+  longs.sort(_signalSortFn);
+  shorts.sort(_signalSortFn);
 
-  renderScannerPositionSetup(scanDate, longs, shorts);
+  const maxTotal = +_maxDayEl().value || 0;
+  let longsOut, shortsOut;
+  if (maxTotal > 0) {
+    const allSigs = [...longs.map(s=>({...s,_side:'LONG'})), ...shorts.map(s=>({...s,_side:'SHORT'}))];
+    allSigs.sort(_signalSortFn);
+    const selected = allSigs.filter(s => s._passesFilter).slice(0, maxTotal);
+    longsOut  = selected.filter(s => s._side === 'LONG');
+    shortsOut = selected.filter(s => s._side === 'SHORT');
+  } else {
+    longsOut  = longs.filter(s => s._passesFilter);
+    shortsOut = shorts.filter(s => s._passesFilter);
+  }
+
+  renderScannerPositionSetup(scanDate, longsOut, shortsOut, params);
+
+  document.getElementById('scanSpinner').classList.remove('show');
+  document.getElementById('scanBtnLabel').textContent = '▶ Scan';
+  document.getElementById('scanBtn').disabled = false;
 }
 
-function renderScannerPositionSetup(scanDate, longs, shorts) {
-  const body = document.getElementById('posSetupBody');
-  if (!body) return;
+function renderScannerPositionSetup(scanDate, longs, shorts, params) {
   const dt      = new Date(scanDate + 'T00:00:00');
   const fmtDate = dt.toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'short', year:'numeric' });
   const total   = longs.length + shorts.length;
+  const hasBacktest = wrDataMatchesStrategy();
 
   if (total === 0) {
-    body.innerHTML = `
+    document.getElementById('scannerBody').innerHTML = `
       <div class="scanner-empty">
         <div style="font-size:28px;margin-bottom:8px;">🧭</div>
-        No Weekly+Daily aligned setups on ${fmtDate}.<br>
+        No Weekly+Daily aligned + hourly-triggered setups on ${fmtDate}.<br>
         <span style="font-size:11px;margin-top:4px;display:inline-block;">
-          Either nothing's aligned, or hourly data isn't loaded for that date — check the freshness note above.
+          Either nothing's aligned, hourly data isn't loaded for that date, or the WR/PnL filters excluded everything.
         </span>
       </div>`;
     return;
   }
 
-  const makeCard = (s) => `
-    <div class="signal-card" title="${s.sym} — ${s.mtf.combined}, hourly ${s.hourly.state}">
-      <div class="sc-main-row">
-        <div>
-          <div class="sc-sym">${s.sym}</div>
-          <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">
-            ${mtfBadgeHTML(s.mtf)}
-            ${hourlyBadgeHTML(s.hourly)}
+  const capital = getCapital();
+  const makeCard = (s, side) => {
+    const isBull = side === 'LONG';
+    const qty = s.entry > 0 ? Math.floor(capital / s.entry) : 0;
+    const cls = s.wilsonPct >= 55 ? 'bull' : s.wilsonPct < 45 ? 'bear' : 'mid';
+    const wrLabel = s.histWR !== null ? `${s.histWR}%` : `~${s.wilsonPct}%`;
+    const lowSample = s.histCount < 5;
+    const countLabel = lowSample
+      ? `<span style="color:var(--gold);font-weight:600;">${s.histCount}T ⚠</span>`
+      : `${s.histCount} trades`;
+
+    const wrBadge = !hasBacktest
+      ? `<div class="sc-wr"><span class="sc-wr-badge none">—</span><span class="sc-wr-count">run backtest</span></div>`
+      : `<div class="sc-wr">
+          <span class="sc-wr-badge ${cls}" title="Wilson-adj: ${s.wilsonPct}%">${wrLabel}</span>
+          <div class="sc-wr-bar-bg"><div class="sc-wr-bar-fill ${cls}" style="width:${s.wilsonPct}%"></div></div>
+          <span class="sc-wr-count">${countLabel}</span>
+         </div>`;
+
+    return `
+      <div class="signal-card clickable ${isBull ? 'bull-card' : 'bear-card'}"
+        onclick="openSymDrill('${s.sym}', allTrades, '${isBull ? 'LONG' : 'SHORT'}')"
+        title="Click to view ${s.sym} trade history">
+        <div class="sc-main-row">
+          <div>
+            <div class="sc-sym">${s.sym}</div>
+            <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">
+              ${mtfBadgeHTML(s.mtf)}
+              ${hourlyBadgeHTML(s.hourly)}
+            </div>
           </div>
+          <div class="sc-field">
+            <span class="sc-label">Entry (hourly trigger)</span>
+            <span class="sc-val">₹${s.entry.toFixed(2)}</span>
+          </div>
+          <div class="sc-field">
+            <span class="sc-label">SL (trailing structural)</span>
+            <span class="sc-val sl">₹${s.slLevel.toFixed(2)}</span>
+          </div>
+          <div class="sc-field">
+            <span class="sc-label">Qty (₹${(capital/1000).toFixed(0)}K)</span>
+            <span class="sc-val" style="color:var(--gold);font-weight:700;">${qty > 0 ? qty + ' sh' : '—'}</span>
+          </div>
+          ${wrBadge}
         </div>
-        <div class="sc-field">
-          <span class="sc-label">Vol confirm</span>
-          <span class="sc-val">${s.hourly.volConfirmed ? 'yes' : 'no'}</span>
-        </div>
-        <div class="sc-field">
-          <span class="sc-label">Last hourly bar</span>
-          <span class="sc-val" style="font-size:11px;">${s.hourly.lastBarDatetime}</span>
-        </div>
-      </div>
-    </div>`;
+      </div>`;
+  };
 
   const makePanel = (signals, side) => {
     const isBull = side === 'LONG';
@@ -9135,19 +9444,33 @@ function renderScannerPositionSetup(scanDate, longs, shorts) {
             padding:3px 10px;border-radius:12px;">${signals.length} signals</span>
         </div>
         <div class="signal-cards">
-          ${signals.map(makeCard).join('')}
+          ${signals.map(s => makeCard(s, side)).join('')}
         </div>
       </div>`;
   };
 
-  body.innerHTML = `
+  const noBacktestNote = !hasBacktest
+    ? `<div class="scanner-no-bt-note">💡 Run <strong>Position Setup</strong> backtest first to see historical win rates.</div>`
+    : '';
+
+  document.getElementById('scannerBody').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-      <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">${fmtDate}</span>
+      <div>
+        <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">${fmtDate}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-left:10px;">
+          Enter on hourly retest flip · Trailing structural SL, no fixed TP
+        </span>
+      </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <span class="mini-badge gap-up">▲ ${longs.length} Long</span>
         <span class="mini-badge gap-down">▼ ${shorts.length} Short</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);
+          background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--border);">
+          SL Lookback ${params.psSlLookbackDays}d · Max Hold ${params.psMaxHoldDays}d
+        </span>
       </div>
     </div>
+    ${noBacktestNote}
     <div class="scanner-grid">
       ${makePanel(longs, 'LONG')}
       ${makePanel(shorts, 'SHORT')}
@@ -9898,7 +10221,7 @@ function buildDayCards() {
   // signalDate, so two different signal days can resolve to the same entry day —
   // group by tradeDate instead, otherwise this view can show more signals under one
   // header than Max/day actually allows to enter on any single day.
-  const groupKey = _strategy === 'pullback' ? 'tradeDate' : 'signalDate';
+  const groupKey = (_strategy === 'pullback' || _strategy === 'positionSetup') ? 'tradeDate' : 'signalDate';
   allTrades.forEach(t => {
     const key = t[groupKey];
     if (!byDay[key]) byDay[key] = { date: key, longs: [], shorts: [] };
@@ -10050,6 +10373,8 @@ function renderUnifiedTable(trades) {
       <td style="color:${t.slHit?'var(--bear)':'var(--text2)'};font-weight:${t.slHit?'600':'400'};">
         ${_strategy === 'pullback'
           ? `<span style="color:var(--bear);">SL ₹${t.sl.toFixed(2)}</span>${t.slHit?' ⚡':''}<br><span style="color:var(--bull);">TP ₹${t.tp.toFixed(2)}</span>`
+          : _strategy === 'positionSetup'
+          ? `<span style="color:var(--bear);">SL ₹${t.sl.toFixed(2)} (trailing)</span>${t.slHit?' ⚡':''}`
           : `₹${t.nextOpen.toFixed(2)}${t.slHit?' ⚡':''}`}
       </td>
       <td style="color:${t.slHit?'var(--bear)':'inherit'};">
@@ -10206,6 +10531,8 @@ function renderSymbolFlatView(trades, matchedSyms) {
               <td style="color:${t.slHit?'var(--bear)':'var(--text2)'};font-weight:${t.slHit?'600':'400'};">
                 ${_strategy === 'pullback'
                   ? `<span style="color:var(--bear);">SL ₹${t.sl.toFixed(2)}</span>${t.slHit?' ⚡':''}<br><span style="color:var(--bull);">TP ₹${t.tp.toFixed(2)}</span>`
+                  : _strategy === 'positionSetup'
+                  ? `<span style="color:var(--bear);">SL ₹${t.sl.toFixed(2)} (trailing)</span>${t.slHit?' ⚡':''}`
                   : `₹${t.nextOpen.toFixed(2)}${t.slHit?' ⚡':''}`}
               </td>
               <td style="color:${t.slHit?'var(--bear)':'inherit'};">
@@ -11184,8 +11511,6 @@ function _updateHourlyStatusAfterLoad(loaded, failed) {
     panel.innerHTML = `<strong>${syms.length}</strong> symbols · hourly data through <strong>${hourlyDay}</strong>` +
       (stale ? ` &nbsp;<span style="color:var(--bear)">⚠ stale vs daily data (${maxDailyDate}) — signals reflect the loaded snapshot, not today</span>` : '');
   }
-  const posPanelWrap = document.getElementById('posSetupPanel');
-  if (posPanelWrap) posPanelWrap.style.display = syms.length ? '' : 'none';
 }
 
 async function _loadHourlyFromDirectoryHandle(handle) {
@@ -12318,7 +12643,7 @@ function computeTradeStats(trades) {
   // anchored the Calendar/Monthly views to Day2 for Overnight trades — one day
   // later than Day-wise Trades and the Automated Trades calendar, both of
   // which already group by the actual entry day.
-  const entryDayKey = _strategy === 'pullback' ? 'tradeDate' : 'signalDate';
+  const entryDayKey = (_strategy === 'pullback' || _strategy === 'positionSetup') ? 'tradeDate' : 'signalDate';
   const bySignalDay = {}, byTradeDay = {};
   trades.forEach(t => {
     (bySignalDay[t.signalDate]  = bySignalDay[t.signalDate]  || []).push(t);
@@ -12602,6 +12927,8 @@ function openSymDrill(sym, tradesSource, sideFilter) {
       <td style="font-family:'DM Mono',monospace;font-size:12px;color:${t.slHit?'var(--bear)':'var(--text2)'};">
         ${_strategy === 'pullback'
           ? `<span style="color:var(--bear);">₹${t.sl.toFixed(2)}</span>${t.slHit?' ⚡':''} / <span style="color:var(--bull);">₹${t.tp.toFixed(2)}</span>`
+          : _strategy === 'positionSetup'
+          ? `<span style="color:var(--bear);">₹${t.sl.toFixed(2)} (trailing)</span>${t.slHit?' ⚡':''}`
           : `₹${t.nextOpen.toFixed(2)}${t.slHit?' ⚡':''}`}
       </td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;">₹${t.exit.toFixed(2)}<span style="font-size:9px;color:var(--text3);margin-left:3px;">(${t.exitNote})</span>${t.exitDate ? `<br><span style="font-size:9px;color:var(--text3);">Exit: ${new Date(t.exitDate+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</span>` : ''}</td>
@@ -12904,6 +13231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <button class="mob-strat-btn active" id="mobStOvernightBtn" onclick="mobSetStrategy('overnight')">🌙 Gap</button>
         <button class="mob-strat-btn" id="mobStIntradayBtn" onclick="mobSetStrategy('intraday')">⚡ Momentum</button>
         <button class="mob-strat-btn" id="mobStPullbackBtn" onclick="mobSetStrategy('pullback')">↩️ Pullback</button>
+        <button class="mob-strat-btn" id="mobStPositionSetupBtn" onclick="mobSetStrategy('positionSetup')">🧭 Setup</button>
       </div>
       <div style="flex:1;"></div>
       <!-- Cache status pill — moved here to free up Row 2 for date picker -->
@@ -13233,6 +13561,33 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>
 
+    <div class="mob-settings-group" id="mobPositionSetupSettings" style="display:none;">
+      <div class="mob-settings-group-title">Position Setup</div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">From Date</div><div class="mob-settings-sub">Backtest start</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPsFromDate" type="date" style="width:130px;"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">To Date</div><div class="mob-settings-sub">Backtest end</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPsToDate" type="date" style="width:130px;"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">SL Lookback Days</div><div class="mob-settings-sub">Trailing structural stop window</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPsSlLookbackDays" type="number" value="5" step="1" min="2" max="30"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Max Hold Days</div><div class="mob-settings-sub">Timeout if stop not hit</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPsMaxHoldDays" type="number" value="40" step="1" min="1" max="120"></div>
+      </div>
+      <div class="mob-settings-row">
+        <div><div class="mob-settings-label">Max/day</div><div class="mob-settings-sub">Signals per day (0=∞)</div></div>
+        <div class="mob-settings-control"><input class="mob-settings-input" id="mobPsMaxDay" type="number" value="2" step="1" min="0" placeholder="0=∞"></div>
+      </div>
+      <div style="padding:6px 2px 2px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">
+        Entry: hourly candle flips back in the Weekly+Daily aligned direction. SL is a trailing rolling low/high, ratcheted forward; no fixed TP.
+      </div>
+    </div>
+
     <!-- Direction -->
 
     <!-- Capital per trade — shared by both strategies -->
@@ -13431,6 +13786,7 @@ function mobSetStrategy(s) {
   document.getElementById('mobStOvernightBtn').classList.toggle('active', s === 'overnight');
   document.getElementById('mobStIntradayBtn').classList.toggle('active', s === 'intraday');
   document.getElementById('mobStPullbackBtn').classList.toggle('active', s === 'pullback');
+  document.getElementById('mobStPositionSetupBtn')?.classList.toggle('active', s === 'positionSetup');
   if (s === _mobStrategy) return;
 
   // Save current results before switching
@@ -13451,6 +13807,8 @@ function mobSetStrategy(s) {
   document.getElementById('mobOvernightSettings').style.display = s === 'overnight' ? '' : 'none';
   document.getElementById('mobIntradaySettings').style.display  = s === 'intraday'  ? '' : 'none';
   document.getElementById('mobPullbackSettings').style.display  = s === 'pullback'  ? '' : 'none';
+  const mobPsSettings = document.getElementById('mobPositionSetupSettings');
+  if (mobPsSettings) mobPsSettings.style.display = s === 'positionSetup' ? '' : 'none';
   // Named presets only exist for Overnight Gap
   const mobPresetGroup = document.getElementById('mobOvernightPresetGroup');
   if (mobPresetGroup) mobPresetGroup.style.display = s === 'overnight' ? '' : 'none';
@@ -13465,6 +13823,7 @@ function mobSetStrategy(s) {
   if (desc) {
     desc.textContent = s === 'intraday' ? 'D1 momentum · D2 open entry'
       : s === 'pullback' ? 'Weekly HH/HL pullback · Enter next open · Structural SL'
+      : s === 'positionSetup' ? 'Weekly+Daily aligned · Hourly retest entry · Trailing SL'
       : 'Gap continuation · D1 close entry';
   }
   // Update strategy note at bottom
@@ -13476,6 +13835,9 @@ function mobSetStrategy(s) {
   } else if (s === 'pullback') {
     if (title) title.textContent = '↩️ Pullback';
     if (text)  text.textContent  = "Finds stocks pulling back against a weekly uptrend (or rallying against a weekly downtrend), using real swing-pivot HH/HL detection — not a moving-average proxy. Waits for the first day price turns back in the trend's favour before entering at the next session's open. Stop loss is structural (the trigger day's low for Long, high for Short); target is a fixed % from entry.";
+  } else if (s === 'positionSetup') {
+    if (title) title.textContent = '🧭 Position Setup';
+    if (text)  text.textContent  = "Finds stocks where Weekly and Daily trend agree, then waits for the Hourly candle to pull back and flip back in the aligned direction (with volume confirmation) before entering — same-day, at the triggering hourly close. Stop loss is a trailing rolling low/high (Long) or high (Short) on the daily chart, ratcheted forward as the trade develops. No fixed target — exits only on a stop break or the hold-days timeout, for holds of days to weeks.";
   } else {
     if (title) title.textContent = '🌙 Overnight Gap';
     if (text)  text.textContent  = "Identifies stocks that gap in one direction and continue that momentum through the next trading day. A gap-up whose D1 close also holds beyond the gap threshold signals long; a gap-down that holds equally beyond it signals short. Enter at the prior day's close, exit at the following day's close.";
@@ -13506,7 +13868,7 @@ function mobSetDir(d) {
 
 function openMobSettings()  {
   syncMobileDefaults();   // re-apply saved values every time panel opens
-  const stratNames = { overnight: 'Gap', intraday: 'Momentum', pullback: 'Pullback' };
+  const stratNames = { overnight: 'Gap', intraday: 'Momentum', pullback: 'Pullback', positionSetup: 'Position Setup' };
   const titleEl = document.getElementById('mobSettingsPanelTitle');
   if (titleEl) titleEl.textContent = `${stratNames[_mobStrategy] || ''} Settings`.trim();
   document.getElementById('mobSettingsPanel').classList.add('open');
@@ -13524,6 +13886,8 @@ function closeMobSettings() {
   s('idToDate',   g('mobIdToDate'));
   s('pbFromDate', g('mobPbFromDate'));
   s('pbToDate',   g('mobPbToDate'));
+  s('psFromDate', g('mobPsFromDate'));
+  s('psToDate',   g('mobPsToDate'));
 
   if (_mobStrategy === 'overnight') {
     s('minGap',          g('mobMinGap'));
@@ -13564,6 +13928,13 @@ function closeMobSettings() {
     s('capitalPerTrade', g('mobCapital'));
     s('scanWrThreshold', g('mobWrInput'));
     s('scanPnlThreshold',g('mobPnlInput'));
+  } else if (_mobStrategy === 'positionSetup') {
+    s('psSlLookbackDays', g('mobPsSlLookbackDays'));
+    s('psMaxHoldDays',    g('mobPsMaxHoldDays'));
+    s('maxSignalsDay',    g('mobPsMaxDay'));
+    s('capitalPerTrade',  g('mobCapital'));
+    s('scanWrThreshold',  g('mobWrInput'));
+    s('scanPnlThreshold', g('mobPnlInput'));
   }
   document.getElementById('mobSettingsPanel').classList.remove('open');
   document.getElementById('mobSettingsBackdrop').classList.remove('open');
@@ -13715,6 +14086,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
   // Mobile direction is _mobDir, not _direction — override after reading
   const params = _strategy === 'intraday' ? { ...readIntradayParams(), direction: _mobDir }
     : _strategy === 'pullback' ? { ...readPullbackParams(), direction: _mobDir }
+    : _strategy === 'positionSetup' ? { ...readPositionSetupParams(), direction: _mobDir }
     : readOvernightParams();
 
   const longs = [], shorts = [];
@@ -13803,6 +14175,35 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         d2date: d2mob ? d2mob.date : null, outcome: outcomeMob,
         _passesFilter: !(hasBacktest && ((wrThreshold > 0 && wilson < wrThreshold) || (pnlThreshold !== 0 && histAvgPnl < pnlThreshold))) };
       if (side === 'LONG') longs.push(sig); else shorts.push(sig);
+    } else if (_strategy === 'positionSetup') {
+      const mtfMobPs = computeMTFAlignment(ohlc, idx);
+      if (!mtfMobPs) return;
+      const hourlyBarsMobPs = (_loadedHourly[sym] || []).filter(b => b.date <= scanDate);
+      if (hourlyBarsMobPs.length < 2) return;
+      const hourlyMobPs = computeHourlyRetestState(hourlyBarsMobPs, mtfMobPs);
+      if (!hourlyMobPs) return; // null = chop (W/D disagree) — sit out
+
+      const sidePs = hourlyMobPs.side;
+      if (_mobDir === 'long'  && sidePs !== 'LONG')  return;
+      if (_mobDir === 'short' && sidePs !== 'SHORT') return;
+
+      // Same pre-trigger-day window the backtest engine/desktop scanner use.
+      const slLevelPs = _positionSetupTrailStop(ohlc, idx - 1, sidePs, params.psSlLookbackDays);
+
+      const wrSrcPs = _allTradesForWR.length > 0 ? _allTradesForWR : allTrades;
+      const htPs = _histTradesAsOf(wrSrcPs, sym, sidePs, scanDate);
+      const hwPs = htPs.filter(t => t.outcome === 'WIN').length;
+      const histWRPs = htPs.length >= 5 ? Math.round(hwPs / htPs.length * 100) : null;
+      const wilsonPs = htPs.length > 0 ? Math.round((hwPs + 1) / (htPs.length + 2) * 100) : 50;
+      const { expectancy: histExpectancyPs } = _scoreFromTrades(htPs);
+      const histAvgPnlPs = htPs.length > 0 ? htPs.reduce((s,t) => s + t.pnlPct, 0) / htPs.length : 0;
+
+      const sig = { sym, movePct: 0, entry: +hourlyMobPs.entryPrice.toFixed(2),
+        slLevel: +slLevelPs.toFixed(2), tpLevel: 'Trailing',
+        histWR: histWRPs, wilson: wilsonPs, histWins: hwPs, histExpectancy: histExpectancyPs,
+        histAvgPnl: histAvgPnlPs, histCount: htPs.length, side: sidePs, mtf: mtfMobPs, hourly: hourlyMobPs,
+        _passesFilter: !(hasBacktest && ((wrThreshold > 0 && wilsonPs < wrThreshold) || (pnlThreshold !== 0 && histAvgPnlPs < pnlThreshold))) };
+      if (sidePs === 'LONG') longs.push(sig); else shorts.push(sig);
     } else {
       const today = ohlc[idx], yesterday = ohlc[idx-1];
       const prevRef = yesterday.adjClose || yesterday.close;
@@ -13858,7 +14259,8 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
   // Sort using active ranking mode (Wilson or Expectancy)
   longs.sort(_signalSortFn); shorts.sort(_signalSortFn);
 
-  const maxDayId = _strategy === 'intraday' ? 'mobIdMaxDay' : _strategy === 'pullback' ? 'mobPbMaxDay' : 'mobMaxDay';
+  const maxDayId = _strategy === 'intraday' ? 'mobIdMaxDay' : _strategy === 'pullback' ? 'mobPbMaxDay'
+    : _strategy === 'positionSetup' ? 'mobPsMaxDay' : 'mobMaxDay';
   const maxTotal = +document.getElementById(maxDayId).value || 0;
   const minSignalsGate = _minSignalsGate();
   const rawCandidateCount = longs.length + shorts.length;
@@ -13960,7 +14362,7 @@ function renderMobResults(scanDate, wrThreshold, pnlThreshold = 0) {
         </div>
         <div class="mob-card-sub">
           <div class="mob-dir-badge ${isBull?'long':'short'}">${isBull?'▲ LONG':'▼ SHORT'}</div>
-          <div class="mob-move ${isBull?'bull':'bear'}" title="${_strategy==='pullback' ? (isBull?'Pullback from rolling peak':'Rally from rolling trough') : 'Overnight Gap'}">${isBull?'+':''}${s.movePct}% <span style="font-size:9px;opacity:0.7;">${_strategy==='pullback' ? (isBull?'pullback':'rally') : 'gap'}</span></div>
+          ${_strategy === 'positionSetup' ? hourlyBadgeHTML(s.hourly) : `<div class="mob-move ${isBull?'bull':'bear'}" title="${_strategy==='pullback' ? (isBull?'Pullback from rolling peak':'Rally from rolling trough') : 'Overnight Gap'}">${isBull?'+':''}${s.movePct}% <span style="font-size:9px;opacity:0.7;">${_strategy==='pullback' ? (isBull?'pullback':'rally') : 'gap'}</span></div>`}
           ${s.d1MovePct !== undefined ? `<div style="font-size:10px;color:${s.d1MovePct >= 0 ? 'var(--bull)' : 'var(--bear)'};font-weight:600;">${s.d1MovePct >= 0 ? '+' : ''}${s.d1MovePct}% <span style="opacity:0.75;font-size:9px;">D1 move</span></div>` : ''}
           ${mtfBadgeHTML(s.mtf)}
         </div>
@@ -15867,6 +16269,17 @@ function syncMobileDefaults() {
       if (el('mobPbMaxPositions')) el('mobPbMaxPositions').value = d.pbMaxPositions;
       if (el('mobPbMaxDay'))       el('mobPbMaxDay').value       = d.maxSignalsDay;
     } catch(e) { console.warn('[syncMobileDefaults] pullback error', e); }
+  }
+
+  // Position Setup — strategy-specific params only
+  const psRaw = localStorage.getItem('TE_POSITIONSETUP_DEFAULTS');
+  if (psRaw) {
+    try {
+      const d = { ...POSITIONSETUP_DEFAULTS, ...JSON.parse(psRaw) };
+      if (el('mobPsSlLookbackDays')) el('mobPsSlLookbackDays').value = d.psSlLookbackDays;
+      if (el('mobPsMaxHoldDays'))    el('mobPsMaxHoldDays').value    = d.psMaxHoldDays;
+      if (el('mobPsMaxDay'))         el('mobPsMaxDay').value         = d.maxSignalsDay;
+    } catch(e) { console.warn('[syncMobileDefaults] positionSetup error', e); }
   }
 
   // The blocks above all read/write the same shared mobWrInput/mobPnlInput
