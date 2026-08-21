@@ -11,7 +11,7 @@ Single-file HTML trading backtester and live scanner for NSE F&O stocks (Indian 
 - `gap_scan.py` — headless Python port of the Overnight Gap signal logic (mirrors `backtest()` in TradeEdge.html), used by both live scanning and backfill so entry/exit decisions match the backtest exactly
 - `telegram_notify.py` — Telegram alerts for the Gap automation (per-event + daily digest); needs `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` env vars
 - `cron_fetch.py` — Render Cron Job entry point (15:15 IST) that runs `tradeedge_fetch.py --fo --merge`
-- `push_incr_data.py` — pushes updated CSVs to GitHub's `data` branch after a fetch; confirms the live symbol universe is **211** total (`--all` flag pushes "all 211 CSVs") — the "186 total" figure elsewhere in this doc and in `ALL_SYMBOLS`/`SYMBOLS` is stale and needs a recount before being trusted
+- `push_incr_data.py` — pushes updated CSVs to GitHub's `data` branch after a fetch; confirms the live symbol universe is **211** total (`--all` flag pushes "all 211 CSVs") — the "186 total" figure elsewhere in this doc and in `ALL_SYMBOLS`/`SYMBOLS` is stale and needs a recount before being trusted (a live-loaded session on 2026-08-21 showed 210 symbols — treat any fixed number in this doc as approximate, always verify against the live-loaded count in the UI)
 
 **Note:** the Watchlist / Trigger Tracker feature referenced in older docs was intentionally removed — do not re-add it.
 
@@ -30,13 +30,13 @@ TradeEdge.html
 ```
 
 ### Key Rules
-- `app.py` `ALL_SYMBOLS` list (186 total) must **exactly match** `TradeEdge.html` `SYMBOLS` list — same symbols, same order
+- `app.py` `ALL_SYMBOLS` list must **exactly match** `TradeEdge.html` `SYMBOLS` list — same symbols, same order (count is stale below — see note in Files section; verify actual total via `push_incr_data.py` or the live-loaded symbol count in the UI rather than trusting a fixed number)
 - Batch size = 10 symbols per request
 - Fetch timeout = 150s per batch (HTML) / 130s safety cutoff (app.py)
 - HTML does a warmup ping before batching (Render cold start is ~30s)
 - Render free tier: server sleeps after 15min of inactivity → always expect cold start
 
-### Symbol List (186 total = 12 indices + 174 F&O stocks)
+### Symbol List (stale — historically 186, confirmed drifted to ~210-211; do not trust this count without re-verifying)
 
 **Indices (12):**
 `NIFTY50, BANKNIFTY, FINNIFTY, MIDCPNIFTY, CNXIT, CNXAUTO, CNXPHARMA, CNXENERGY, CNXMETAL, CNXFMCG, CNXINFRA, CNXCONSUM`
@@ -61,7 +61,7 @@ TradeEdge.html
 
 ---
 
-## Backtest Strategies (3 active)
+## Backtest Strategies (4 active)
 
 Strategy dispatch uses `STRATEGY_ENGINES`, `STRATEGY_DATE_IDS`, and `STRATEGY_PARAM_READERS` tables.
 
@@ -91,6 +91,18 @@ Strategy dispatch uses `STRATEGY_ENGINES`, `STRATEGY_DATE_IDS`, and `STRATEGY_PA
 - One position per symbol at a time (busyUntilIdx guard)
 - OPEN outcome tracked for still-live positions (not counted in win rate)
 
+### 4. Positional (`positionSetup`)
+**UI label:** "Positional" (both desktop and mobile — was "Position Setup" until 2026-08-21).
+**Engine:** `backtestPositionSetup()`
+- Requires BOTH daily data (for Weekly+Daily MTF scoring) AND hourly data (for entry timing) to be loaded — hourly is loaded separately via 🕐 (local CSV, `tradeedge_data/hourly/`) or 🛰️ (live sync from Kite via `/kite/hourly`, ~2min for ~200 symbols due to Kite's rate limit)
+- Signal: Weekly+Daily MTF alignment via `computeMTFAlignment()` shows a **confirmed downtrend** ("Aligned Bearish") — this is intentionally contrarian (buying dips, not trend-following); the trend-following version was backtested and found to have *negative* forward returns
+- Entry: hourly candle flips back up (`computeHourlyRetestState()`), same-day at the triggering hourly close, with volume confirmation shown per-signal (informational only, not a hard filter)
+- Side: **Long only** — direction is locked in the UI (`_lockDirection(true)`). Short (fading an "Aligned Bullish" exhaustion) was implemented and backtested with its own correctly-mirrored trigger/stop and performed worse than Long — it's disabled by design, not an oversight. Do not silently re-enable Short without re-validating.
+- Exit: trailing structural stop — rolling N-day low (`_positionSetupTrailStop()`), ratcheted forward as new lows form via `_simulatePositionSetupExit()`. No fixed TP; exits only on stop break (`SL`/`TRAIL` exitReason) or `psMaxHoldDays` timeout.
+- `psFromDate` defaults to the later of (earliest loaded hourly data, the generic ~1yr-back default) via `_psHourlyMinDate`, computed in `_updateHourlyStatusAfterLoad()` — avoids wasting backtest range before hourly data exists. Daily/weekly MTF scoring always uses full prior history regardless (same `sliceForBacktest`/`sliceOHLC` special-case as Pullback).
+- `psToDate` follows the same shared convention as every other strategy's `toDate` (max loaded **daily** data date, not literal today) — if it looks stale, check whether Today Sync has actually run recently (see Known Issue below), not the Positional-specific code.
+- **Known real-data status (as of 2026-08-21):** win rate has run persistently low (~13-18%) across every month tested, spread broadly across many symbols (not one bad stretch or one symbol) — a signal-quality issue with the entry trigger, not a direction bug. Don't assume flipping to Short would fix this; that was already tried and rejected.
+
 **Note:** S&R (Support & Resistance) strategy was previously implemented and has since been removed. Do not re-add it without explicit instruction.
 
 ---
@@ -101,6 +113,7 @@ Each strategy has its own param block in the config panel and its own `localStor
 - `TE_OVERNIGHT_DEFAULTS` — overnight params
 - `TE_INTRADAY_D2_DEFAULTS` / `TE_INTRADAY_D1_DEFAULTS` — intraday params (keyed by entry type)
 - `TE_PULLBACK_DEFAULTS` — pullback params
+- `TE_POSITIONSETUP_DEFAULTS` — positional params (`psSlLookbackDays`, `psMaxHoldDays`, `psMinPersistDays`, direction always `'long'`)
 
 Shared keys: `TE_CAPITAL`, `TE_WR_THRESHOLD`, `TE_PNL_THRESHOLD`
 
@@ -111,9 +124,10 @@ Shared keys: `TE_CAPITAL`, `TE_WR_THRESHOLD`, `TE_PNL_THRESHOLD`
 ### Desktop
 - Config panel — collapsible (collapsed by default on load)
 - Signal Filters panel — collapsible (collapsed by default)
-- Strategy tabs: Overnight Gap | Intraday Momentum | Pullback (direction buttons + params per strategy)
+- Strategy tabs: Overnight Gap | Intraday Momentum | Pullback | Positional (direction buttons + params per strategy; Positional's direction is locked to Long)
 - Results sections: Summary Cards → Equity Curve → Trade Analysis (Day-wise / Calendar / Monthly / All Trades / Symbol / Insights / Positions / Sweep)
 - Live Scanner — EOD signal cards with WR badge, SL/TP levels, MTF alignment badge
+- Bottom-of-page strategy description footers (`#onStratDesc`/`#idStratDesc`/`#psStratDesc`) — Signal/Entry/Exit/SL breakdown shown for whichever strategy is active; Pullback has no footer (relies on the header `stDesc` text only)
 - Automated Trades (`#msTradesTaken`, Gap strategy only) — real Kite paper/live trades, 4 sub-tabs: All Trades / Day-wise Trades / Calendar View (2 months/row) / Stockwise. See "Live Trading Automation" below.
 
 ### Mobile
@@ -140,6 +154,11 @@ Shared keys: `TE_CAPITAL`, `TE_WR_THRESHOLD`, `TE_PNL_THRESHOLD`
 | `backtestIntraday()` | ~5440 | Intraday Momentum engine |
 | `backtestPullback()` | ~5296 | Pullback engine |
 | `_simulatePullbackExit()` | ~5360 | Day-by-day exit simulation for Pullback |
+| `backtestPositionSetup()` | — | Positional engine (line numbers shift often — re-grep before citing) |
+| `computeHourlyRetestState()` | — | Hourly candle-flip entry trigger + side, given an MTF alignment |
+| `_positionSetupTrailStop()` | — | Rolling N-day low/high for Positional's trailing structural stop |
+| `_simulatePositionSetupExit()` | — | Day-by-day trailing-stop exit simulation for Positional |
+| `_updateHourlyStatusAfterLoad()` | — | Updates hourly freshness display + `_psHourlyMinDate` after any hourly load/sync |
 | `computeTradeStats()` | ~10294 | Builds `_tradeStats` (byTradeDay, bySymbol, etc.) |
 | `buildResults()` | ~8035 | Renders all result sections after backtest |
 | `buildCalendar()` | ~9861 | Initialises calendar year and renders both views |
@@ -152,7 +171,7 @@ Shared keys: `TE_CAPITAL`, `TE_WR_THRESHOLD`, `TE_PNL_THRESHOLD`
 | `runScanner()` | ~6741 | Desktop EOD scanner |
 | `runMobileScanner()` | ~11558 | Mobile scanner (auto-backtests if WR data missing) |
 | `getYFTicker()` | ~4311 | Maps internal symbol ID → Yahoo Finance ticker |
-| `computeMTFAlignment()` | ~4653 | Weekly+Daily trend alignment score |
+| `computeMTFAlignment()` | ~4653 | Weekly+Daily trend alignment score — feeds the Positional strategy's signal |
 | `loadTradesTaken()` / `renderTradesTaken()` | ~3430 / ~3803 | Fetch + render Automated Trades (desktop) |
 | `_ttDayCardsHTML()` / `_ttCalendarBuild()` / `_ttStockwiseRows()` | ~3870 / ~3960 / ~4090 | Pure builders shared by desktop AND mobile Automated Trades sub-tabs |
 | `renderMobLiveTrades()` | ~4181 | Mobile Auto Trades tab (strategy pills + sub-tab bar + stats + list) |
@@ -161,7 +180,7 @@ Shared keys: `TE_CAPITAL`, `TE_WR_THRESHOLD`, `TE_PNL_THRESHOLD`
 
 ## Live Trading Automation (Kite Integration)
 
-Overnight Gap only (no automation for Intraday Momentum or Pullback). Places real/simulated NSE F&O futures trades via Zerodha Kite Connect, driven by cron-job.org hitting Flask routes on `app.py`. Max 1 signal/day is hardcoded in `gap_scan.py` regardless of any UI setting.
+Overnight Gap only (no automation for Intraday Momentum, Pullback, or Positional). Places real/simulated NSE F&O futures trades via Zerodha Kite Connect, driven by cron-job.org hitting Flask routes on `app.py`. Max 1 signal/day is hardcoded in `gap_scan.py` regardless of any UI setting.
 
 ### Cron wiring (all times IST)
 - **`POST /gap-orders/enter`** — 3:15 PM on the signal day. Scans today via `gap_scan.scan_gap_signals()`, places entry + GTT-SL.
@@ -261,3 +280,4 @@ Overnight Gap only (no automation for Intraday Momentum or Pullback). Places rea
 - Never change ALL_SYMBOLS order in app.py without updating HTML SYMBOLS to match
 - Never remove the Render warmup ping logic from the HTML fetch flow
 - Never add `allorigins.win` or `corsproxy.io` back to the CORS proxy list — both block null/file:// origin
+- Never re-enable Short direction for Positional without explicit instruction — it was properly backtested with its own mirrored trigger/stop and performed worse than Long; it's disabled by design
