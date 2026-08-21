@@ -510,6 +510,9 @@ NIFTY50_SYMBOLS = [
 ]
 
 # ── Full F&O universe — 186 symbols, exact match with app.py ALL_SYMBOLS ──────
+# Symbols to skip during fetch (known Yahoo Finance failures)
+EXCLUDE_SYMBOLS = {"LTIM"}
+
 # 12 indices (NIFTY50 + BANKNIFTY + FINNIFTY + MIDCPNIFTY + 8 sector) + 174 F&O stocks
 # Symbol names here = CSV filenames = symbol IDs used in TradeEdge.html
 # Yahoo tickers resolved via YAHOO_TICKER_MAP above (e.g. ZOMATO → ETERNAL.NS)
@@ -586,19 +589,9 @@ def _normalise_yf_df(df: "pd.DataFrame", ticker_str: str) -> "pd.DataFrame":
     if "adj_close" not in df.columns:
         df["adj_close"] = df["close"].copy()
 
-    # ── Standardise index → plain date strings (IST timezone) ────────────────
-    # Yahoo returns timestamps in UTC. Convert to IST (UTC+5:30) before
-    # extracting date — otherwise a 10-Jun IST candle stored at midnight UTC
-    # would be labelled 2026-06-11 instead of 2026-06-10.
+    # ── Standardise index → plain date strings ────────────────────────────────
     df.index.name = "date"
-    idx = pd.to_datetime(df.index)
-    if idx.tz is not None:
-        # Already timezone-aware — convert to IST
-        idx = idx.tz_convert("Asia/Kolkata")
-    else:
-        # Timezone-naive UTC timestamps from yfinance — localize then convert
-        idx = idx.tz_localize("UTC").tz_convert("Asia/Kolkata")
-    df.index = idx.strftime("%Y-%m-%d")
+    df.index = pd.to_datetime(df.index).tz_localize(None).strftime("%Y-%m-%d")
 
     # ── Select & clean ────────────────────────────────────────────────────────
     df = df[["open", "high", "low", "close", "adj_close", "volume"]].copy()
@@ -663,6 +656,175 @@ def fetch_symbol(symbol: str, start: str, end: str, retries: int = 3):
                     print(f"\n    gave up ({type(e).__name__}: {str(e)[:80]})",
                           end="", flush=True)
     return None
+
+
+
+
+# ── Hourly OHLC fetch ─────────────────────────────────────────────────────────
+
+def _normalise_hourly_df(df: "pd.DataFrame", ticker_str: str) -> "pd.DataFrame":
+    """
+    Normalise a yfinance hourly DataFrame into standard format.
+    Index is datetime with timezone — convert to IST naive datetime string.
+    Output columns: datetime,open,high,low,close,volume
+    """
+    import pytz
+
+    # Flatten MultiIndex if present
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [" ".join(str(c) for c in col).strip().lower() for col in df.columns]
+        rename = {}
+        for col in df.columns:
+            cl = col.lower()
+            if cl.startswith("open"):   rename[col] = "open"
+            elif cl.startswith("high"): rename[col] = "high"
+            elif cl.startswith("low"):  rename[col] = "low"
+            elif cl.startswith("close"):rename[col] = "close"
+            elif cl.startswith("volume"):rename[col] = "volume"
+        df = df.rename(columns=rename)
+    else:
+        df.columns = [c.lower().replace(" ","_") for c in df.columns]
+
+    # Convert index to IST
+    ist = pytz.timezone("Asia/Kolkata")
+    idx = pd.to_datetime(df.index)
+    if idx.tz is None:
+        idx = idx.tz_localize("UTC")
+    idx_ist = idx.tz_convert(ist)
+
+    # Filter NSE market hours: 9:15 AM to 3:30 PM IST
+    market_open  = pd.Timestamp("09:15", tz=ist).time()
+    market_close = pd.Timestamp("15:30", tz=ist).time()
+    mask = (idx_ist.time >= market_open) & (idx_ist.time <= market_close)
+    df = df[mask].copy()
+    idx_ist = idx_ist[mask]
+
+    # Format as "YYYY-MM-DD HH:MM" IST naive string
+    df.index = idx_ist.strftime("%Y-%m-%d %H:%M")
+    df.index.name = "datetime"
+
+    # Keep only needed columns
+    keep = [c for c in ["open","high","low","close","volume"] if c in df.columns]
+    df = df[keep].copy()
+    df = df.dropna(subset=["open","close"])
+    df = df[df["open"] > 0].round(2)
+    return df
+
+
+def fetch_symbol_hourly(symbol: str, days_back: int = 60, retries: int = 3):
+    """
+    Download hourly OHLC for one symbol using yf.Ticker.history(interval='1h').
+
+    Yahoo Finance limits intraday history to ~60 days for 1h interval.
+    NSE market hours filtered: 9:15 AM – 3:30 PM IST.
+    Returns DataFrame with datetime index (IST) or None on failure.
+    """
+    from datetime import date, timedelta
+
+    primary = get_yf_ticker(symbol)
+    candidates = [primary]
+    if primary.endswith(".NS"):
+        candidates.append(primary.replace(".NS", ".BO"))
+
+    start = (date.today() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    end   = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    for ticker_str in candidates:
+        for attempt in range(retries):
+            try:
+                with _suppress_yf_noise():
+                    tk = yf.Ticker(ticker_str)
+                    df = tk.history(
+                        start=start,
+                        end=end,
+                        interval="1h",
+                        auto_adjust=True,
+                        actions=False,
+                        timeout=30,
+                    )
+
+                if df is None or df.empty:
+                    raise ValueError("empty")
+
+                df = _normalise_hourly_df(df, ticker_str)
+
+                if df.empty:
+                    raise ValueError("empty after normalise")
+
+                if ticker_str != primary:
+                    print(f" (fallback: {ticker_str})", end="")
+                return df
+
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rl = any(k in err_str for k in
+                            ["rate limit","too many","429","yfratelimit","rate_limit"])
+                if attempt < retries - 1:
+                    wait = 60 if is_rl else 2 ** attempt
+                    label = "rate limited — waiting 60s" if is_rl else f"retry {attempt+2}/{retries}"
+                    print(f"\n    {label} ({type(e).__name__}: {str(e)[:60]})...",
+                          end="", flush=True)
+                    time.sleep(wait)
+                else:
+                    print(f"\n    gave up ({type(e).__name__}: {str(e)[:80]})",
+                          end="", flush=True)
+    return None
+
+
+def fetch_hourly_batch_via_kite(symbols: list[str], api_url: str, days_back: int = 60,
+                                 timeout: float = 90.0) -> tuple[dict, list[str]]:
+    """
+    Fetch hourly OHLC for a batch of symbols from the deployed Render API's
+    /kite/hourly route — reuses today's already-authenticated Kite session
+    server-side, so no local API key/secret is needed. Avoids Yahoo's per-IP
+    rate limiting since Kite has no equivalent for a low-volume historical
+    data pull like this.
+
+    Returns ({symbol: DataFrame}, failed_symbols). DataFrames match the shape
+    fetch_symbol_hourly()/_normalise_hourly_df() produce (datetime-indexed,
+    columns open/high/low/close/volume) so merge_hourly_csv() works unchanged.
+    Raises RuntimeError with a clear message if today's Kite login is missing.
+    """
+    import requests
+    params = {"symbols": ",".join(symbols), "days": days_back}
+    resp = requests.get(f"{api_url}/kite/hourly", params=params, timeout=timeout)
+    resp.raise_for_status()
+    payload = resp.json()
+
+    if "error" in payload:
+        if payload["error"] == "not_logged_in_today":
+            raise RuntimeError(
+                f"Kite not logged in today — open {api_url}/kite/login in a browser first, then re-run."
+            )
+        raise RuntimeError(f"/kite/hourly error: {payload['error']}")
+
+    out = {}
+    for sym, bars in payload.get("data", {}).items():
+        if not bars:
+            continue
+        df = pd.DataFrame(bars).set_index("datetime")[["open", "high", "low", "close", "volume"]]
+        df.index.name = "datetime"
+        out[sym] = df
+
+    return out, payload.get("failedSymbols", [])
+
+
+def merge_hourly_csv(path: Path, new_df: "pd.DataFrame") -> tuple[int, int]:
+    """Merge new hourly bars into existing CSV, deduplicating by datetime index."""
+    try:
+        existing = pd.read_csv(path, index_col=0)
+        existing.index = existing.index.astype(str)
+    except Exception:
+        existing = None
+
+    if existing is None or existing.empty:
+        new_df.to_csv(path)
+        return len(new_df), len(new_df)
+
+    combined = pd.concat([existing, new_df])
+    combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+    combined.to_csv(path)
+    return len(combined) - len(existing), len(combined)
 
 
 # ── Futures scanner ───────────────────────────────────────────────────────────
@@ -876,6 +1038,17 @@ def main():
                         help="Skip symbols already fetched today")
     parser.add_argument("--delay",   type=float, default=1.5,
                         help="Seconds between requests (default 0.5)")
+    parser.add_argument("--hourly",  action="store_true",
+                        help="Fetch hourly OHLC data (last 60 days) into tradeedge_data/hourly/")
+    parser.add_argument("--hourly-days", dest="hourly_days", type=int, default=60,
+                        help="With --hourly: how many days back to fetch (max ~60 for Yahoo, up to 400 for Kite)")
+    parser.add_argument("--hourly-source", dest="hourly_source", choices=["yahoo", "kite"], default="yahoo",
+                        help="With --hourly: data source. 'yahoo' fetches directly (may rate-limit on large runs); "
+                             "'kite' calls the deployed Render API's /kite/hourly route, reusing today's already-"
+                             "authenticated Kite session (requires having visited /kite/login today)")
+    parser.add_argument("--api-url", dest="api_url",
+                        default=os.environ.get("TRADEEDGE_API_URL", "https://tradeedge-api.onrender.com"),
+                        help="Render API base URL, used by --hourly-source kite")
     parser.add_argument("--sectors", action="store_true",
                         help="(deprecated — sector indices now included in --fo)")
     parser.add_argument("--summary", action="store_true",
@@ -895,7 +1068,115 @@ def main():
         print_summary(outdir)
         return
 
-    # ── FUTURES MODE ──────────────────────────────────────────────────────────
+    # ── HOURLY MODE ──────────────────────────────────────────────────────────
+    if args.hourly:
+        if args.symbols:
+            h_syms = [s for s in args.symbols if s.upper() not in EXCLUDE_SYMBOLS]
+        elif args.fo:
+            h_syms = [s for s in FO_SYMBOLS
+                      if s not in {"NIFTY50","BANKNIFTY","FINNIFTY","MIDCPNIFTY",
+                                   "CNXIT","CNXAUTO","CNXPHARMA","CNXENERGY",
+                                   "CNXMETAL","CNXFMCG","CNXINFRA","CNXCONSUM"}
+                      and s.upper() not in EXCLUDE_SYMBOLS]
+        else:
+            h_syms = NIFTY50_SYMBOLS
+
+        hourly_dir = outdir / "hourly"
+        hourly_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"\n{'='*62}")
+        print(f"  TradeEdge Hourly Fetcher  —  {len(h_syms)} symbols")
+        print(f"  Source   : {args.hourly_source}")
+        print(f"  Interval : 1h  (NSE market hours 9:15–15:30 IST only)")
+        if args.hourly_source == "kite":
+            print(f"  Range    : last {args.hourly_days} days (via {args.api_url})")
+        else:
+            print(f"  Range    : last {args.hourly_days} days (Yahoo Finance limit ~60 days)")
+        print(f"  Output   : {hourly_dir.resolve()}")
+        print(f"{'='*62}\n")
+
+        ok = failed = skipped = 0
+        total_rows = 0
+
+        # Skip-if-already-today applies the same way for both sources.
+        pending = []
+        for sym in h_syms:
+            csv_path = hourly_dir / f"{sym}.csv"
+            if not args.merge and csv_path.exists():
+                mtime = datetime.fromtimestamp(csv_path.stat().st_mtime).date()
+                if mtime >= datetime.today().date():
+                    print(f"  {sym:<16} skipped (already today)")
+                    skipped += 1
+                    continue
+            pending.append(sym)
+
+        if args.hourly_source == "kite":
+            try:
+                requests_mod = __import__("requests")
+                requests_mod.get(args.api_url + "/", timeout=40)  # warmup — Render free tier cold start ~30s
+            except Exception:
+                pass
+
+            batch_size = 30
+            for bi in range(0, len(pending), batch_size):
+                batch = pending[bi:bi + batch_size]
+                print(f"  [{bi+1:>3}-{bi+len(batch):>3}/{len(pending)}] fetching {len(batch)} symbols via Kite ...",
+                      end="", flush=True)
+                try:
+                    dfs, batch_failed = fetch_hourly_batch_via_kite(batch, args.api_url, days_back=args.hourly_days)
+                except RuntimeError as e:
+                    print(f"\n  ✗ ABORTED: {e}")
+                    failed += len(pending) - bi
+                    break
+
+                for sym in batch:
+                    df = dfs.get(sym)
+                    csv_path = hourly_dir / f"{sym}.csv"
+                    if df is not None and not df.empty:
+                        if csv_path.exists():
+                            added, total = merge_hourly_csv(csv_path, df)
+                            total_rows += added
+                        else:
+                            df.to_csv(csv_path)
+                            total_rows += len(df)
+                        ok += 1
+                    else:
+                        failed += 1
+                print(f"  ✓ {len(batch) - len(batch_failed)} ok, {len(batch_failed)} failed"
+                      + (f" ({', '.join(batch_failed)})" if batch_failed else ""))
+        else:
+            for i, sym in enumerate(pending, 1):
+                csv_path = hourly_dir / f"{sym}.csv"
+                prefix   = f"  [{i:>3}/{len(pending)}] {sym:<16}"
+
+                print(f"{prefix} fetching hourly ...", end="", flush=True)
+                df = fetch_symbol_hourly(sym, days_back=args.hourly_days)
+
+                if df is not None and not df.empty:
+                    if csv_path.exists():
+                        added, total = merge_hourly_csv(csv_path, df)
+                        total_rows += added
+                        print(f"  +{added} bars  (total {total})")
+                    else:
+                        df.to_csv(csv_path)
+                        total_rows += len(df)
+                        print(f"  ✓  {len(df)} bars  [{df.index[0]} → {df.index[-1]}]")
+                    ok += 1
+                else:
+                    print("  ✗ FAILED")
+                    failed += 1
+
+                if i < len(pending):
+                    time.sleep(args.delay)
+
+        print(f"\n{'='*62}")
+        print(f"  ✓ {ok} fetched  |  {skipped} skipped  |  {failed} failed")
+        print(f"  Bars written: {total_rows:,}")
+        print(f"  Hourly CSVs → {hourly_dir.resolve()}")
+        print(f"{'='*62}\n")
+        return
+
+        # ── FUTURES MODE ──────────────────────────────────────────────────────────
     if args.futures:
         if args.symbols:
             fut_syms = args.symbols
@@ -929,14 +1210,17 @@ def main():
 
     # Resolve symbol list — flags can be combined
     if args.symbols:
-        symbols = args.symbols
+        symbols = [s for s in args.symbols if s.upper() not in EXCLUDE_SYMBOLS]
+        skipped_ex = [s for s in args.symbols if s.upper() in EXCLUDE_SYMBOLS]
+        if skipped_ex:
+            print(f"  ⚠  Skipping excluded symbols: {', '.join(skipped_ex)}")
         label   = f"custom ({len(symbols)} symbols)"
     else:
         symbols = []
         parts   = []
         if args.fo:
-            symbols += FO_SYMBOLS
-            parts.append(f"F&O + indices ({len(FO_SYMBOLS)} symbols — matches TradeEdge.html)")
+            symbols += [s for s in FO_SYMBOLS if s.upper() not in EXCLUDE_SYMBOLS]
+            parts.append(f"F&O + indices ({len(symbols)} symbols — matches TradeEdge.html)")
         if args.sectors:
             print("Note: --sectors is no longer needed; sector indices (CNXIT, CNXAUTO, etc.) are included in --fo")
         if not symbols:
@@ -979,18 +1263,12 @@ def main():
             else:
                 last = last_csv_date(csv_path)
                 if last:
-                    today_str = datetime.today().strftime("%Y-%m-%d")
                     nxt = (datetime.strptime(last, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
                     if nxt > end_date:
-                        # If last row is today, re-fetch today to overwrite intraday price with EOD close
-                        if last == today_str:
-                            fetch_start = today_str
-                        else:
-                            print(f"{prefix} up to date  ({last})")
-                            skipped += 1
-                            continue
-                    else:
-                        fetch_start = nxt
+                        print(f"{prefix} up to date  ({last})")
+                        skipped += 1
+                        continue
+                    fetch_start = nxt
                 else:
                     fetch_start = start_2yr
 

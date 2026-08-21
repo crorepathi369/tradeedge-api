@@ -1874,6 +1874,122 @@ def kite_daily_check():
     return cors_response(result)
 
 
+# Kite tradingsymbol differs from our internal symbol id for a few legacy/renamed
+# stocks — same 5 cases YAHOO_TICKER_MAP special-cases (minus the .NS suffix).
+KITE_SYMBOL_MAP = {
+    "BIRLASOFT":    "BSOFT",
+    "DEEPAKNITR":   "DEEPAKNTR",
+    "ICICIPRULIFE": "ICICIPRULI",
+    "MCDOWELL-N":   "UNITDSPR",
+    "ZOMATO":       "ETERNAL",
+}
+# Kite represents indices under a different segment (not NSE cash equities) —
+# exclude them from the hourly NSE-cash instrument lookup entirely.
+KITE_INDEX_SYMBOLS = {
+    "NIFTY50", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY",
+    "CNXIT", "CNXAUTO", "CNXPHARMA", "CNXENERGY", "CNXMETAL", "CNXFMCG", "CNXINFRA", "CNXCONSUM",
+}
+
+def get_kite_tradingsymbol(s):
+    return KITE_SYMBOL_MAP.get(s, s)
+
+
+_nse_instrument_cache = {"date": None, "by_symbol": None}
+
+def get_nse_instruments_map(kite):
+    """Cached NSE cash-market tradingsymbol -> instrument_token map, refreshed once/day
+    (same pattern as kite_orders.get_nfo_instruments, but for exchange=NSE)."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    if _nse_instrument_cache["date"] == today and _nse_instrument_cache["by_symbol"]:
+        return _nse_instrument_cache["by_symbol"]
+    instruments = kite.instruments("NSE")
+    by_symbol = {i["tradingsymbol"]: i["instrument_token"] for i in instruments}
+    _nse_instrument_cache["date"] = today
+    _nse_instrument_cache["by_symbol"] = by_symbol
+    return by_symbol
+
+
+@app.route("/kite/hourly", methods=["GET", "OPTIONS"])
+def kite_hourly():
+    """
+    Fetches hourly (60minute) OHLC candles from Kite for a batch of NSE
+    cash-market symbols — a Yahoo-rate-limit-free alternative for
+    tradeedge_fetch.py --hourly-source kite. Kite's historical_data() is
+    single-instrument-per-call (no yfinance-style bulk download), so this
+    loops with a small delay to stay under Kite's ~3 req/sec limit.
+
+    Query params: symbols=SYM1,SYM2 (explicit list) OR offset/limit (paginate
+    ALL_SYMBOLS minus indices, same contract as /sync-today), days (default 60,
+    capped at 400 per Kite's documented 60minute lookback limit).
+    """
+    if request.method == "OPTIONS":
+        return cors_response({"ok": True})
+
+    kite = get_kite_client()
+    if kite is None:
+        return cors_response({"error": "not_logged_in_today"}, 400)
+
+    offset = int(request.args.get("offset", 0))
+    limit  = int(request.args.get("limit", 40))
+    days   = min(int(request.args.get("days", 60)), 400)
+
+    raw_symbols_param = request.args.get("symbols", "")
+    if raw_symbols_param:
+        batch = [s.strip().upper() for s in raw_symbols_param.split(",") if s.strip()]
+    else:
+        universe = [s for s in ALL_SYMBOLS if s not in KITE_INDEX_SYMBOLS]
+        batch = universe[offset:offset + limit]
+
+    try:
+        by_symbol = get_nse_instruments_map(kite)
+    except Exception as e:
+        return cors_response({"error": f"instruments_fetch_failed: {e}"}, 500)
+
+    from_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d") + " 00:00:00"
+    to_date   = datetime.now().strftime("%Y-%m-%d") + " 23:59:59"
+
+    t0 = time.time()
+    data, failed = {}, []
+    for sym in batch:
+        tsym = get_kite_tradingsymbol(sym)
+        token = by_symbol.get(tsym)
+        if not token:
+            failed.append(sym)
+            continue
+        try:
+            candles = kite.historical_data(token, from_date, to_date, "60minute")
+            bars = []
+            for c in candles:
+                dt = c["date"]  # tz-aware, already IST per Kite's API
+                if (dt.hour, dt.minute) < (9, 15) or (dt.hour, dt.minute) > (15, 30):
+                    continue
+                bars.append({
+                    "datetime": dt.strftime("%Y-%m-%d %H:%M"),
+                    "open": c["open"], "high": c["high"], "low": c["low"],
+                    "close": c["close"], "volume": c["volume"],
+                })
+            data[sym] = bars
+        except Exception:
+            failed.append(sym)
+        time.sleep(0.34)
+
+    grand_total = len(ALL_SYMBOLS) - len(KITE_INDEX_SYMBOLS) if not raw_symbols_param else len(batch)
+    done = bool(raw_symbols_param) or (offset + limit) >= grand_total
+
+    return cors_response({
+        "status": "ok",
+        "fetched": len(data),
+        "failed": len(failed),
+        "failedSymbols": failed,
+        "elapsed": round(time.time() - t0, 1),
+        "data": data,
+        "offset": offset,
+        "limit": limit,
+        "grandTotal": grand_total,
+        "done": done,
+    })
+
+
 def push_kite_token_to_github():
     """
     Pushes kite_token.json to the GitHub data branch — same PUT pattern as
