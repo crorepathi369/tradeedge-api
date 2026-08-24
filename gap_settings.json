@@ -1,14 +1,14 @@
 {
   "minGap": 3,
-  "maxGap": 8,
+  "maxGap": 6,
   "maxChangePct": 0,
   "slType": "pct",
   "slPct": 2,
   "tpType": "d2_close",
   "tpPct": 3,
   "holdDays": 2,
-  "maxSignalsDay": 3,
-  "minSignalsGate": 1,
+  "maxSignalsDay": 5,
+  "minSignalsGate": 0,
   "wrThreshold": 40,
   "pnlThreshold": 0.3,
   "capitalPerTrade": 300000,
@@ -17,5 +17,5 @@
   "fromDate": "2025-08-14",
   "toDate": "2026-08-14",
   "tradingMode": "paper",
-  "_syncedAt": "2026-08-24 03:27:43"
+  "_syncedAt": "2026-08-24 03:28:00"
 }
