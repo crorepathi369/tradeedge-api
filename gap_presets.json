@@ -75,7 +75,7 @@
     "minSignalsGate": 0,
     "pnlThreshold": 0.3,
     "rankingMode": "expectancy",
-    "slPct": 2,
+    "slPct": 3,
     "slType": "pct",
     "toDate": "2026-08-14",
     "tpPct": 3,
