@@ -10,12 +10,12 @@
   "maxSignalsDay": 3,
   "minSignalsGate": 1,
   "wrThreshold": 40,
-  "pnlThreshold": 0.5,
+  "pnlThreshold": 0.3,
   "capitalPerTrade": 300000,
-  "rankingMode": "wilson",
-  "direction": "short",
+  "rankingMode": "expectancy",
+  "direction": "both",
   "fromDate": "2025-08-14",
   "toDate": "2026-08-14",
   "tradingMode": "paper",
-  "_syncedAt": "2026-08-24 02:31:37"
+  "_syncedAt": "2026-08-24 03:27:43"
 }
