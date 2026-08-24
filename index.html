@@ -3169,7 +3169,7 @@
                 <th onclick="sortSymTable('wr')">Win Rate</th>
                 <th onclick="sortSymTable('pnl')">Total PnL%</th>
                 <th onclick="sortSymTable('avg')">Avg PnL%</th>
-                <th onclick="sortSymTable('avgGap')">Avg Gap%</th>
+                <th onclick="sortSymTable('avgGap')">Avg Move%</th>
                 <th onclick="sortSymTable('dir')">Best Dir</th>
               </tr>
             </thead>
@@ -6144,8 +6144,22 @@ function backtestPositionSetup(ohlc, symId, params, debug = false) {
     // SL is drawn from the pullback/bounce structure BEFORE today's reversal
     // bar (idx i-1), not including it — including today would let today's own
     // low/high define the stop and then immediately trip it on the same bar.
-    const sl = _positionSetupTrailStop(ohlc, i - 1, side, params.psSlLookbackDays);
-    const validDirection = side === 'LONG' ? entry > sl : entry < sl;
+    let sl = _positionSetupTrailStop(ohlc, i - 1, side, params.psSlLookbackDays);
+    let validDirection = side === 'LONG' ? entry > sl : entry < sl;
+    // Capitulation-day rescue: on a V-shaped single-day crash-and-reverse, the
+    // lookback stop above is blind to today's own extreme by construction —
+    // but that extreme (today's low/high) IS the real support/resistance the
+    // setup is trading off, not an SL that's already broken. Fall back to it,
+    // buffered so today's own bar can't immediately trip the stop it just
+    // defined. Only engaged when the lookback stop would otherwise reject the
+    // trade, so ordinary (non-capitulation) entries are unaffected.
+    if (!validDirection) {
+      const todayExtreme = side === 'LONG' ? ohlc[i].low : ohlc[i].high;
+      const buffer = 0.005;
+      const rescueSl = side === 'LONG' ? todayExtreme * (1 - buffer) : todayExtreme * (1 + buffer);
+      const rescueValid = side === 'LONG' ? entry > rescueSl : entry < rescueSl;
+      if (rescueValid) { sl = rescueSl; validDirection = true; }
+    }
     if (!validDirection) continue;
 
     const trade = _simulatePositionSetupExit(ohlc, i, entry, sl, side, params, symId, today);
@@ -10454,7 +10468,7 @@ function renderUnifiedTable(trades) {
     <thead><tr>
       <th style="padding-left:20px;">Dir</th>
       <th>Symbol</th>
-      <th>Gap%</th>
+      <th>Move%</th>
       <th>Entry<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'pullback' ? 'Next Open' : _strategy === 'overnight' ? 'D1 Close' : 'D2 Open'}</span></th>
       <th>SL / TP<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'pullback' ? 'structural / fixed %' : 'levels'}</span></th>
       <th>Exit<br><span style="font-weight:400;font-size:9px;color:var(--text3);">${_strategy === 'pullback' ? 'SL / TP / timeout' : 'D2 Close / SL / TP'}</span></th>
@@ -10613,7 +10627,7 @@ function renderSymbolFlatView(trades, matchedSyms) {
             <th>Trade Date<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'Entry day' : 'D2 — Outcome'}</span></th>
             ${multiSym ? '<th>Symbol</th>' : ''}
             <th>Dir</th>
-            <th>Gap%</th>
+            <th>Move%</th>
             <th>Entry<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'Next Open' : _strategy === 'overnight' ? 'D1 Close' : 'D2 Open'}</span></th>
             <th>SL / TP<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'structural / fixed %' : 'levels'}</span></th>
             <th>Exit<br><span style="font-weight:400;font-size:9px;">${_strategy === 'pullback' ? 'SL / TP / timeout' : 'D2 Close / SL / TP'}</span></th>
@@ -13048,7 +13062,7 @@ function openSymDrill(sym, tradesSource, sideFilter) {
           callbacks: {
             title: (items) => {
               const t = trades[items[0].dataIndex];
-              return `${t.tradeDate}  ·  ${t.side}  ·  Gap ${t.gapPct>0?'+':''}${t.gapPct}%`;
+              return `${t.tradeDate}  ·  ${t.side}  ·  Move ${t.gapPct>0?'+':''}${t.gapPct}%`;
             },
             label: (item) => {
               const t = trades[item.dataIndex];
@@ -13071,7 +13085,7 @@ function openSymDrill(sym, tradesSource, sideFilter) {
     }
   });
 
-  // ── Gap % bar chart ──
+  // ── Move % bar chart ──
   const gapLabels = trades.map(t => t.tradeDate.slice(5));
   const gapData   = trades.map(t => +t.gapPct.toFixed(2));
   const gapColors = trades.map(t =>
@@ -13104,7 +13118,7 @@ function openSymDrill(sym, tradesSource, sideFilter) {
             },
             label: (item) => {
               const t = trades[item.dataIndex];
-              return ` Gap ${t.gapPct>0?'+':''}${t.gapPct}%  →  ${t.slHit?'SL':t.outcome} (${t.pnlPct>=0?'+':''}${t.pnlPct}%)`;
+              return ` Move ${t.gapPct>0?'+':''}${t.gapPct}%  →  ${t.slHit?'SL':t.outcome} (${t.pnlPct>=0?'+':''}${t.pnlPct}%)`;
             }
           }
         },
@@ -13125,7 +13139,7 @@ function openSymDrill(sym, tradesSource, sideFilter) {
     <thead><tr style="position:sticky;top:0;z-index:2;">
       <th style="padding:8px 12px;position:sticky;top:0;background:var(--text);color:#fff;">Date</th>
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">Dir</th>
-      <th style="position:sticky;top:0;background:var(--text);color:#fff;">Gap%</th>
+      <th style="position:sticky;top:0;background:var(--text);color:#fff;">Move%</th>
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">Entry</th>
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">${_strategy === 'pullback' ? 'SL / TP' : 'D2 Open'}</th>
       <th style="position:sticky;top:0;background:var(--text);color:#fff;">Exit</th>
@@ -13245,9 +13259,9 @@ document.addEventListener('DOMContentLoaded', () => {
           <canvas id="drillEquityCanvas"></canvas>
         </div>
       </div>
-      <!-- Gap % bar chart -->
+      <!-- Move % bar chart -->
       <div style="padding:8px 24px 20px;">
-        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:10px;">Gap % per Trade · coloured by outcome</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:10px;">Move % per Trade · coloured by outcome</div>
         <div style="position:relative;height:140px;">
           <canvas id="drillGapCanvas"></canvas>
         </div>
@@ -14100,6 +14114,15 @@ function openMobSettings()  {
   document.getElementById('mobSettingsBackdrop').classList.add('open');
 }
 function closeMobSettings() {
+  // "Apply & Close" (and the ✕/backdrop, which also call this) must persist
+  // exactly like the explicit Save button — otherwise any edit made without
+  // hunting down the separate 💾 Save button (the natural path, since this is
+  // the wide primary action) silently reverts the next time the panel opens
+  // or the page reloads, since only localStorage survives a reload, not the
+  // desktop hidden-field sync below. saveMobDefaults() is idempotent with
+  // its own toast/rerun, so it's safe to call unconditionally here.
+  saveMobDefaults();
+
   // Sync all mobile settings → desktop inputs so backtest/scanner uses updated values
   const g = (id) => document.getElementById(id)?.value;
   const s = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
@@ -14165,9 +14188,9 @@ function closeMobSettings() {
   document.getElementById('mobSettingsPanel').classList.remove('open');
   document.getElementById('mobSettingsBackdrop').classList.remove('open');
 
-  // Re-run the backtest for the current strategy so Stats/Summary numbers
-  // reflect whatever was just changed, rather than staying stale.
-  _rerunMobBacktestAfterSettingsChange();
+  // saveMobDefaults() above already reruns the backtest for the current
+  // strategy so Stats/Summary numbers reflect whatever was just changed —
+  // no need to do it again here.
 }
 
 function _mobUpdateCachePill(status, label) {
@@ -15717,7 +15740,7 @@ function _buildMobAllTrades(fmtPct, fmtPrice) {
           ${t.daysHeld != null ? `<span style="font-size:10px;color:var(--text3)">(${t.daysHeld}d)</span>` : ''}
         </div>
         <div style="font-size:11px;color:var(--text3);">
-          Gap <span style="color:${t.gapPct>=0?'var(--bull)':'var(--bear)'}">${t.gapPct>=0?'+':''}${t.gapPct}%</span>
+          Move <span style="color:${t.gapPct>=0?'var(--bull)':'var(--bear)'}">${t.gapPct>=0?'+':''}${t.gapPct}%</span>
           &nbsp;&#183;&nbsp; &#8377;${t.entry.toLocaleString('en-IN')} &#8594; &#8377;${t.exit.toLocaleString('en-IN')}
         </div>
       </div>
