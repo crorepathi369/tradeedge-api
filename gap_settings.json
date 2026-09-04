@@ -7,7 +7,7 @@
   "tpType": "d2_close",
   "tpPct": 1,
   "holdDays": 1,
-  "maxSignalsDay": 10,
+  "maxSignalsDay": 6,
   "minSignalsGate": 0,
   "wrThreshold": 0,
   "pnlThreshold": 0,
@@ -17,5 +17,5 @@
   "fromDate": "2025-09-04",
   "toDate": "2026-09-03",
   "tradingMode": "paper",
-  "_syncedAt": "2026-09-04 01:29:44"
+  "_syncedAt": "2026-09-04 01:29:57"
 }
