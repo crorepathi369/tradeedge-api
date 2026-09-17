@@ -14,8 +14,8 @@
   "capitalPerTrade": 300000,
   "rankingMode": "expectancy",
   "direction": "long",
-  "fromDate": "2025-08-14",
-  "toDate": "2026-08-14",
+  "fromDate": "2025-09-17",
+  "toDate": "2026-09-17",
   "tradingMode": "paper",
-  "_syncedAt": "2026-09-17 15:58:37"
+  "_syncedAt": "2026-09-17 15:59:24"
 }
