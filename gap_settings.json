@@ -9,13 +9,13 @@
   "holdDays": 10,
   "maxSignalsDay": 10,
   "minSignalsGate": 3,
-  "wrThreshold": 40,
-  "pnlThreshold": 0.5,
+  "wrThreshold": 0,
+  "pnlThreshold": 0,
   "capitalPerTrade": 300000,
-  "rankingMode": "expectancy",
+  "rankingMode": "wilson",
   "direction": "both",
-  "fromDate": "2025-08-14",
-  "toDate": "2026-08-14",
+  "fromDate": "2025-09-17",
+  "toDate": "2026-09-17",
   "tradingMode": "paper",
-  "_syncedAt": "2026-09-16 03:42:42"
+  "_syncedAt": "2026-09-17 14:57:01"
 }
