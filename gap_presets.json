@@ -54,7 +54,7 @@
     "minGap": 3,
     "minSignalsGate": 6,
     "pnlThreshold": 0,
-    "rankingMode": "wilson",
+    "rankingMode": "expectancy",
     "slPct": 6,
     "slType": "pct",
     "toDate": "2026-08-14",
