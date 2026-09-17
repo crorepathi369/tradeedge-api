@@ -12,10 +12,10 @@
   "wrThreshold": 0,
   "pnlThreshold": 0,
   "capitalPerTrade": 300000,
-  "rankingMode": "wilson",
+  "rankingMode": "expectancy",
   "direction": "long",
   "fromDate": "2025-08-15",
   "toDate": "2026-08-14",
   "tradingMode": "paper",
-  "_syncedAt": "2026-09-17 15:19:49"
+  "_syncedAt": "2026-09-17 15:20:06"
 }
