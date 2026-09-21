@@ -39,7 +39,8 @@
     "tpPct": 12,
     "tpType": "pct",
     "tradingMode": "paper",
-    "wrThreshold": 0
+    "wrThreshold": 0,
+    "maxChangePct": 12
   },
   "High-Conviction-WR-Based": {
     "capitalPerTrade": 300000,
