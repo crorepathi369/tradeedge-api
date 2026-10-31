@@ -64,25 +64,5 @@
     "tpType": "pct",
     "tradingMode": "paper",
     "wrThreshold": 0
-  },
-  "More-Signals": {
-    "capitalPerTrade": 300000,
-    "direction": "both",
-    "fromDate": "2025-08-14",
-    "holdDays": 2,
-    "maxChangePct": 0,
-    "maxGap": 6,
-    "maxSignalsDay": 5,
-    "minGap": 3,
-    "minSignalsGate": 0,
-    "pnlThreshold": 0.3,
-    "rankingMode": "expectancy",
-    "slPct": 3,
-    "slType": "pct",
-    "toDate": "2026-08-14",
-    "tpPct": 3,
-    "tpType": "d2_close",
-    "tradingMode": "paper",
-    "wrThreshold": 40
   }
 }
