@@ -14,8 +14,8 @@
   "capitalPerTrade": 300000,
   "rankingMode": "wilson",
   "direction": "long",
-  "fromDate": "2025-11-03",
-  "toDate": "2026-11-02",
+  "fromDate": "2025-11-08",
+  "toDate": "2026-11-06",
   "tradingMode": "paper",
-  "_syncedAt": "2026-11-03 02:05:15"
+  "_syncedAt": "2026-11-08 07:10:16"
 }
