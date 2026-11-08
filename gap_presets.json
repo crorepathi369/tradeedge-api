@@ -2,7 +2,7 @@
   "MinGapUp": {
     "minGap": 0.6,
     "maxGap": 2.4,
-    "maxChangePct": 5,
+    "maxChangePct": 6,
     "slType": "pct",
     "slPct": 3,
     "tpType": "pct",
