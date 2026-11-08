@@ -14,7 +14,7 @@
     "pnlThreshold": 0.3,
     "capitalPerTrade": 300000,
     "rankingMode": "wilson",
-    "direction": "long",
+    "direction": "both",
     "fromDate": "2025-08-14",
     "toDate": "2026-08-14",
     "tradingMode": "paper"
