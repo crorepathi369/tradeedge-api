@@ -7,7 +7,7 @@
   "tpType": "pct",
   "tpPct": 12,
   "holdDays": 10,
-  "maxSignalsDay": 10,
+  "maxSignalsDay": 5,
   "minSignalsGate": 3,
   "wrThreshold": 40,
   "pnlThreshold": 0.5,
@@ -17,5 +17,5 @@
   "fromDate": "2025-08-14",
   "toDate": "2026-08-14",
   "tradingMode": "paper",
-  "_syncedAt": "2026-11-08 14:16:59"
+  "_syncedAt": "2026-11-08 14:17:12"
 }
