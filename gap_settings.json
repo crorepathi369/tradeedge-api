@@ -8,7 +8,7 @@
   "tpPct": 6,
   "holdDays": 10,
   "maxSignalsDay": 5,
-  "minSignalsGate": 3,
+  "minSignalsGate": 2,
   "wrThreshold": 0,
   "pnlThreshold": 0,
   "capitalPerTrade": 300000,
@@ -17,5 +17,5 @@
   "fromDate": "2025-08-14",
   "toDate": "2026-08-14",
   "tradingMode": "paper",
-  "_syncedAt": "2026-11-09 12:24:12"
+  "_syncedAt": "2026-11-09 12:25:09"
 }
