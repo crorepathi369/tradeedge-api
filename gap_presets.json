@@ -6,7 +6,7 @@
     "holdDays": 9,
     "maxChangePct": 3,
     "maxGap": 3,
-    "maxSignalsDay": 3,
+    "maxSignalsDay": 2,
     "minGap": 1.5,
     "minSignalsGate": 0,
     "pnlThreshold": 0,
