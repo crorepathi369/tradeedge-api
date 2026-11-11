@@ -3,10 +3,10 @@
   "maxGap": 3,
   "maxChangePct": 3,
   "slType": "pct",
-  "slPct": 4,
+  "slPct": 8,
   "tpType": "pct",
-  "tpPct": 6,
-  "holdDays": 6,
+  "tpPct": 9,
+  "holdDays": 9,
   "maxSignalsDay": 2,
   "minSignalsGate": 0,
   "wrThreshold": 0,
@@ -17,5 +17,5 @@
   "fromDate": "2025-11-14",
   "toDate": "2026-11-11",
   "tradingMode": "paper",
-  "_syncedAt": "2026-11-11 10:52:11"
+  "_syncedAt": "2026-11-11 11:00:04"
 }
