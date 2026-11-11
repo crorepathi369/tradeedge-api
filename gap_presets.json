@@ -1,6 +1,6 @@
 {
   "MinGapUp": {
-    "capitalPerTrade": 300000,
+    "capitalPerTrade": 200000,
     "direction": "long",
     "fromDate": "2025-11-14",
     "holdDays": 6,
