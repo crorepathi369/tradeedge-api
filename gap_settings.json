@@ -1,6 +1,6 @@
 {
   "minGap": 0.3,
-  "maxGap": 4,
+  "maxGap": 3,
   "maxChangePct": 6,
   "slType": "pct",
   "slPct": 3,
@@ -12,10 +12,10 @@
   "wrThreshold": 0,
   "pnlThreshold": 0,
   "capitalPerTrade": 300000,
-  "rankingMode": "wilson",
+  "rankingMode": "expectancy",
   "direction": "long",
   "fromDate": "2025-10-15",
   "toDate": "2026-11-11",
   "tradingMode": "paper",
-  "_syncedAt": "2026-11-11 10:46:50"
+  "_syncedAt": "2026-11-11 10:47:21"
 }
