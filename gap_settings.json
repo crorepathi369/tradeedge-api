@@ -11,11 +11,11 @@
   "minSignalsGate": 0,
   "wrThreshold": 0,
   "pnlThreshold": 0,
-  "capitalPerTrade": 300000,
+  "capitalPerTrade": 200000,
   "rankingMode": "expectancy",
   "direction": "long",
   "fromDate": "2025-11-14",
   "toDate": "2026-11-11",
   "tradingMode": "paper",
-  "_syncedAt": "2026-11-11 10:51:04"
+  "_syncedAt": "2026-11-11 10:51:36"
 }
