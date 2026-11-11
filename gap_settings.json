@@ -1,7 +1,7 @@
 {
   "minGap": 0.3,
-  "maxGap": 2,
-  "maxChangePct": 9,
+  "maxGap": 4,
+  "maxChangePct": 6,
   "slType": "pct",
   "slPct": 3,
   "tpType": "pct",
@@ -15,7 +15,7 @@
   "rankingMode": "wilson",
   "direction": "long",
   "fromDate": "2025-08-14",
-  "toDate": "2026-11-09",
+  "toDate": "2026-11-11",
   "tradingMode": "paper",
-  "_syncedAt": "2026-11-09 12:27:58"
+  "_syncedAt": "2026-11-11 10:46:22"
 }
